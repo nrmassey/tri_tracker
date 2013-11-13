@@ -1,16 +1,16 @@
 #! /usr/bin/env bash
-T_STEP=$2
-LEV=$1
-EX_LEV=$3
-DATA_PATH=/Users/massey/google_drive/hadam3p_eu_p3at_2011_1_008287381_1/
-WU_NAME=p3atga.pdl1dec
+DATA_PATH=../../test_data/hadam3p_eu_2kci_1962_1_007425047_1
+
+T_STEP=0
+LEV=7
+PLT_LEV=7
+WU_NAME=2kciga.pdg2dec
+
 RGD_FILE=$DATA_PATH/$WU_NAME"_l"$LEV".rgd"
-#RGD_FILE=../ds_background_removed.rgd
-EX_FILE=$DATA_PATH/$WU_NAME"_l"$EX_LEV"min_back.ex"
-GRD_FILE=../grids/eu_mesh_1_7
-OUT_FILE=output/regional/$WU_NAME""_$T_STEP"_"$EX_LEV".png"
-OUT_FILE=output/regional/$WU_NAME""_$T_STEP".png"
-cmd="python plot_tri_tracker.py -m $GRD_FILE -r $RGD_FILE -e $EX_FILE -o $OUT_FILE -l $LEV -t $T_STEP -x [-50,75] -y [10,80]"
-#cmd="python plot_tri_tracker.py -m $GRD_FILE -r $RGD_FILE -o $OUT_FILE -l $LEV -t $T_STEP -x [-50,75] -y [10,80]"
+
+GRD_FILE=../../grids/eu_mesh_0_7.msh
+OUT_FILE=../output/regional/$WU_NAME""_$T_STEP".png"
+
+cmd="../plot_tri_tracker.py -m $GRD_FILE -r $RGD_FILE -o $OUT_FILE -l $PLT_LEV -t $T_STEP -x [-50,75] -y [10,80] -d"
 echo $cmd
 $cmd

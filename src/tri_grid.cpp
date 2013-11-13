@@ -15,6 +15,7 @@
 #include "geo_convert.h"
 #include "bin_file_utils.h"
 #include "haversine.h"
+#include "Rot2Global.h"
 
 /******************************************************************************/
 // alias for adding points
@@ -282,42 +283,43 @@ void tri_grid::create_shape(SHAPE initial_shape, FP_TYPE R)
 
 void tri_grid::assign_points_from_grid(ncdata* nc_input_data)
 {
-	// get the coordinates from the ncdata file and add to the quad trees
+	// relative coordinates for the 5 points of a grid box
+	const int n_gp = 5;
+	const FP_TYPE x_pts[5] = {0,-1,1,1,-1};
+	const FP_TYPE y_pts[5] = {0,-1,-1,1,1};
+	FP_TYPE lon_d = nc_input_data->get_lon_d();
+	FP_TYPE lat_d = nc_input_data->get_lat_d();
+	FP_TYPE lon_s = nc_input_data->get_lon_s();
+	FP_TYPE lat_s = nc_input_data->get_lat_s();
+	
+	FP_TYPE rot_pole_lon, rot_pole_lat;
 	if (nc_input_data->has_rotated_grid())
 	{
-		// special case for rotated grid data
-		rotated_grid* rot_grid = nc_input_data->get_rotated_grid();
-		for (int j=0; j<nc_input_data->get_lat_len(); j++)
-		{
-			for (int i=0; i<nc_input_data->get_lon_len(); i++)
-			{
-				// get the lon / lat from the rotated grid
-				FP_TYPE lat = rot_grid->get_global_latitude_value(i, j);
-				FP_TYPE lon = rot_grid->get_global_longitude_value(i, j);
-				// convert to Cartesian coordinates
-				vector_3D cart_coords = model_to_cart(lon, lat);
-				// determine which triangle (head node) this point is in
-				for (unsigned int tri=0; tri<triangles.size(); tri++)
-					if (point_in_tri(&cart_coords, triangles[tri]->get_root()->get_data()))
-						triangles[tri]->get_root()->get_data()->add_index(i,j, cart_coords);
-			}
-		}
+		 rot_pole_lon = nc_input_data->get_rotated_grid()->get_rotated_pole_longitude();
+		 rot_pole_lat = nc_input_data->get_rotated_grid()->get_rotated_pole_latitude();
 	}
-	else
+	
+	// get the coordinates from the ncdata file and add to the quad trees
+	for (int j=0; j<nc_input_data->get_lat_len(); j++)
 	{
-		// different case for global grid
-		// get the grid details
-		FP_TYPE lon_s = nc_input_data->get_lon_s();
-		FP_TYPE lat_s = nc_input_data->get_lat_s();
-		FP_TYPE lon_d = nc_input_data->get_lon_d();
-		FP_TYPE lat_d = nc_input_data->get_lat_d();
-		
-		for (int j=0; j<nc_input_data->get_lat_len(); j++)
+		for (int i=0; i<nc_input_data->get_lon_len(); i++)
 		{
-			for (int i=0; i<nc_input_data->get_lon_len(); i++)
+			FP_TYPE lon_b = lon_s + i*lon_d;
+			FP_TYPE lat_b = lat_s + j*lat_d;
+			for (int k=0; k<n_gp; k++)
 			{
-				FP_TYPE lon = lon_s + i*lon_d;
-				FP_TYPE lat = lat_s + j*lat_d;
+				// get the lon as the corners of a grid box
+				FP_TYPE lon = lon_b + x_pts[k] * lon_d * 0.49;
+				FP_TYPE lat = lat_b + y_pts[k] * lat_d * 0.49;
+				// extra conversion for rotated grid
+				if (nc_input_data->has_rotated_grid())
+				{
+					FP_TYPE glob_lon, glob_lat;
+					Rot2Global(lat, lon, rot_pole_lat, rot_pole_lon, 
+             		     	   glob_lat, glob_lon);
+             		lat = glob_lat;
+             		lon = glob_lon;
+				}
 				// convert to Cartesian coordinates
 				vector_3D cart_coords = model_to_cart(lon, lat);
 				// determine which triangle (head node) this point is in
@@ -461,6 +463,7 @@ void tri_grid::fill_index_holes(void)
 	std::cout << "# Filling indexing holes" << std::endl;
 	// try to fill holes in the mapping of the regular grid to the triangular
 	// mesh for all the levels except level zero
+	int tgt_tris = 3;
 	for (int l=1; l<get_max_level(); l++)
 	{
 		std::list<QT_TRI_NODE*> tri_list = get_triangles_at_level(l);
@@ -472,44 +475,34 @@ void tri_grid::fill_index_holes(void)
 		{
 			indexed_force_tri_3D* c_tri = (*it)->get_data();
 			// get length of index list and if zero do something
+			int n_sur_tris = 0;
 			if (c_tri->get_grid_indices()->size() == 0)
 			{
-				// initialise high value of minimum distance
-				FP_TYPE min_dist = 1e10;
-				LABEL min_label(-1, -1);
-				// get the nearest indexed point from the adjacency map
-				const LABEL_STORE* adj_map = c_tri->get_adjacent_labels(POINT);
+				// use the edge adjacencies to fill in the missing indices
+				const LABEL_STORE* adj_map = c_tri->get_adjacent_labels(EDGE);
 				for (LABEL_STORE::const_iterator jt = adj_map->begin();
 					 jt != adj_map->end(); jt++)
 				{
-					// get the current triangle
-					indexed_force_tri_3D* tri_2 = get_triangle(*jt);
+					indexed_force_tri_3D* s_tri = get_triangle(*jt);
 					// check that this has indices!
-					if (tri_2->get_grid_indices()->size() == 0)
-						continue;
-					// get the distance between the two centroids
-					FP_TYPE dist = (tri_2->centroid() - c_tri->centroid()).mag();
-					// if it's less, then copy the data over
-					if (dist < min_dist)
+					if (s_tri->get_grid_indices()->size() != 0)
+						n_sur_tris++;
+				}
+				if (n_sur_tris >= tgt_tris)
+				{
+					// if the 3 surrounding triangles have indices then add the indices to
+					// this triangle - this will produce a mean average in the regridding
+					for (LABEL_STORE::const_iterator jt = adj_map->begin();
+						 jt != adj_map->end(); jt++)
 					{
-						min_dist = dist;
-						min_label = tri_2->get_label();
+						indexed_force_tri_3D* s_tri = get_triangle(*jt);
+						const std::list<grid_index>* new_grid_indices = s_tri->get_grid_indices();
+						for (std::list<grid_index>::const_iterator kt = new_grid_indices->begin();
+							 kt != new_grid_indices->end(); kt++)
+						{
+							c_tri->add_index(kt->i, kt->j, kt->cart_coord);
+						}
 					}
-				}
-				// assign the index points from the near triangle to this one
-				if (min_label.label == -1)
-				{
-					missed++;
-					continue;
-				}
-				indexed_force_tri_3D* tri = get_triangle(min_label);
-				const std::list<grid_index>* new_grid_indices = tri->get_grid_indices();
-				for (std::list<grid_index>::const_iterator kt = new_grid_indices->begin();
-					 kt != new_grid_indices->end(); kt++)
-				{
-					added++;
-					// copy the indices from the nearest triangle with valid indices
-					c_tri->add_index(kt->i, kt->j, kt->cart_coord);
 				}
 			}
 		}

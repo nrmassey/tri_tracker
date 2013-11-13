@@ -16,6 +16,8 @@ class rotated_grid
 		~rotated_grid(void);
 		FP_TYPE get_global_latitude_value(int i, int j);
 		FP_TYPE get_global_longitude_value(int i, int j);
+		FP_TYPE get_rotated_pole_longitude(void);
+		FP_TYPE get_rotated_pole_latitude(void);
 	private:
 		// this function fills in the global_latitude_values and global_longitude_values
 		void calculate_global_coordinates(void);

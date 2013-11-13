@@ -79,12 +79,13 @@ class data_store:
 				idx_list.remove(i)
 		if time_step == -1:
 			D = self.ds[:, idx_list]
-			return numpy.max(D[numpy.abs(D) < 0.99*abs(self.mv)])
+			max_v = numpy.max(D[numpy.abs(D) < 0.99*abs(self.mv)])
 		else:
 			T = self.ds[time_step]
 			D = T[:, idx_list]
 			# require some fault tolerance
-			return numpy.max(D[numpy.abs(D) < 0.99*abs(self.mv)])
+			max_v = numpy.max(D[numpy.abs(D) < 0.99*abs(self.mv)])
+		return max_v
 
 	#******************************************************************************
 	

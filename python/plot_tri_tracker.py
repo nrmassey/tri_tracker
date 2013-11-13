@@ -8,6 +8,8 @@
 ###############################################################################
 
 import sys, os, getopt
+from netcdf_file import *
+
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
@@ -109,7 +111,11 @@ def plot_data(sp, tg, ds, time_step, level, colmap=cm.RdYlBu_r, dzt=1, keep_scal
 			continue
 		# get the value from the datastore
 		ds_idx = TRI.get_ds_index()
-		V = int(ds[time_step, TRI.get_ds_index()]+0.5)
+		V = ds[time_step, TRI.get_ds_index()]+0.5
+		if numpy.isnan(V):
+			continue
+		else:
+			V = int(V)
 		
 		if abs(V) >= abs(ds.get_missing_value())*0.99:
 			col = "#FFFFFF"
@@ -288,6 +294,30 @@ def load_track_list(trk_file):
 
 ###############################################################################
 
+def load_original_grid(orig_mesh_file, orig_mesh_var):
+	nc_fh = netcdf_file(orig_mesh_file)
+	nc_var = nc_fh.variables[orig_mesh_var]
+	# get lat / lon dimension - assume 4D variable
+	# should do this via looking at the axis info.
+	lat_dim = nc_var.dimensions[2]
+	lon_dim = nc_var.dimensions[3]
+	lon_vals = nc_fh.variables[lon_dim][:]
+	lat_vals = nc_fh.variables[lat_dim][:]
+	return lat_vals, lon_vals
+
+###############################################################################
+
+def plot_original_grid(sp, lat_vals, lon_vals):
+	# plot the original grid lon / lats as dots
+	for la in lat_vals:
+		for lo in lon_vals:
+			# wrap lo val
+			if lo > 180.0: 	# wrap around date line
+				lo = lo-360.0
+			sp.plot(lo, la, 'ko', ms=1)
+
+###############################################################################
+
 if __name__ == "__main__":
 	mesh_file   = ""
 	regrid_file = ""
@@ -299,11 +329,14 @@ if __name__ == "__main__":
 	draw_mesh   = False
 	lat_limits  = [-90, 90]
 	lon_limits  = [-180, 180]
+	orig_mesh_file = ""
+	orig_mesh_var = ""
 	
-	opts, args = getopt.getopt(sys.argv[1:], 'm:o:r:t:e:l:f:x:y:n:d', 
+	opts, args = getopt.getopt(sys.argv[1:], 'm:o:r:t:e:l:f:x:y:n:g:v:d', 
 							   ['mesh_file=', 'out_name=', 'regrid_file=', 't_step=', 
 							   	'extrema_file=', 'level=', 'track_file=', 'draw_mesh',
-							   	'lat_limits=', 'lon_limits=', 'extrema_num='])
+							   	'lat_limits=', 'lon_limits=', 'extrema_num=',
+							   	'orig_file=', 'orig_var='])
 
 	for opt, val in opts:
 		if opt in ['--mesh_file', '-m']:
@@ -330,6 +363,10 @@ if __name__ == "__main__":
 		if opt in ['--lon_limits', '-x']:
 			x = val.strip("[]").split(",")
 			lon_limits = [float(x[0]), float(x[1])]
+		if opt in ['--orig_file', '-g']:
+			orig_mesh_file = val
+		if opt in ['--orig_var', '-v']:
+			orig_mesh_var = val
 
 	# load each part in
 	tg = load_mesh_file(mesh_file)
@@ -356,6 +393,11 @@ if __name__ == "__main__":
 
 	if ex_file != "":
 		plot_extrema(sp, tg, ex, time_step, ex_num)
+	
+	if orig_mesh_file != "" and orig_mesh_var != "":
+		# load and plot the original mesh as dots
+		lon, lat = load_original_grid(orig_mesh_file, orig_mesh_var)
+		plot_original_grid(sp, lon, lat)
 	
 	draw_continents(sp)
 	sp.set_aspect(1.0)

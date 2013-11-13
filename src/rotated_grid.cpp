@@ -50,6 +50,20 @@ FP_TYPE rotated_grid::get_global_longitude_value(int i, int j)
 
 /*****************************************************************************/
 
+FP_TYPE rotated_grid::get_rotated_pole_longitude(void)
+{
+	return rotated_pole_longitude;
+}
+
+/*****************************************************************************/
+
+FP_TYPE rotated_grid::get_rotated_pole_latitude(void)
+{
+	return rotated_pole_latitude;
+}
+
+/*****************************************************************************/
+
 void rotated_grid::calculate_global_coordinates(void)
 {
 	// create the storage for the global coordinates

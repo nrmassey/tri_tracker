@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
 EU_FILE=../test_data/hadam3p_eu_2kci_1962_1_007425047_1/2kciga.pdg2dec.nc
-N_PTS=1
+N_PTS=0
 LEV=7
 EX_LEV=7
-GRID_FILE=../grids/eu_mesh_$N_PTS"_"$LEV
+GRID_FILE=../grids/eu_mesh_$N_PTS"_"$LEV".msh"
 EXE_PATH=../exe
 NC_VAR=field8
 RGD_FILE=${EU_FILE%.nc}_l$LEV"".rgd
@@ -24,9 +24,9 @@ echo $cmd
 $cmd
 
 # regrid the netCDF file
-#cmd="$EXE_PATH/regrid -i $EU_FILE -v $NC_VAR -m $GRID_FILE -o $RGD_FILE -S 0.07"
-#echo $cmd
-#$cmd
+cmd="$EXE_PATH/regrid -i $EU_FILE -v $NC_VAR -m $GRID_FILE -o $RGD_FILE -S 0.07"
+echo $cmd
+$cmd
 
 # convert back to netCDF file
 #cmd=./tri_grid_to_netcdf -i $RGD_FILE -m $GRID_FILE -v $NC_VAR -o $NC_RE_FILE -l $LEV -s $DEG -t $DEG
@@ -34,11 +34,11 @@ $cmd
 #$cmd
 
 # locate the extrema
-cmd="$EXE_PATH/extrema -i $RGD_FILE -o $EX_FILE -m $GRID_FILE -l $EX_LEV --method $EX_ARGS"
-echo $cmd
-$cmd
+#cmd="$EXE_PATH/extrema -i $RGD_FILE -o $EX_FILE -m $GRID_FILE -l $EX_LEV --method $EX_ARGS"
+#echo $cmd
+#$cmd
 
 # track the extrema
-cmd="$EXE_PATH/track -i $EX_FILE -o $TRK_FILE $TRK_WTS $TRK_ARGS"
-echo $cmd
-$cmd
+#cmd="$EXE_PATH/track -i $EX_FILE -o $TRK_FILE $TRK_WTS $TRK_ARGS"
+#echo $cmd
+#$cmd

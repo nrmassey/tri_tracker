@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# test the global version
+
+IN_FILE=../test_data/hadam3p_m001_1960_2_006101835_0/m001ma.pbg1dec.nc
+N_PTS=0
+LEV=5
+GRID_FILE=../grids/hadam3p_mesh_$N_PTS"_"$LEV".msh"
+NC_VAR=field8
+GP_VAR=field1
+RGD_FILE=${IN_FILE%.nc}_l$LEV"".rgd
+EX_FILE=${IN_FILE%.nc}_l$LEV"".ex
+TRK_FILE=${IN_FILE%.nc}_l$LEV"".trk
+EX_ARGS='minima(101300,0,12,0.0000)'
+TRK_WTS=" -0 1.0 -1 49.36 -2 5.54 -3 35.0 "
+TRK_ARGS="-r 1000 -p 1 -d 0 -l 0 -t 1 -k 1 -s 0 "
+EXE_DIR=/Users/massey/Coding/tri_tracker/exe
+
+# generate a grid
+cmd="$EXE_DIR/gen_grid -f $IN_FILE -v $NC_VAR -o $GRID_FILE -n $N_PTS -I 0 -l $LEV"
+echo $cmd
+$cmd
+
+# regrid the netCDF file
+cmd="$EXE_DIR/regrid -i $IN_FILE -v $NC_VAR -m $GRID_FILE -o $RGD_FILE"
+echo $cmd
+$cmd
+
+# convert back to netCDF file
+#echo ./tri_grid_to_netcdf -i $RGD_FILE -m $GRID_FILE -v $NC_VAR -o $NC_RE_FILE -l $LEV -s $DEG -t $DEG
+#./tri_grid_to_netcdf -i $RGD_FILE -m $GRID_FILE -v $NC_VAR -o $NC_RE_FILE -l $LEV -s $DEG -t $DEG
+# locate extrema
+#echo ./extrema_reg -i $RGD_FILE -o $EX_FILE -m $GRID_FILE -l $LEV --method $EX_ARGS -T
+#./extrema_reg -i $RGD_FILE -o $EX_FILE -m $GRID_FILE -l $LEV --method $EX_ARGS -T
+# locate tracks
+#echo ./track_reg -i $EX_FILE -o $TRK_FILE $TRK_WTS $TRK_ARGS -T
+#./track_reg -i $EX_FILE -o $TRK_FILE $TRK_WTS $TRK_ARGS -T

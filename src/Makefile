@@ -24,7 +24,7 @@ FLAGS = $(RELEASE_FLAGS) $(COMMON_FLAGS)
 
 # Linker variables
 LDFLAGS = $(FLAGS)
-LD = g++ $(LDFLAGS) -pg
+LD = g++ $(LDFLAGS)
 COMMON_LIBS = -lnetcdf -lnetcdf_c++
 
 ALL_DEPEND = quadtree.h
