@@ -17,6 +17,10 @@ class spline
 		spline(std::vector<FP_TYPE> v, std::vector<FP_TYPE> x, FP_TYPE mv);
 		// evaluate the spline for pt t
 		FP_TYPE evaluate(FP_TYPE t);
+		// evaluate the derivative of the spline
+		FP_TYPE evaluate_dx(FP_TYPE t);
+		// evaluate the 2nd derivative
+		FP_TYPE evaluate_d2x(FP_TYPE t);
 
 	private:
 		void calc_coefficients(std::vector<FP_TYPE> v);

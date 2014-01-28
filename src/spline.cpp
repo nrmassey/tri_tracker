@@ -42,6 +42,38 @@ FP_TYPE spline::evaluate(FP_TYPE t)
 
 /*****************************************************************************/
 
+FP_TYPE spline::evalutate_dx(FP_TYPE t)
+{
+	int i = find_piece(t);
+	FP_TYPE v;
+	// check for mv
+	if (a[i] == mv)
+		v = mv;
+	else
+	{
+		FP_TYPE t1 = t - x[i];
+		v = 3.0*pow(t1, 2.0)*d[i] + 2.0*t1*c[i] + b[i];
+	}
+}
+
+/*****************************************************************************/
+
+FP_TYPE spline::evalutate_d2x(FP_TYPE t)
+{
+	int i = find_piece(t);
+	FP_TYPE v;
+	// check for mv
+	if (a[i] == mv)
+		v = mv;
+	else
+	{
+		FP_TYPE t1 = t - x[i];
+		v = 6.0*t1*d[i]+2.0*t1*c[i];
+	}
+}
+
+/*****************************************************************************/
+
 int spline::find_piece(FP_TYPE t)
 {
 	int ti=0;
