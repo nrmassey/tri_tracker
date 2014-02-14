@@ -21,6 +21,7 @@
 // alias for adding points
 #define PC point_cloud_instance
 #define PC_ADD_ROT(X,Y,Z,T) point_cloud_instance.add_point(force_point(ROT_PT(vector_3D(X,Y,Z), T)))
+#define PC_ADD(X,Y,Z)       point_cloud_instance.add_point(force_point(X,Y,Z))
 #define TRI_ADD(P,X,Y,Z,S) 	triangles.push_back(new QT_TRI(indexed_force_tri_3D((P), X, Y, Z, S)))
 #define PC_ADD_SPLIT(X)  	point_cloud_instance.add_point(X)
 
@@ -46,7 +47,7 @@ void tri_grid::initialize(SHAPE initial_shape, ncdata* nc_input_data, int max_pt
 	max_lev_input = max_levs;
 	// initialise the eight or twelve quad trees with the icosahedron or octahedron
 	// vertices
-	assert(initial_shape == ICOSAHEDRON || initial_shape == OCTAHEDRON);
+	assert(initial_shape == ICOSAHEDRON || initial_shape == OCTAHEDRON || initial_shape == DYMAXION);
 	create_shape(initial_shape, 1.0);
 	assign_points_from_grid(nc_input_data);
 	split_triangles(max_pts, max_levs);
@@ -60,7 +61,18 @@ void tri_grid::initialize(SHAPE initial_shape, ncdata* nc_input_data, int max_pt
 
 	meta_data["input_grid_file_name"] = nc_input_data->get_file_name();
 	meta_data["input_grid_var_name"] = nc_input_data->get_file_name();
-	meta_data["initial_shape"] = initial_shape == ICOSAHEDRON ? "icosahedron" : "octahedron";
+	switch(initial_shape)
+	{
+		case ICOSAHEDRON:
+			meta_data["initial_shape"] = "icosahedron";
+		break;
+		case OCTAHEDRON:
+			meta_data["initial_shape"] = "octahedron";
+		break;
+		case DYMAXION:
+			meta_data["initial_shape"] = "dymaxion";
+		break;
+	}
 	ss << max_levs;
 	meta_data["maximum_levels"] = ss.str();
 	ss.str("");	ss << max_pts;
@@ -274,6 +286,49 @@ void tri_grid::create_shape(SHAPE initial_shape, FP_TYPE R)
 			TRI_ADD(&PC, idx_4,  idx_3,  idx_0, LABEL(6L, 0));
 			TRI_ADD(&PC, idx_5,  idx_3,  idx_0, LABEL(7L, 0));
 
+			break;
+		}
+		case DYMAXION:
+		{
+			// Buckminster Fuller's Dymaxion (tm) map.  Icosahedron but with specific
+			// coordinates.  Taken from:
+			// Gray, Robert W., Exact Transformation Equations For Fuller's World Map, Cartographica, 32(3): 17-25, 1995.
+
+			int idx_1  = PC_ADD( 0.420152426708710003,  0.078145249402782959,  0.904082550615019298);
+			int idx_2  = PC_ADD( 0.995009439436241649, -0.091347795276427931,  0.040147175877166645);
+   			int idx_3  = PC_ADD( 0.518836730327364437,  0.835420380378235850,  0.181331837557262454);
+   			int idx_4  = PC_ADD(-0.414682225320335218,  0.655962405434800777,  0.630675807891475371);
+			int idx_5  = PC_ADD(-0.515455959944041808, -0.381716898287133011,  0.767200992517747538);
+			int idx_6  = PC_ADD( 0.355781402532944713, -0.843580002466178147,  0.402234226602925571);
+			int idx_7  = PC_ADD( 0.414682225320335218, -0.655962405434800777, -0.630675807891475371);
+			int idx_8  = PC_ADD( 0.515455959944041808,  0.381716898287133011, -0.767200992517747538);
+			int idx_9  = PC_ADD(-0.355781402532944713,  0.843580002466178147, -0.402234226602925571);
+			int idx_10 = PC_ADD(-0.995009439436241649,  0.091347795276427931, -0.040147175877166645);
+			int idx_11 = PC_ADD(-0.518836730327364437, -0.835420380378235850, -0.181331837557262454);
+			int idx_12 = PC_ADD(-0.420152426708710003, -0.078145249402782959, -0.904082550615019298);
+			
+			// create the faces
+			TRI_ADD(&PC, idx_1,  idx_2,  idx_3,  LABEL(0L, 0));
+			TRI_ADD(&PC, idx_1,  idx_3,  idx_4,  LABEL(1L, 0));
+			TRI_ADD(&PC, idx_1,  idx_4,  idx_5,  LABEL(2L, 0));
+			TRI_ADD(&PC, idx_1,  idx_5,  idx_6,  LABEL(3L, 0));
+			TRI_ADD(&PC, idx_1,  idx_2,  idx_6,  LABEL(4L, 0));
+			TRI_ADD(&PC, idx_2,  idx_3,  idx_8,  LABEL(5L, 0));
+			TRI_ADD(&PC, idx_8,  idx_3,  idx_9,  LABEL(6L, 0));
+			TRI_ADD(&PC, idx_9,  idx_3,  idx_4,  LABEL(7L, 0));
+			TRI_ADD(&PC, idx_10, idx_9,  idx_4,  LABEL(8L, 0));
+			TRI_ADD(&PC, idx_5,  idx_10, idx_4,  LABEL(9L, 0));
+
+			TRI_ADD(&PC, idx_5,  idx_11, idx_10, LABEL(10L, 0));
+			TRI_ADD(&PC, idx_5,  idx_6,  idx_11, LABEL(11L, 0));
+			TRI_ADD(&PC, idx_11, idx_6,  idx_7,  LABEL(12L, 0));
+			TRI_ADD(&PC, idx_7,  idx_6,  idx_2,  LABEL(13L, 0));
+			TRI_ADD(&PC, idx_8,  idx_7,  idx_2,  LABEL(14L, 0));
+			TRI_ADD(&PC, idx_12, idx_9,  idx_8,  LABEL(15L, 0));
+			TRI_ADD(&PC, idx_12, idx_9,  idx_10, LABEL(16L, 0));
+			TRI_ADD(&PC, idx_12, idx_11, idx_10, LABEL(17L, 0));
+			TRI_ADD(&PC, idx_12, idx_11, idx_7,  LABEL(18L, 0));
+			TRI_ADD(&PC, idx_12, idx_8,  idx_7,  LABEL(19L, 0));
 			break;
 		}
 	}

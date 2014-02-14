@@ -42,7 +42,7 @@ FP_TYPE spline::evaluate(FP_TYPE t)
 
 /*****************************************************************************/
 
-FP_TYPE spline::evalutate_dx(FP_TYPE t)
+FP_TYPE spline::evaluate_dx(FP_TYPE t)
 {
 	int i = find_piece(t);
 	FP_TYPE v;
@@ -58,7 +58,7 @@ FP_TYPE spline::evalutate_dx(FP_TYPE t)
 
 /*****************************************************************************/
 
-FP_TYPE spline::evalutate_d2x(FP_TYPE t)
+FP_TYPE spline::evaluate_d2x(FP_TYPE t)
 {
 	int i = find_piece(t);
 	FP_TYPE v;

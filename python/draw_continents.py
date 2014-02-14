@@ -18,6 +18,7 @@ def read_continents():
 		fh = open(path + "map_continents_lowres.txt")
 		lines = fh.readlines()			
 		fh.close()
+		continents = []
 		# get the info line by line - each continent takes up 3 lines
 		continent_points = []
 		c_cont = 0
@@ -84,4 +85,4 @@ def draw_continents(sp, fillcolor='none', cn=0, lw=0.5, alpha=1.0):
 	for cont in continents:
 		cont_p = patches.PathPatch(cont, edgecolor=ec, facecolor=fillcolor, lw=lw, zorder=1,
 								   alpha=alpha)
-		sp.add_patch(cont_p)
+		p = sp.add_patch(cont_p)

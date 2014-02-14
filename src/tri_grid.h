@@ -13,7 +13,7 @@
 #include "quadtree.h"
 #include "meta_data.h"
 
-enum SHAPE{ICOSAHEDRON=0, OCTAHEDRON};
+enum SHAPE{ICOSAHEDRON=0, OCTAHEDRON, DYMAXION};
 #define QT_TRI quadtree<indexed_force_tri_3D>
 #define QT_TRI_NODE qt_node<indexed_force_tri_3D>
 

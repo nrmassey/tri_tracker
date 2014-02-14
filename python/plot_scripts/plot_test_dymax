@@ -1,0 +1,22 @@
+NC_FILE=m001ma.pbg1dec.nc
+ORIG_FILE=../../test_data/hadam3p_m001_1960_2_006101835_0/$NC_FILE
+ORIG_VAR=field8
+
+LEV=7
+NPTS=0
+
+#eu_mesh_0_7_DX.msh
+
+MESH_FILE=../../grids/eu_mesh_$NPTS""_$LEV"_DX.msh"
+RGD_FILE=${ORIG_FILE%.nc}_l$LEV"".rgd
+
+RGD_PLOT_FILE=../output/global/${NC_FILE%.nc}_l$LEV"".png
+MESH_PLOT_FILE=../output/global/hadam3p_mesh_$NPTS""_$LEV".png"
+
+# plot the mesh
+#../plot_tri_tracker.py -m $MESH_FILE -x [-50,75] -y [10,80] -o $MESH_PLOT_FILE -l $LEV -d -g $ORIG_FILE -v $ORIG_VAR
+
+# plot the data
+cmd="../plot_tri_tracker.py -m $MESH_FILE -o $RGD_PLOT_FILE -l $LEV -d"
+echo $cmd
+$cmd

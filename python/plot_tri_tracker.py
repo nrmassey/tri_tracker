@@ -148,7 +148,6 @@ def plot_extrema(sp, tg, ex, time_step, ex_num=-1):
 			   [0.25,0.75,0,1], [0.75,0.0,0.25,1], [0.25,0.0,0.75,1], [0.5,0.0,0.5,1],
 			   [1,1,1,1]]
 	ex_c = 0
-	print len(ex_t_step)
 	for ex_n in range(0, len(ex_t_step)):
 		if ex_num != -1 and ex_n != ex_num:
 			continue
