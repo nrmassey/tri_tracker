@@ -369,7 +369,6 @@ if __name__ == "__main__":
 
 	# load each part in
 	tg = load_mesh_file(mesh_file)
-#	regrid_file = ""
 	if regrid_file != "":
 		ds = load_regrid_file(regrid_file)
 	if ex_file != "":		
@@ -379,16 +378,12 @@ if __name__ == "__main__":
 		
 	# decide what to do with the data
 	sp = plt.subplot("111")
-#	colmap=cm.Paired
 	colmap=cm.RdYlBu_r
-#	regrid_file = ""
 	if regrid_file != "":
 		plot_data(sp, tg, ds, time_step, grid_level, colmap=colmap, dzt=1, keep_scale=False, symmetric_cb=False)
 
 	if mesh_file != "" and draw_mesh:
 		plot_mesh(sp, tg, grid_level)
-#		for lv in range(1, grid_level+1):
-#			plot_mesh(sp, tg, lv, grid_level)
 
 	if ex_file != "":
 		plot_extrema(sp, tg, ex, time_step, ex_num)
