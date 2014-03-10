@@ -312,22 +312,22 @@ void tri_grid::create_shape(SHAPE initial_shape, FP_TYPE R)
 			TRI_ADD(&PC, idx_1,  idx_3,  idx_4,  LABEL(1L, 0));
 			TRI_ADD(&PC, idx_1,  idx_4,  idx_5,  LABEL(2L, 0));
 			TRI_ADD(&PC, idx_1,  idx_5,  idx_6,  LABEL(3L, 0));
-			TRI_ADD(&PC, idx_1,  idx_2,  idx_6,  LABEL(4L, 0));
-			TRI_ADD(&PC, idx_2,  idx_3,  idx_8,  LABEL(5L, 0));
-			TRI_ADD(&PC, idx_8,  idx_3,  idx_9,  LABEL(6L, 0));
-			TRI_ADD(&PC, idx_9,  idx_3,  idx_4,  LABEL(7L, 0));
-			TRI_ADD(&PC, idx_10, idx_9,  idx_4,  LABEL(8L, 0));
-			TRI_ADD(&PC, idx_5,  idx_10, idx_4,  LABEL(9L, 0));
+			TRI_ADD(&PC, idx_1,  idx_6,  idx_2,  LABEL(4L, 0)); // reversed
+			TRI_ADD(&PC, idx_2,  idx_8,  idx_3,  LABEL(5L, 0)); // reversed
+			TRI_ADD(&PC, idx_8,  idx_9,  idx_3,  LABEL(6L, 0)); // reversed
+			TRI_ADD(&PC, idx_9,  idx_4,  idx_3,  LABEL(7L, 0)); // reversed
+			TRI_ADD(&PC, idx_10, idx_4,  idx_9,  LABEL(8L, 0)); // reversed
+			TRI_ADD(&PC, idx_5,  idx_4,  idx_10, LABEL(9L, 0)); // reversed
 
-			TRI_ADD(&PC, idx_5,  idx_11, idx_10, LABEL(10L, 0));
-			TRI_ADD(&PC, idx_5,  idx_6,  idx_11, LABEL(11L, 0));
-			TRI_ADD(&PC, idx_11, idx_6,  idx_7,  LABEL(12L, 0));
-			TRI_ADD(&PC, idx_7,  idx_6,  idx_2,  LABEL(13L, 0));
-			TRI_ADD(&PC, idx_8,  idx_7,  idx_2,  LABEL(14L, 0));
+			TRI_ADD(&PC, idx_5,  idx_10, idx_11, LABEL(10L, 0)); // reversed
+			TRI_ADD(&PC, idx_5,  idx_11, idx_6,  LABEL(11L, 0)); // reversed
+			TRI_ADD(&PC, idx_11, idx_7,  idx_6,  LABEL(12L, 0)); // reversed
+			TRI_ADD(&PC, idx_7,  idx_2,  idx_6,  LABEL(13L, 0)); // reversed
+			TRI_ADD(&PC, idx_8,  idx_2,  idx_7,  LABEL(14L, 0)); // reversed
 			TRI_ADD(&PC, idx_12, idx_9,  idx_8,  LABEL(15L, 0));
-			TRI_ADD(&PC, idx_12, idx_9,  idx_10, LABEL(16L, 0));
+			TRI_ADD(&PC, idx_12, idx_10, idx_9,  LABEL(16L, 0)); // reversed
 			TRI_ADD(&PC, idx_12, idx_11, idx_10, LABEL(17L, 0));
-			TRI_ADD(&PC, idx_12, idx_11, idx_7,  LABEL(18L, 0));
+			TRI_ADD(&PC, idx_12, idx_7,  idx_11, LABEL(18L, 0)); // reversed
 			TRI_ADD(&PC, idx_12, idx_8,  idx_7,  LABEL(19L, 0));
 			break;
 		}
