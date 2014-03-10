@@ -1,0 +1,18 @@
+#! /usr/bin/env bash
+DATA_PATH=/Volumes/MacintoshHD2/WaH_Data/OSTIA_ins0/1986/hadam3p_eu_j7u7_1986_1_008502004_0
+
+T_STEP=119
+LEV=7
+PLT_LEV=7
+WU_NAME=j7u7ga.pdi6dec
+
+RGD_FILE=$DATA_PATH/$WU_NAME"_l"$LEV".rgd"
+EX_FILE=$DATA_PATH/$WU_NAME"_l"$LEV".ex"
+
+GRD_FILE=../../grids/eu_mesh_0_7.msh
+OUT_FILE=../output/regional/$WU_NAME""_$T_STEP".png"
+
+cmd="../plot_tri_tracker.py -m $GRD_FILE -r $RGD_FILE -o $OUT_FILE -l $PLT_LEV -t $T_STEP -x [-50,75] -y [10,80] -e $EX_FILE"
+#cmd="../plot_tri_tracker.py -m $GRD_FILE -o $OUT_FILE -l $PLT_LEV -t $T_STEP -x [-50,75] -y [10,80] -e $EX_FILE"
+echo $cmd
+$cmd
