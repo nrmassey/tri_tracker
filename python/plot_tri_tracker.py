@@ -148,6 +148,7 @@ def plot_extrema(sp, tg, ex, time_step, ex_num=-1):
 			   [0.25,0.75,0,1], [0.75,0.0,0.25,1], [0.25,0.0,0.75,1], [0.5,0.0,0.5,1],
 			   [1,1,1,1]]
 	ex_c = 0
+	print len(ex_t_step)
 	for ex_n in range(0, len(ex_t_step)):
 		if ex_num != -1 and ex_n != ex_num:
 			continue
@@ -369,7 +370,6 @@ if __name__ == "__main__":
 
 	# load each part in
 	tg = load_mesh_file(mesh_file)
-#	regrid_file = ""
 	if regrid_file != "":
 		ds = load_regrid_file(regrid_file)
 	if ex_file != "":		
@@ -379,16 +379,12 @@ if __name__ == "__main__":
 		
 	# decide what to do with the data
 	sp = plt.subplot("111")
-#	colmap=cm.Paired
 	colmap=cm.RdYlBu_r
-#	regrid_file = ""
 	if regrid_file != "":
 		plot_data(sp, tg, ds, time_step, grid_level, colmap=colmap, dzt=1, keep_scale=False, symmetric_cb=False)
 
 	if mesh_file != "" and draw_mesh:
 		plot_mesh(sp, tg, grid_level)
-#		for lv in range(1, grid_level+1):
-#			plot_mesh(sp, tg, lv, grid_level)
 
 	if ex_file != "":
 		plot_extrema(sp, tg, ex, time_step, ex_num)

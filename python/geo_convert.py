@@ -7,6 +7,22 @@
 #******************************************************************************
 
 import math
+from vector_3D import *
+
+#******************************************************************************
+
+def model_to_cart(lon, lat, R=1.0):
+	# convert to radians
+	lon_r = math.radians(lon)
+	lat_r = math.radians((90.0 - lat))
+
+	# convert spherical to cartesian on a unit sphere
+	S = vector_3D(R * math.cos(lon_r) * math.sin(lat_r),
+				  R * math.sin(lon_r) * math.sin(lat_r),
+				  R * math.cos(lat_r))
+	return S
+
+#******************************************************************************
 
 def cart_to_model(V):
 	# convert a cartesian coordinate to a "model coordinate" - spherical

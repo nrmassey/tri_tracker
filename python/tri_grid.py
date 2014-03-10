@@ -22,7 +22,7 @@ class tri_grid:
 	
 	#**************************************************************************
 
-	def get_triangle(self, label):
+	def get_node(self, label):
 		# get the triangle node from the label.
 		# the label is now completely numeric and has the following format
 	
@@ -44,7 +44,12 @@ class tri_grid:
 			assert(not isinstance(current, NoneType))
 			mp1 *= 10
 			mp2 *= 10
-		return current.get_data()
+		return current
+
+	#**************************************************************************
+
+	def get_triangle(self, label):
+		return self.get_node(label).get_data()
 
 	#**************************************************************************
 	
