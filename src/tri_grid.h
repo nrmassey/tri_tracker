@@ -25,7 +25,7 @@ class tri_grid
 		
 		// set up initial triangles
 		void initialize(SHAPE initial_shape, class ncdata* nc_input_data, int max_pts,
-						int max_levs, int max_its);
+						int max_levs, int max_its, int perim);
 		indexed_force_tri_3D* get_triangle(LABEL label);
 		QT_TRI_NODE* get_triangle_node(LABEL label);
 		int get_max_level(void);
@@ -52,7 +52,7 @@ class tri_grid
 	private:
 		/***********************************************************************/	
 		void create_shape(SHAPE initial_shape, FP_TYPE R);
-		void assign_points_from_grid(ncdata* nc_input_data);
+		void assign_points_from_grid(ncdata* nc_input_data, int perim);
 		void split_triangle(QT_TRI_NODE* triangle, int max_pts, int max_levs);
 		void split_triangles(int max_pts, int max_levs);
 		void fill_index_holes(void);

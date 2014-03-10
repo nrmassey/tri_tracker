@@ -42,14 +42,14 @@ tri_grid::~tri_grid(void)
 /******************************************************************************/
 
 void tri_grid::initialize(SHAPE initial_shape, ncdata* nc_input_data, int max_pts,
-						  int max_levs, int max_its)
+						  int max_levs, int max_its, int perim)
 {
 	max_lev_input = max_levs;
 	// initialise the eight or twelve quad trees with the icosahedron or octahedron
 	// vertices
 	assert(initial_shape == ICOSAHEDRON || initial_shape == OCTAHEDRON || initial_shape == DYMAXION);
 	create_shape(initial_shape, 1.0);
-	assign_points_from_grid(nc_input_data);
+	assign_points_from_grid(nc_input_data, perim);
 	split_triangles(max_pts, max_levs);
 	if (max_its != 0)
 		PC.equalise(max_its, get_max_level());
@@ -336,7 +336,7 @@ void tri_grid::create_shape(SHAPE initial_shape, FP_TYPE R)
 
 /*****************************************************************************/
 
-void tri_grid::assign_points_from_grid(ncdata* nc_input_data)
+void tri_grid::assign_points_from_grid(ncdata* nc_input_data, int perim)
 {
 	// relative coordinates for the 5 points of a grid box
 	const int n_gp = 5;
@@ -355,17 +355,17 @@ void tri_grid::assign_points_from_grid(ncdata* nc_input_data)
 	}
 	
 	// get the coordinates from the ncdata file and add to the quad trees
-	for (int j=0; j<nc_input_data->get_lat_len(); j++)
+	for (int j=perim; j<nc_input_data->get_lat_len()-perim; j++)
 	{
-		for (int i=0; i<nc_input_data->get_lon_len(); i++)
+		for (int i=perim; i<nc_input_data->get_lon_len()-perim; i++)
 		{
 			FP_TYPE lon_b = lon_s + i*lon_d;
 			FP_TYPE lat_b = lat_s + j*lat_d;
 			for (int k=0; k<n_gp; k++)
 			{
 				// get the lon as the corners of a grid box
-				FP_TYPE lon = lon_b + x_pts[k] * lon_d * 0.49;
-				FP_TYPE lat = lat_b + y_pts[k] * lat_d * 0.49;
+				FP_TYPE lon = lon_b + x_pts[k] * lon_d * 0.49999;
+				FP_TYPE lat = lat_b + y_pts[k] * lat_d * 0.49999;
 				// extra conversion for rotated grid
 				if (nc_input_data->has_rotated_grid())
 				{
