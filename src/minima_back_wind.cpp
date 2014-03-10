@@ -81,8 +81,8 @@ void minima_back_wind::locate(void)
 	if (grid_level > 5)
 		trim_objects();
 	merge_objects();
-	ex_points_from_objects();
 	expand_objects();
+	ex_points_from_objects();
 }
 
 /******************************************************************************/
@@ -95,6 +95,9 @@ void minima_back_wind::parse_arg_string(std::string method_string)
 	// arg[2] = averaging period to take background field over
 	// arg[3] = mesh level to detect large scale minima at
 	// arg[4] = contour value
+	// arg[5] = minimum delta
+	// arg[6] = file name containing wind field
+	// arg[7] = field name of wind in file
 	// parameters for minima location with background removal
 	// get the first bracket
 	int c_pos = method_string.find_first_of("(")+1;
@@ -168,7 +171,6 @@ bool minima_back_wind::wind_test(indexed_force_tri_3D* O_TRI,
 		c_wnd_spd = -1.0;
 	else
 		c_wnd_spd /= c_tri_idxs->size();
-	
 	bool wnd_test = false;
 	wnd_test = c_wnd_spd >= 0.0 && c_wnd_spd >= all_wind_distr[t_step][80];
 	return wnd_test;
