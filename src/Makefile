@@ -9,7 +9,7 @@ TRACK_NAME = ../exe/track
 TRI_GRID_TO_NC_NAME = ../exe/tri_grid_to_netcdf
 
 # Compiler variables
-CPP = g++
+CPP = g++ -stdlib=libstdc++
 INCLUDE_DIRS = -Itclap/include/ -I./
 LIBRARY_DIRS = -L./
 OBJ_DIR = obj
@@ -18,14 +18,14 @@ DEBUG_FLAGS = -Wno-deprecated -O0 -g -Wall
 RELEASE_FLAGS = -Wno-deprecated -O3 -msse3
 PROFILE_FLAGS = $(RELEASE_FLAGS) -pg
 COMMON_FLAGS = -DFP_TYPE=float
-FLAGS = $(RELEASE_FLAGS) $(COMMON_FLAGS)
+#FLAGS = $(RELEASE_FLAGS) $(COMMON_FLAGS)
 #FLAGS = $(PROFILE_FLAGS) $(COMMON_FLAGS)
-#FLAGS = $(DEBUG_FLAGS) $(COMMON_FLAGS)
+FLAGS = $(DEBUG_FLAGS) $(COMMON_FLAGS)
 
 # Linker variables
-LDFLAGS = $(FLAGS)
+LDFLAGS = $(FLAGS) -stdlib=libstdc++
 LD = g++ $(LDFLAGS)
-COMMON_LIBS = -lnetcdf -lnetcdf_c++
+COMMON_LIBS = -lstdc++ -lnetcdf -lnetcdf_c++
 
 ALL_DEPEND = quadtree.h
 
