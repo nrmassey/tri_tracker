@@ -26,7 +26,7 @@ class extrema_locator
 {
 	public:
 		extrema_locator(void);
-		~extrema_locator(void);
+		virtual ~extrema_locator(void);
 		virtual void locate(void);
 		void save(std::string output_fname, bool save_text=false);
 		void set_steering_vector(steering_vector* sv);
@@ -64,9 +64,9 @@ class extrema_locator
 		void merge_objects(void);
 		void ex_points_from_objects(void);
 		void get_min_max_values(FP_TYPE& min, FP_TYPE& max, int o, int t);
-		void calculate_object_position(int o, int t);
-		void calculate_object_intensity(int o, int t);
-		void calculate_object_delta(int o, int t);
+		virtual void calculate_object_position(int o, int t);
+		virtual void calculate_object_intensity(int o, int t);
+		virtual void calculate_object_delta(int o, int t);
 		bool objects_share_nodes(const LABEL_STORE* o1,
 								 const LABEL_STORE* o2);
 		void tstep_out_begin(int t);

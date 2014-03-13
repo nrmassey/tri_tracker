@@ -13,13 +13,14 @@
 #include <algorithm>
 #include <math.h>
 #include "concentric_shell.h"
+#include "haversine.h"
+#include "geo_convert.h"
 
 /******************************************************************************/
 
 minima_back_wind::minima_back_wind(void) : wind_spd_field(NULL),
 										   minima_background()
 {
-	previous_object = -1;
 }
 
 /******************************************************************************/
@@ -35,34 +36,26 @@ bool minima_back_wind::process_data(void)
 {
 	// load the netcdf data and then call the base class process_data
 	wind_spd_field = new ncdata(wind_file_name, wind_spd_field_name);
-	// calculate the distribution of wind speeds per timestep	
-	for (int t=0; t<wind_spd_field->get_t_len(); t++)
+	std::vector<FP_TYPE> all_wind_distr;
+	// calculate the threshold values for the wind speed test in each frame	
+	for (int t=0; t<wind_spd_field->get_t_len()+1; t++)
 	{
 		// calculate the wind speed at each grid point for this time step
-		std::vector<FP_TYPE> wind_for_t_step;
 		for (int i=0; i<wind_spd_field->get_lon_len(); i++)
 		{
 			for (int j=0; j<wind_spd_field->get_lat_len(); j++)
 			{
 				FP_TYPE wnd_speed = wind_spd_field->get_data(i,j,0,t);
-				wind_for_t_step.push_back(wnd_speed);
+				all_wind_distr.push_back(wnd_speed);
 			}
 		}
-		std::sort(wind_for_t_step.begin(), wind_for_t_step.end());
-		// create the storage
-		std::vector<FP_TYPE> percentile_winds;
-		// now calculate the distribution in 1% percentiles
-		int s = wind_for_t_step.size();
-		for (int p=0; p<100; p++)
-		{
-			float ptile = float(p)/100.0;
-			int idx = int(float(s) * ptile);
-			float frac_part = float(s) * ptile - int(float(s) * ptile);
-			float value = wind_for_t_step[idx] * (1.0-frac_part) + wind_for_t_step[idx+1] * frac_part;
-			percentile_winds.push_back(value);
-		}
-		all_wind_distr.push_back(percentile_winds);
-	}
+	}	
+	std::sort(all_wind_distr.begin(), all_wind_distr.end());
+	// we have now got all the data and sorted so calculate the threshold value of the 
+	// wind speed
+	int idx = int(FP_TYPE(all_wind_distr.size()) / 100 * ptile_thresh);
+	wind_thresh_value = all_wind_distr[idx];
+	std::cout << wind_thresh_value << std::endl;
 	return minima_background::process_data();
 }
 
@@ -79,9 +72,11 @@ void minima_back_wind::locate(void)
 	}
 	find_objects();
 	if (grid_level > 5)
+	{
 		trim_objects();
+	}
 	merge_objects();
-	expand_objects();
+//	expand_objects();
 	ex_points_from_objects();
 }
 
@@ -98,6 +93,7 @@ void minima_back_wind::parse_arg_string(std::string method_string)
 	// arg[5] = minimum delta
 	// arg[6] = file name containing wind field
 	// arg[7] = field name of wind in file
+	// arg[8] = percentile of value to use for threshold of winds
 	// parameters for minima location with background removal
 	// get the first bracket
 	int c_pos = method_string.find_first_of("(")+1;
@@ -125,6 +121,9 @@ void minima_back_wind::parse_arg_string(std::string method_string)
 	c_pos = read_from_string(method_string, c_pos, ",", wind_file_name);
 	c_pos = read_from_string(method_string, c_pos, ",", wind_spd_field_name);
 	
+	std::stringstream stream2(method_string.substr(c_pos, e_pos));	
+	stream2 >> ptile_thresh;
+		
 	// add to the metadata
 	std::stringstream ss;
 	meta_data["method"] = "minima_back_wind";
@@ -141,17 +140,40 @@ void minima_back_wind::parse_arg_string(std::string method_string)
 	meta_data["minimum_delta"] = ss.str();
 	meta_data["wind_file_name"] = wind_file_name;
 	meta_data["wind_var_name"] = wind_spd_field_name;	
+	ss.str(""); ss << ptile_thresh;
+	meta_data["wind_ptile_thresh"] = ss.str();
+}
+				  
+/******************************************************************************/
+
+FP_TYPE calc_percentile(std::vector<FP_TYPE>* wnd_val, FP_TYPE ptile)
+{
+	// calculate the percentile of the wind values
+	int v_size = wnd_val->size();
+	int pos_0 = v_size * (ptile/100);
+	std::vector<FP_TYPE>::iterator it_val = wnd_val->begin();
+	std::advance(it_val, pos_0);
+	FP_TYPE val_0 = *it_val;
+	if (it_val != wnd_val->end())
+		it_val ++;
+	else
+		it_val --;
+	FP_TYPE val_1 = *it_val;
+	FP_TYPE ptile_val = 0.5*(val_0 + val_1);
+	it_val = wnd_val->end();
+	return ptile_val;
 }
 
 /******************************************************************************/
 
-FP_TYPE calc_percentile(std::vector<FP_TYPE>& V, FP_TYPE p)
+bool minima_back_wind::is_in_object(indexed_force_tri_3D* O_TRI, 
+				  					 indexed_force_tri_3D* C_TRI, int t_step)
 {
-	int s = V.size();
-	int idx_5 = float(s) * p;
-	float frac_part = float(s) * p - int(float(s) * p);
-	float value = V[idx_5] * (1.0-frac_part) + V[idx_5+1] * frac_part;
-	return value;
+	// O_TRI - original triangle
+	// C_TRI - candidate triangle - triangle being tested for inclusion
+	bool is_in = minima_background::is_in_object(O_TRI, C_TRI, t_step);
+	bool wnd_tst = wind_test(O_TRI, C_TRI, t_step);
+	return is_in;
 }
 
 /******************************************************************************/
@@ -161,18 +183,20 @@ bool minima_back_wind::wind_test(indexed_force_tri_3D* O_TRI,
 {
 	const std::list<grid_index>* c_tri_idxs = C_TRI->get_grid_indices();
 	FP_TYPE c_wnd_spd = 0.0;
+	FP_TYPE c_distance = 0.0;
 	// candidate triangle wind speed
 	for (std::list<grid_index>::const_iterator c_t_idx = c_tri_idxs->begin();
 		 c_t_idx != c_tri_idxs->end(); c_t_idx++)
 	{
 		c_wnd_spd += wind_spd_field->get_data(c_t_idx->i, c_t_idx->j, 0, t_step);
 	}
-	if (c_tri_idxs->size() == 0.0)
-		c_wnd_spd = -1.0;
+		
+	if (c_tri_idxs->size() == 0)
+		return true;
 	else
 		c_wnd_spd /= c_tri_idxs->size();
-	bool wnd_test = false;
-	wnd_test = c_wnd_spd >= 0.0 && c_wnd_spd >= all_wind_distr[t_step][80];
+
+	bool wnd_test = c_wnd_spd >= wind_thresh_value;
 	return wnd_test;
 }
 
@@ -189,6 +213,7 @@ void minima_back_wind::expand_objects(void)
 		tstep_out_begin(t);
 		for (int e=0; e<ex_list.number_of_extrema(t); e++)
 		{
+			// reset shell
 			c_shell.clear();
 			// get the extremum for this object
 			steering_extremum* svex = ex_list.get(t, e);
@@ -227,11 +252,147 @@ void minima_back_wind::expand_objects(void)
 					}
 				}
 				c_shell.recalculate(&tg, &shell_in_object);
-			}
+			}			
 		}
 		tstep_out_end(t);
 	}
 	std::cout << std::endl;	
 }
 
-/******************************************************************************/
+/*****************************************************************************/
+
+void minima_back_wind::calculate_object_position(int o, int t)
+{
+	steering_extremum* svex = ex_list.get(t, o);
+	LABEL_STORE* object_labels = &(svex->object_labels);
+	// find min / max of values in the object
+	FP_TYPE min_v = 2e20f;	// minimum value in object
+	FP_TYPE max_v = 0;		// maximum value in object
+	get_min_max_values(min_v, max_v, o, t);
+	
+	// position vector in Cartesian coordinates
+	vector_3D P;
+	FP_TYPE sum_w = 0.0;
+	// get the position and weight for each triangle in the object
+	for (LABEL_STORE::iterator it_ll = object_labels->begin(); 
+		 it_ll != object_labels->end(); it_ll++)	// tri labels
+	{
+		// get the triangle and its centroid
+		indexed_force_tri_3D* c_tri = tg.get_triangle(*it_ll);
+		// get the data value from the datastore
+		FP_TYPE V = ds.get_data(t, c_tri->get_ds_index());
+		// only add for the position if it is less than min_v+one contour
+		if (V == min_v)
+		{
+			vector_3D C = c_tri->centroid();
+			// get the weight assigned to this point
+			FP_TYPE w = calculate_point_weight(V, min_v, max_v);
+			// update the position
+			P += C * w;
+			// sum the weights
+			sum_w += w;
+		}
+	}
+	// divide by the sum of the weights
+	if (sum_w > 0.0)
+	{
+		P = P / sum_w;
+		// project / normalise to sphere
+		P *= 1.0 / P.mag();
+		// put the values back in the geo extremum
+		FP_TYPE lon, lat;
+		cart_to_model(P, lon, lat);
+		svex->lon = lon;
+		svex->lat = lat;
+	}
+/*	// get position of original triangle
+	indexed_force_tri_3D* O_TRI = get_original_triangle(o, t);
+	if (O_TRI == NULL)
+		return;
+	// convert triangle position to lat / lon
+	vector_3D C = O_TRI->centroid();
+	FP_TYPE lon, lat;
+	cart_to_model(C, lon, lat);
+	steering_extremum* svex = ex_list.get(t, o);
+	svex->lon = lon;
+	svex->lat = lat;
+	std::cout << svex->lon << " " << svex->lat << std::endl;*/
+}
+
+/*****************************************************************************/
+
+void minima_back_wind::calculate_object_intensity(int o, int t)
+{
+	// object intensity is calculated as a weighted sum of the intensities of
+	// the triangles in the object.  The weight is defined as 1.0 - dist/max_dist
+	// where dist is the distance between the lat and lon of the feature point
+	// and max_dist is the maximum distance of all the objects
+	
+	// get the extremum - the lat and lon will have been set already
+/*	steering_extremum* svex = ex_list.get(t, o);
+	LABEL_STORE* object_labels = &(svex->object_labels);
+	FP_TYPE max_dist = -1.0;
+	
+	// find min / max of values in the object
+	FP_TYPE min_v = 2e20f;	// minimum value in object
+	FP_TYPE max_v = 0;		// maximum value in object
+	get_min_max_values(min_v, max_v, o, t);	
+	// loop through the triangle objects to get maximum distance
+	for (LABEL_STORE::iterator it_ll = object_labels->begin();
+		 it_ll != object_labels->end(); it_ll++)
+	{
+		// get the triangle
+		indexed_force_tri_3D* c_tri = tg.get_triangle(*it_ll);
+		// get the data value from the datastore
+		FP_TYPE V = ds.get_data(t, c_tri->get_ds_index());
+		// calculate the distance if the value is < min_v + one contour
+		if (V <= min_v+contour_value)
+		{
+			// get the centroid and convert to lat / lon
+			vector_3D C = c_tri->centroid();
+			FP_TYPE lat, lon;
+			cart_to_model(C, lon, lat);
+			FP_TYPE dist = haversine(svex->lon, svex->lat, lon, lat, 1.0);
+			// check against max
+			if (dist > max_dist)
+				max_dist = dist;
+		}
+	}
+	// repeat the loop, but work out the values this time
+	FP_TYPE sum_intensity = 0.0;
+	FP_TYPE sum_w = 0.0;
+	for (LABEL_STORE::iterator it_ll = object_labels->begin(); 
+		 it_ll != object_labels->end(); it_ll++)
+	{
+		// get the triangle
+		indexed_force_tri_3D* c_tri = tg.get_triangle(*it_ll);
+		// now get the value from the datastore
+		FP_TYPE V = ds.get_data(t, c_tri->get_ds_index());
+		// only add if V <= min_v + one contour
+		if (V <= min_v+contour_value)
+		{
+			// get the centroid and convert to lat / lon
+			vector_3D C = c_tri->centroid();
+			FP_TYPE lat, lon;
+			cart_to_model(C, lon, lat);
+			// calculate the distance
+			FP_TYPE dist = haversine(svex->lon, svex->lat, lon, lat, 1.0);
+			// calculate the weight
+			FP_TYPE w = 1.0;
+			if (max_dist != 0.0)
+				w = 1.0 - dist / max_dist;
+			sum_intensity += w * V;
+			sum_w += w;
+		}
+	}
+	svex->intensity = sum_intensity / sum_w;*/
+	steering_extremum* svex = ex_list.get(t, o);
+	// get value of original triangle
+	indexed_force_tri_3D* O_TRI = get_original_triangle(o, t);
+	if (O_TRI == NULL)
+		return;
+	FP_TYPE V = ds.get_data(t, O_TRI->get_ds_index());
+	// convert triangle position to lat / lon
+	vector_3D C = O_TRI->centroid();
+	svex->intensity = V;
+}

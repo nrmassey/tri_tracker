@@ -178,18 +178,17 @@ bool minima_background::is_in_object(indexed_force_tri_3D* O_TRI,
 
 void minima_background::calculate_background_field(void)
 {
-	std::cout << "# Calculating background field" << std::endl;
+	std::cout << "# Calculating background field : ";
 	
 	// load in the field first
 	bck_field_ds = new data_store();
 	bck_field_ds->load(bck_field_file);
-	
 	// get the size of the current datastore
 	int n_ts = bck_field_ds->get_number_of_time_steps();
 	int n_idx = bck_field_ds->get_number_of_indices();
 	
 	// do we need to take a mean?
-	if (bck_avg_period > 1 && n_ts > bck_avg_period)
+	if (bck_avg_period > 1 && n_ts >= bck_avg_period)
 	{
 		// create a new background field
 		data_store* new_bck_field_ds = new data_store();
@@ -214,8 +213,9 @@ void minima_background::calculate_background_field(void)
 			}
 		}
 		// assign the bck_field to be the new_field and delete the old one
-		delete bck_field_ds;
+		data_store* old_bck_field_ds = bck_field_ds;
 		bck_field_ds = new_bck_field_ds;
+		delete old_bck_field_ds;
 	}
 }
 
@@ -466,10 +466,7 @@ void minima_background::refine_objects(void)
 			{
 				indexed_force_tri_3D* c_tri = tg.get_triangle(*it_ll);
 				FP_TYPE val = ds.get_data(t, c_tri->get_ds_index());
-				bool add_label = false;
 				if (val <= min_v + contour_value)
-					add_label = true;					
-				if (add_label)
 					new_labels.push_back(*it_ll);
 			}
 			ex_list.get(t, o1)->object_labels = new_labels;
@@ -500,7 +497,7 @@ indexed_force_tri_3D* minima_background::get_original_triangle(int o, int t)
 		// get the triangle
 		indexed_force_tri_3D* c_tri = tg.get_triangle(*it_ll);
 		FP_TYPE val = ds.get_data(t, c_tri->get_ds_index());
-		// find the min and max values
+		// find the min value
 		if (fabs(val) < 0.99*fabs(mv) && val < c_val)
 		{
 			c_val = val;
@@ -509,3 +506,4 @@ indexed_force_tri_3D* minima_background::get_original_triangle(int o, int t)
 	}
 	return o_tri;
 }
+

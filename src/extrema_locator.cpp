@@ -78,6 +78,7 @@ void extrema_locator::locate(void)
 
 void extrema_locator::save(std::string output_fname, bool save_text)
 {
+	std::cout << "# Number of extrema: " << ex_list.size() << std::endl;
 	ex_list.set_meta_data(&meta_data);
 
 	if (sv != NULL)

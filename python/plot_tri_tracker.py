@@ -144,11 +144,7 @@ def plot_extrema(sp, tg, ex, time_step, ex_num=-1):
 	# get the extrema for this timestep
 	ex_t_step = ex.get_extrema_for_t_step(time_step)
 	# plot each extrema
-	ec_list = [[0,0,0,1], [1,0,0,1], [0,1,0,1], [0,0,1,1], [0.5,0.5,0.5,1], [0.75,0.25,0,1],
-			   [0.25,0.75,0,1], [0.75,0.0,0.25,1], [0.25,0.0,0.75,1], [0.5,0.0,0.5,1],
-			   [1,1,1,1]]
-	ex_c = 0
-	print len(ex_t_step)
+	cur = 0;
 	for ex_n in range(0, len(ex_t_step)):
 		if ex_num != -1 and ex_n != ex_num:
 			continue
@@ -156,9 +152,8 @@ def plot_extrema(sp, tg, ex, time_step, ex_num=-1):
 		lon = ex_t.lon
 		if lon > 180.0: 	# wrap around date line
 			lon = lon-360.0
-		sp.plot(lon, ex_t.lat, 'r+', ms=5.0)
+		sp.plot(lon, ex_t.lat, 'b+', ms=5.0)
 		# plot the triangles in the object from their labels
-		cur = 0;
 		for tl in ex_t.object_list:
 			# get the triangle from the grid via its label
 			TRI = tg.get_triangle(tl)			
@@ -169,16 +164,12 @@ def plot_extrema(sp, tg, ex, time_step, ex_num=-1):
 				continue
 			# draw see-through triangle with black border
 			fc = [1,1,1,0]
-#			if (cur == 0):
-#				ec = [1,0,0,1]
-#				fc = [1,0,0,1]
-#			else:
-			ec = ec_list[ex_c % len(ec_list)]
-			cur += 0
+#			ec = [[0,0,0,1], [1,0,0,1]][cur%2]
+			ec = [0,0,0,1]
 			sp.fill([P[0][0], P[1][0], P[2][0], P[0][0]], \
 					[P[0][1], P[1][1], P[2][1], P[0][1]], \
-					facecolor=fc, edgecolor=ec, lw=0.25, zorder=0)			
-		ex_c += 1
+					facecolor=fc, edgecolor=ec, lw=0.25, zorder=2)
+		cur+=1
 		
 ###############################################################################
 
@@ -233,7 +224,7 @@ def plot_objects(sp, tg, ds, ex, time_step, level, ex_num=-1):
 			ec=[0,0,0,1]
 			sp.fill([P[0][0], P[1][0], P[2][0], P[0][0]], \
 					[P[0][1], P[1][1], P[2][1], P[0][1]], \
-					facecolor=col, edgecolor=ec, lw=0.25, zorder=1)
+					facecolor=col, edgecolor=ec, lw=0.25, zorder=2)
 
 ###############################################################################
 
@@ -318,6 +309,32 @@ def plot_original_grid(sp, lat_vals, lon_vals):
 
 ###############################################################################
 
+def plot_wind_speed(sp, lat, lon, wnd_speed):
+	wind_skp = 1
+	print "Plotting winds"
+	sc = 0.33
+	# plot the wind for the lat / lon coordinates
+	for th in range(0, lat.shape[0], wind_skp):
+		for lm in range(0, lat.shape[1], wind_skp):
+			la = lat[th, lm]
+			lo = lon[th, lm]
+			if lo > 180.0:
+				lo -= 360.0
+			sp.plot(lo, la, 'k.', markersize = wnd_speed[0, th, lm] * sc, zorder=1, alpha=0.5)
+					  
+###############################################################################
+
+def load_wind(wind_file, t_step):
+	fh = netcdf_file(wind_file)
+	lon = fh.variables["global_longitude1"][:,:]
+	lat = fh.variables["global_latitude1"][:,:]
+	wnd = fh.variables["field50"][t_step]
+	print "Max " + str(numpy.max(wnd))
+	
+	return wnd, lon, lat
+	
+###############################################################################
+
 if __name__ == "__main__":
 	mesh_file   = ""
 	regrid_file = ""
@@ -330,43 +347,47 @@ if __name__ == "__main__":
 	lat_limits  = [-90, 90]
 	lon_limits  = [-180, 180]
 	orig_mesh_file = ""
-	orig_mesh_var = ""
+	orig_mesh_var = ""	
+	wnd_file    = ""
 	
-	opts, args = getopt.getopt(sys.argv[1:], 'm:o:r:t:e:l:f:x:y:n:g:v:d', 
+	opts, args = getopt.getopt(sys.argv[1:], 'm:o:r:t:e:l:f:x:y:n:g:w:d', 
 							   ['mesh_file=', 'out_name=', 'regrid_file=', 't_step=', 
 							   	'extrema_file=', 'level=', 'track_file=', 'draw_mesh',
 							   	'lat_limits=', 'lon_limits=', 'extrema_num=',
-							   	'orig_file=', 'orig_var='])
+							   	'orig_file=', 'orig_var=',						   	
+							   	'wind_file='])
 
 	for opt, val in opts:
-		if opt in ['--mesh_file', '-m']:
+		if opt in ['--mesh_file',   '-m']:
 			mesh_file = val
 		if opt in ['--regrid_file', '-r']:
 			regrid_file = val
-		if opt in ['--t_step', '-t']:
+		if opt in ['--t_step',      '-t']:
 			time_step = int(val)
-		if opt in ['--out_name', '-o']:
+		if opt in ['--out_name',    '-o']:
 			out_name = val
-		if opt in ['--extrema', '-e']:
+		if opt in ['--extrema',     '-e']:
 			ex_file = val
-		if opt in ['--track_file', '-f']:
+		if opt in ['--track_file',  '-f']:
 			trk_file = val
 		if opt in ['--extrema_num', '-n']:
 			ex_num = int(val)
-		if opt in ['--level', '-l']:
+		if opt in ['--level',       '-l']:
 			grid_level = int(val)
-		if opt in ['--draw_mesh', '-d']:
+		if opt in ['--draw_mesh',   '-d']:
 			draw_mesh = True
-		if opt in ['--lat_limits', '-y']:
+		if opt in ['--lat_limits',  '-y']:
 			y = val.strip("[]").split(",")
 			lat_limits = [float(y[0]), float(y[1])]
-		if opt in ['--lon_limits', '-x']:
+		if opt in ['--lon_limits',  '-x']:
 			x = val.strip("[]").split(",")
 			lon_limits = [float(x[0]), float(x[1])]
-		if opt in ['--orig_file', '-g']:
+		if opt in ['--orig_file',  '-g']:
 			orig_mesh_file = val
-		if opt in ['--orig_var', '-v']:
-			orig_mesh_var = val
+		if opt in ['--orig_var',   '-v']:
+			orig_mesh_var = val			
+		if opt in ['--wind_file',  '-w']:
+			wind_file = val
 
 	# load each part in
 	tg = load_mesh_file(mesh_file)
@@ -385,6 +406,10 @@ if __name__ == "__main__":
 
 	if mesh_file != "" and draw_mesh:
 		plot_mesh(sp, tg, grid_level)
+
+	if wind_file != "":
+		wnd, wnd_lon, wnd_lat = load_wind(wind_file, time_step)
+		plot_wind_speed(sp, wnd_lat, wnd_lon, wnd)
 
 	if ex_file != "":
 		plot_extrema(sp, tg, ex, time_step, ex_num)
