@@ -118,9 +118,9 @@ bool minima_locator::is_in_object(indexed_force_tri_3D* O_TRI,
 	FP_TYPE cl_v = ds.get_data(t_step, C_TRI->get_ds_index());
 	FP_TYPE ol_v = ds.get_data(t_step, O_TRI->get_ds_index());
 	// quick checks
-	is_in &= cl_v != ds.get_missing_value();
-	is_in &= cl_v <= ol_v;
-	is_in &= cl_v < thresh;
+	is_in = is_in && cl_v != ds.get_missing_value();
+	is_in = is_in && cl_v <= ol_v;
+	is_in = is_in && cl_v < thresh;
 	return is_in;	
 }
 

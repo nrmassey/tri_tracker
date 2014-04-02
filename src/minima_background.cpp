@@ -169,8 +169,8 @@ bool minima_background::is_in_object(indexed_force_tri_3D* O_TRI,
 	// quick check	
 	is_in = cl_v <= ol_v;
 	// not the mv
-	is_in &= fabs(cl_v) <= fabs(0.99 * ds.get_missing_value());
-	is_in &= (cl_v <= -min_delta);
+	is_in = is_in && fabs(cl_v) <= fabs(0.99 * ds.get_missing_value());
+	is_in = is_in && (cl_v <= -min_delta);
 	return is_in;
 }
 
@@ -348,7 +348,7 @@ bool minima_background::process_data(void)
 	// contour the data
 	if (contour_value != 1.0)
 		contour_data();
-//	ds.save("ds_background_removed.rgd");
+//	ds.save("/Volumes/MacintoshHD2/shared/WaH_Data/OSTIA_ins0/1986/hadam3p_eu_j7u7_1986_1_008502004_0/ds_background_removed.rgd");
 	return true;
 }
 /******************************************************************************/
@@ -416,7 +416,7 @@ FP_TYPE minima_background::calculate_point_weight(FP_TYPE V, FP_TYPE min_v, FP_T
 void minima_background::trim_objects(void)
 {
 	std::cout << "# Trimming objects, timestep: ";
-	FP_TYPE min_diameter = 50;
+	FP_TYPE min_diameter = 0;
 	FP_TYPE max_diameter = 1500;
 
 	// calculate surface area of a triangle
