@@ -91,7 +91,7 @@ bool force_tri_3D::operator==(const force_tri_3D& rhs) const
 	bool share_pt = false;
 	for (int i=0; i<3; i++)
 		for (int j=0; j<3; j++)
-			share_pt |= (operator[](i) == rhs[j]);
+			share_pt = share_pt || (operator[](i) == rhs[j]);
 	bool pn_equal = (plane_normal() == rhs.plane_normal()) ||
                     (plane_normal() == rhs.plane_normal() * -1.0);
 	return share_pt && pn_equal;
