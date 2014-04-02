@@ -116,7 +116,7 @@ class qt_node
 		{
 			bool is_leaf = true;
 			for (int i=0; i<4; i++)
-				is_leaf &= (child[i] == NULL);
+				is_leaf = is_leaf && (child[i] == NULL);
 			return is_leaf;
 		}
 
