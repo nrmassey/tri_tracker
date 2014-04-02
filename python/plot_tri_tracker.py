@@ -312,7 +312,7 @@ def plot_original_grid(sp, lat_vals, lon_vals):
 def plot_wind_speed(sp, lat, lon, wnd_speed):
 	wind_skp = 1
 	print "Plotting winds"
-	sc = 0.33
+	sc = 0.175
 	# plot the wind for the lat / lon coordinates
 	for th in range(0, lat.shape[0], wind_skp):
 		for lm in range(0, lat.shape[1], wind_skp):
@@ -320,8 +320,8 @@ def plot_wind_speed(sp, lat, lon, wnd_speed):
 			lo = lon[th, lm]
 			if lo > 180.0:
 				lo -= 360.0
-			sp.plot(lo, la, 'k.', markersize = wnd_speed[0, th, lm] * sc, zorder=1, alpha=0.5)
-					  
+			sp.plot(lo, la, 'k.', markersize = wnd_speed[0, th, lm] * sc, zorder=1, alpha=0.25, mec='k')
+
 ###############################################################################
 
 def load_wind(wind_file, t_step):
@@ -338,6 +338,7 @@ def load_wind(wind_file, t_step):
 if __name__ == "__main__":
 	mesh_file   = ""
 	regrid_file = ""
+	wind_file   = ""
 	ex_file     = ""
 	ex_num		= -1
 	trk_file    = ""
