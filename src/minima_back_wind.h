@@ -38,10 +38,12 @@ class minima_back_wind : public minima_background
 		ncdata* wind_spd_field;
 		int ptile_thresh;
 		FP_TYPE wind_thresh_value;
+		int perim;
 
 		/*********************************************************************/
 		
 		bool wind_test(indexed_force_tri_3D* O_TRI, indexed_force_tri_3D* C_TRI, int t_step);
+		FP_TYPE calculate_average_wind(indexed_force_tri_3D* TRI, int t_step);
 		void expand_objects(void);
 		virtual void calculate_object_position(int o, int t);
 		virtual void calculate_object_intensity(int o, int t);

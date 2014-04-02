@@ -21,6 +21,7 @@
 minima_back_wind::minima_back_wind(void) : wind_spd_field(NULL),
 										   minima_background()
 {
+	perim=4;
 }
 
 /******************************************************************************/
@@ -38,12 +39,12 @@ bool minima_back_wind::process_data(void)
 	wind_spd_field = new ncdata(wind_file_name, wind_spd_field_name);
 	std::vector<FP_TYPE> all_wind_distr;
 	// calculate the threshold values for the wind speed test in each frame	
-	for (int t=0; t<wind_spd_field->get_t_len()+1; t++)
+	for (int t=0; t<wind_spd_field->get_t_len(); t++)
 	{
 		// calculate the wind speed at each grid point for this time step
-		for (int i=0; i<wind_spd_field->get_lon_len(); i++)
+		for (int i=perim; i<wind_spd_field->get_lon_len()-perim; i++)
 		{
-			for (int j=0; j<wind_spd_field->get_lat_len(); j++)
+			for (int j=perim; j<wind_spd_field->get_lat_len()-perim; j++)
 			{
 				FP_TYPE wnd_speed = wind_spd_field->get_data(i,j,0,t);
 				all_wind_distr.push_back(wnd_speed);
@@ -55,7 +56,6 @@ bool minima_back_wind::process_data(void)
 	// wind speed
 	int idx = int(FP_TYPE(all_wind_distr.size()) / 100 * ptile_thresh);
 	wind_thresh_value = all_wind_distr[idx];
-	std::cout << wind_thresh_value << std::endl;
 	return minima_background::process_data();
 }
 
@@ -75,8 +75,8 @@ void minima_back_wind::locate(void)
 	{
 		trim_objects();
 	}
+	expand_objects();
 	merge_objects();
-//	expand_objects();
 	ex_points_from_objects();
 }
 
@@ -167,13 +167,34 @@ FP_TYPE calc_percentile(std::vector<FP_TYPE>* wnd_val, FP_TYPE ptile)
 /******************************************************************************/
 
 bool minima_back_wind::is_in_object(indexed_force_tri_3D* O_TRI, 
-				  					 indexed_force_tri_3D* C_TRI, int t_step)
+				  					indexed_force_tri_3D* C_TRI, int t_step)
 {
 	// O_TRI - original triangle
 	// C_TRI - candidate triangle - triangle being tested for inclusion
-	bool is_in = minima_background::is_in_object(O_TRI, C_TRI, t_step);
-	bool wnd_tst = wind_test(O_TRI, C_TRI, t_step);
+	// restrict to 1000km
+	bool is_in = true;
+	is_in = is_in && calculate_triangle_distance(O_TRI, C_TRI) < 1000.0;
+	is_in = is_in && minima_background::is_in_object(O_TRI, C_TRI, t_step);
 	return is_in;
+}
+
+/******************************************************************************/
+
+FP_TYPE minima_back_wind::calculate_average_wind(indexed_force_tri_3D* TRI, int t_step)
+{
+	const std::list<grid_index>* c_tri_idxs = TRI->get_grid_indices();
+	FP_TYPE c_wnd_spd = 0.0;
+	FP_TYPE c_distance = 0.0;
+	// candidate triangle wind speed
+	for (std::list<grid_index>::const_iterator c_t_idx = c_tri_idxs->begin();
+		 c_t_idx != c_tri_idxs->end(); c_t_idx++)
+		c_wnd_spd += wind_spd_field->get_data(c_t_idx->i, c_t_idx->j, 0, t_step);
+		
+	if (c_tri_idxs->size() == 0)
+		return -1;
+	else
+		c_wnd_spd /= c_tri_idxs->size();
+	return c_wnd_spd;
 }
 
 /******************************************************************************/
@@ -181,22 +202,18 @@ bool minima_back_wind::is_in_object(indexed_force_tri_3D* O_TRI,
 bool minima_back_wind::wind_test(indexed_force_tri_3D* O_TRI, 
 								 indexed_force_tri_3D* C_TRI, int t_step)
 {
-	const std::list<grid_index>* c_tri_idxs = C_TRI->get_grid_indices();
-	FP_TYPE c_wnd_spd = 0.0;
-	FP_TYPE c_distance = 0.0;
-	// candidate triangle wind speed
-	for (std::list<grid_index>::const_iterator c_t_idx = c_tri_idxs->begin();
-		 c_t_idx != c_tri_idxs->end(); c_t_idx++)
-	{
-		c_wnd_spd += wind_spd_field->get_data(c_t_idx->i, c_t_idx->j, 0, t_step);
-	}
-		
-	if (c_tri_idxs->size() == 0)
-		return true;
-	else
-		c_wnd_spd /= c_tri_idxs->size();
-
+	// distance check - distance from original triangle to current triangle
+	// should be less than 1000km
+	const FP_TYPE dist_thresh = 1000;
+	FP_TYPE c_wnd_spd = calculate_average_wind(C_TRI, t_step);
 	bool wnd_test = c_wnd_spd >= wind_thresh_value;
+	FP_TYPE dist = calculate_triangle_distance(O_TRI, C_TRI);
+	wnd_test = wnd_test && dist < dist_thresh;
+	// how much over the wind_thresh? - special case for very strong winds on
+	// edge of 1000km radius
+	FP_TYPE wnd_ratio = c_wnd_spd / wind_thresh_value;
+	if (c_wnd_spd >= wind_thresh_value && dist < dist_thresh * wnd_ratio && dist < 1500)
+		wnd_test = true;
 	return wnd_test;
 }
 
@@ -204,7 +221,6 @@ bool minima_back_wind::wind_test(indexed_force_tri_3D* O_TRI,
 
 void minima_back_wind::expand_objects(void)
 {
-	//
 	std::cout << "# Expanding objects, timestep: ";
 	concentric_shell c_shell;
 	LABEL_STORE shell_in_object;
@@ -223,11 +239,11 @@ void minima_back_wind::expand_objects(void)
 			// get the "original triangle" for this object 
 			// - i.e. the one at the centre of the object
 			indexed_force_tri_3D* O_TRI = get_original_triangle(e, t);
-			bool keep_adding_to_obj = true;
 			// continue until no more triangles are added to the object
 			c_shell.calculate_inner_ring(&tg, svex);	// calculate the initial shape
 			// calculate the 1st concentric shell
 			c_shell.calculate(&tg, svex);
+			bool keep_adding_to_obj = true;
 			while (keep_adding_to_obj)
 			{
 				keep_adding_to_obj = false;
@@ -239,6 +255,7 @@ void minima_back_wind::expand_objects(void)
 				{
 					// get the candidate triangle
 					indexed_force_tri_3D* C_TRI = tg.get_triangle(*it_c_shell_labs);
+					FP_TYPE V = ds.get_data(t, C_TRI->get_ds_index());
 					if (wind_test(O_TRI, C_TRI, t))
 					{
 						keep_adding_to_obj = true;
@@ -247,7 +264,11 @@ void minima_back_wind::expand_objects(void)
 							*it_c_shell_labs) == svex->object_labels.end())
 						{
 							svex->object_labels.push_back(*it_c_shell_labs);
-							shell_in_object.push_back(*it_c_shell_labs);
+							if (std::find(shell_in_object.begin(), shell_in_object.end(), 
+								*it_c_shell_labs) == shell_in_object.end())
+							{
+								shell_in_object.push_back(*it_c_shell_labs);							
+							}
 						}
 					}
 				}
@@ -279,19 +300,18 @@ void minima_back_wind::calculate_object_position(int o, int t)
 	{
 		// get the triangle and its centroid
 		indexed_force_tri_3D* c_tri = tg.get_triangle(*it_ll);
+		// just based on position
+
 		// get the data value from the datastore
 		FP_TYPE V = ds.get_data(t, c_tri->get_ds_index());
 		// only add for the position if it is less than min_v+one contour
-		if (V == min_v)
-		{
-			vector_3D C = c_tri->centroid();
-			// get the weight assigned to this point
-			FP_TYPE w = calculate_point_weight(V, min_v, max_v);
-			// update the position
-			P += C * w;
-			// sum the weights
-			sum_w += w;
-		}
+		vector_3D C = c_tri->centroid();
+		// get the weight assigned to this point
+		FP_TYPE w = calculate_point_weight(V, min_v, max_v);
+		// update the position
+		P += C * w;
+		// sum the weights
+		sum_w += w;
 	}
 	// divide by the sum of the weights
 	if (sum_w > 0.0)
@@ -305,18 +325,6 @@ void minima_back_wind::calculate_object_position(int o, int t)
 		svex->lon = lon;
 		svex->lat = lat;
 	}
-/*	// get position of original triangle
-	indexed_force_tri_3D* O_TRI = get_original_triangle(o, t);
-	if (O_TRI == NULL)
-		return;
-	// convert triangle position to lat / lon
-	vector_3D C = O_TRI->centroid();
-	FP_TYPE lon, lat;
-	cart_to_model(C, lon, lat);
-	steering_extremum* svex = ex_list.get(t, o);
-	svex->lon = lon;
-	svex->lat = lat;
-	std::cout << svex->lon << " " << svex->lat << std::endl;*/
 }
 
 /*****************************************************************************/
@@ -329,14 +337,14 @@ void minima_back_wind::calculate_object_intensity(int o, int t)
 	// and max_dist is the maximum distance of all the objects
 	
 	// get the extremum - the lat and lon will have been set already
-/*	steering_extremum* svex = ex_list.get(t, o);
+	steering_extremum* svex = ex_list.get(t, o);
 	LABEL_STORE* object_labels = &(svex->object_labels);
 	FP_TYPE max_dist = -1.0;
 	
 	// find min / max of values in the object
 	FP_TYPE min_v = 2e20f;	// minimum value in object
 	FP_TYPE max_v = 0;		// maximum value in object
-	get_min_max_values(min_v, max_v, o, t);	
+	get_min_max_values(min_v, max_v, o, t);
 	// loop through the triangle objects to get maximum distance
 	for (LABEL_STORE::iterator it_ll = object_labels->begin();
 		 it_ll != object_labels->end(); it_ll++)
@@ -385,14 +393,8 @@ void minima_back_wind::calculate_object_intensity(int o, int t)
 			sum_w += w;
 		}
 	}
-	svex->intensity = sum_intensity / sum_w;*/
-	steering_extremum* svex = ex_list.get(t, o);
-	// get value of original triangle
-	indexed_force_tri_3D* O_TRI = get_original_triangle(o, t);
-	if (O_TRI == NULL)
-		return;
-	FP_TYPE V = ds.get_data(t, O_TRI->get_ds_index());
-	// convert triangle position to lat / lon
-	vector_3D C = O_TRI->centroid();
-	svex->intensity = V;
+	if (sum_w == 0.0)
+		svex->intensity = min_v;
+	else
+		svex->intensity = sum_intensity / sum_w;
 }
