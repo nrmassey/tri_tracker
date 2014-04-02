@@ -11,7 +11,7 @@
 #include <list>
 #include <algorithm>
 
-const ADJACENCY adjacency_type = POINT;
+const ADJACENCY adjacency_type = EDGE;
 
 /*****************************************************************************/
 
