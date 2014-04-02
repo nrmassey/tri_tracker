@@ -231,6 +231,19 @@ bool extrema_locator::objects_share_nodes(const LABEL_STORE* o1,
 	return false;
 }
 
+/******************************************************************************/
+
+FP_TYPE calculate_triangle_distance(indexed_force_tri_3D* O_TRI, 
+				  					indexed_force_tri_3D* C_TRI)
+{
+	FP_TYPE o_lon, o_lat;
+	FP_TYPE c_lon, c_lat;
+	cart_to_model(O_TRI->centroid(), o_lon, o_lat);
+	cart_to_model(C_TRI->centroid(), c_lon, c_lat);
+	FP_TYPE dist = haversine(o_lon, o_lat, c_lon, c_lat, EARTH_R);
+	return dist / 1000.0;
+}
+
 /*****************************************************************************/
 
 void extrema_locator::merge_objects(void)
@@ -252,6 +265,8 @@ void extrema_locator::merge_objects(void)
 		}
 		for (int o1=0; o1<o_s; o1++)
 		{
+			indexed_force_tri_3D* O1_TRI = get_original_triangle(o1, t);
+			
 			LABEL_STORE* o1_shell_labs = obj_c_shells[o1].get_labels();
 			if (o1_shell_labs->size() == 0)	// deleted object as above
 				continue;
@@ -275,6 +290,11 @@ void extrema_locator::merge_objects(void)
 				if (!test) test = objects_share_nodes(o1_labs, o2_shell_labs);
 				// 4th - labels in 1st object overlaps 2nd object
 				if (!test) test = objects_share_nodes(o1_labs, o2_labs);
+				
+				indexed_force_tri_3D* O2_TRI = get_original_triangle(o2, t);
+				FP_TYPE dist = calculate_triangle_distance(O1_TRI, O2_TRI);
+				test = test && dist < 1000.0;
+				
 				if (test)
 				{
 					// add to the first object
@@ -381,11 +401,16 @@ void extrema_locator::calculate_object_intensity(int o, int t)
 	// the triangles in the object.  The weight is defined as 1.0 - dist/max_dist
 	// where dist is the distance between the lat and lon of the feature point
 	// and max_dist is the maximum distance of all the objects
-	
+
 	// get the extremum - the lat and lon will have been set already
 	steering_extremum* svex = ex_list.get(t, o);
 	LABEL_STORE* object_labels = &(svex->object_labels);
 	FP_TYPE max_dist = -1.0;
+	
+	// find min / max of values in the object
+	FP_TYPE min_v = 2e20f;	// minimum value in object
+	FP_TYPE max_v = 0;		// maximum value in object
+	get_min_max_values(min_v, max_v, o, t);	
 	
 	// loop through the triangle objects
 	for (LABEL_STORE::iterator it_ll = object_labels->begin(); 
@@ -426,7 +451,10 @@ void extrema_locator::calculate_object_intensity(int o, int t)
 		sum_intensity += w * val;
 		sum_w += w;
 	}
-	svex->intensity = sum_intensity / sum_w;
+	if (sum_w == 0.0)
+		svex->intensity = min_v;
+	else
+		svex->intensity = sum_intensity / sum_w;
 }
 
 /*****************************************************************************/
