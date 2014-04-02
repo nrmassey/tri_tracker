@@ -473,9 +473,9 @@ void tracker::trim_tracks(void)
 		track* tr = tr_list.get(tr_i);
 		// calculate the latitude scaling for the curvature
 		bool add = true;
-		add &= tr->get_persistence() >= min_per;
-		add &= tr->get_length() >= min_len;
-		add &= tr->get_deviation() >= min_dev;
+		add = add && tr->get_persistence() >= min_per;
+		add = add && tr->get_length() >= min_len;
+		add = add && tr->get_deviation() >= min_dev;
 
 		if (add)
 			new_tr_list.add(*tr);
