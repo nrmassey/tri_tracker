@@ -416,8 +416,8 @@ FP_TYPE minima_background::calculate_point_weight(FP_TYPE V, FP_TYPE min_v, FP_T
 void minima_background::trim_objects(void)
 {
 	std::cout << "# Trimming objects, timestep: ";
-	FP_TYPE min_diameter = 0;
-	FP_TYPE max_diameter = 1500;
+	FP_TYPE min_diameter = 50;
+	FP_TYPE max_diameter = 1000;
 
 	// calculate surface area of a triangle
 	LABEL tri_lab_0 = ex_list.get(0,0)->object_labels[0];
@@ -466,7 +466,7 @@ void minima_background::refine_objects(void)
 			{
 				indexed_force_tri_3D* c_tri = tg.get_triangle(*it_ll);
 				FP_TYPE val = ds.get_data(t, c_tri->get_ds_index());
-				if (val <= min_v + contour_value)
+				if (val <= min_v)
 					new_labels.push_back(*it_ll);
 			}
 			ex_list.get(t, o1)->object_labels = new_labels;
