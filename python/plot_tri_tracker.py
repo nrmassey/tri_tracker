@@ -12,6 +12,7 @@ from netcdf_file import *
 
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+import cartopy.crs as ccrs
 
 from tri_grid import *
 from data_store import *
@@ -19,6 +20,10 @@ from extrema_list import *
 from track_list import *
 from draw_continents import *
 from geo_convert import *
+from conv_rot_grid import *
+
+pole_latitude=39.25
+pole_longitude=198.0
 
 ###############################################################################
 
@@ -33,14 +38,13 @@ def draw_colorbar(min_V, max_V, n_ticks, colmap, format="%i", title="none"):
 	cb.set_position([cbb, cbb*1.5, 1.0-2*cbb, cbh])
 	# set no y ticks or labels and don't draw the x tick lines
 	# finally! draw the colorbar
-	sc = abs(float(min_V - max_V)) / colmap.N
-	w = int(colmap.N/n_ticks)
 	xt = []
-	for c in range(0, colmap.N, w):
-		x = min_V + c * sc
-		col = colmap.__call__(c)
-		cb.fill([x,x,x+w*sc,x+w*sc],[0,1,1,0],fc=col,ec=col)
-		xt.append(x + 0.5*w*sc)
+	n = 1.0/(max_V-min_V)
+	w = (max_V - min_V) / n_ticks
+	for c in range(min_V, max_V+n_ticks, n_ticks):
+		col = colmap.__call__((c-min_V)*n)
+		cb.fill([c,c,c+w,c+w],[0,1,1,0],fc=col,ec=col)
+		xt.append(c)
 	cb.set_xlim(min_V, max_V)
 
 	# set the x tick values and labels
@@ -71,6 +75,9 @@ def plot_mesh(sp, tg, l, tl=-1):
 			# don't draw if it goes around the date line
 			if abs(P[0][0] - P[1][0]) > 180 or abs(P[1][0] - P[2][0]) > 180 or abs(P[2][0] - P[1][0]) > 180:
 				continue
+			P = [glob2rot(P[0][0], P[0][1], pole_longitude, pole_latitude),
+				 glob2rot(P[1][0], P[1][1], pole_longitude, pole_latitude),
+				 glob2rot(P[2][0], P[2][1], pole_longitude, pole_latitude)]				
 			fc = [1,1,1,0]
 			ec = [0,0,0,0.5]
 			sp.fill([P[0][0], P[1][0], P[2][0], P[0][0]], \
@@ -95,13 +102,17 @@ def plot_data(sp, tg, ds, time_step, level, colmap=cm.RdYlBu_r, dzt=1, keep_scal
 	
 	max_V = float(int(max_V / 100))
 	min_V = float(int(min_V / 100))
+	
+	max_V = 50
+	min_V = -50
+	
 	if (symmetric_cb):
 		if (abs(min_V) > abs(max_V)):
 			max_V = abs(min_V)
 		if (abs(max_V) > abs(min_V)):
 			min_V = -max_V
 	# calculate the denominator in the normalising equation
-	trans = max_V - min_V	
+	trans = max_V - min_V
 	for t in tri_list:
 		# get each corner of the triangle and convert to model coordinates (lat/lon)
 		TRI = t.get_data()
@@ -109,6 +120,9 @@ def plot_data(sp, tg, ds, time_step, level, colmap=cm.RdYlBu_r, dzt=1, keep_scal
 		# don't draw if it goes around the date line
 		if abs(P[0][0] - P[1][0]) > 180 or abs(P[1][0] - P[2][0]) > 180 or abs(P[2][0] - P[1][0]) > 180:
 			continue
+		P = [glob2rot(P[0][0], P[0][1], pole_longitude, pole_latitude),
+			 glob2rot(P[1][0], P[1][1], pole_longitude, pole_latitude),
+			 glob2rot(P[2][0], P[2][1], pole_longitude, pole_latitude)]
 		# get the value from the datastore
 		ds_idx = TRI.get_ds_index()
 		V = ds[time_step, TRI.get_ds_index()]+0.5
@@ -134,7 +148,7 @@ def plot_data(sp, tg, ds, time_step, level, colmap=cm.RdYlBu_r, dzt=1, keep_scal
 				facecolor=col, edgecolor=col, lw=0.25, zorder=0)
 				
 	# draw a colorbar
-	draw_colorbar((min_V), (max_V), 12.25, colmap, format="%i", title="MSLP hPa")
+	draw_colorbar((min_V), (max_V), 10, colmap, format="%i")#title="MSLP hPa")
 
 ###############################################################################
 
@@ -150,9 +164,8 @@ def plot_extrema(sp, tg, ex, time_step, ex_num=-1):
 			continue
 		ex_t = ex_t_step[ex_n]
 		lon = ex_t.lon
-		if lon > 180.0: 	# wrap around date line
-			lon = lon-360.0
-		sp.plot(lon, ex_t.lat, 'b+', ms=5.0)
+		P = glob2rot(lon, ex_t.lat, pole_longitude, pole_latitude)
+		sp.plot(P[0], P[1],'wo', ms=2.5, mec='w')
 		# plot the triangles in the object from their labels
 		for tl in ex_t.object_list:
 			# get the triangle from the grid via its label
@@ -162,6 +175,9 @@ def plot_extrema(sp, tg, ex, time_step, ex_num=-1):
 			# don't draw if it goes around the date line
 			if abs(P[0][0] - P[1][0]) > 180 or abs(P[1][0] - P[2][0]) > 180 or abs(P[2][0] - P[1][0]) > 180:
 				continue
+			P = [glob2rot(P[0][0], P[0][1], pole_longitude, pole_latitude),
+				 glob2rot(P[1][0], P[1][1], pole_longitude, pole_latitude),
+				 glob2rot(P[2][0], P[2][1], pole_longitude, pole_latitude)]				
 			# draw see-through triangle with black border
 			fc = [1,1,1,0]
 #			ec = [[0,0,0,1], [1,0,0,1]][cur%2]
@@ -186,7 +202,7 @@ def plot_objects(sp, tg, ds, ex, time_step, level, ex_num=-1):
 	max_V = float(int(max_V / 100))
 	min_V = float(int(min_V / 100))
 	trans = max_V - min_V
-	dzt=1
+	dzt=10
 	# plot each extrema	
 	for ex_n in range(0, len(ex_t_step)):
 		if ex_num != -1 and ex_n != ex_num:
@@ -205,6 +221,9 @@ def plot_objects(sp, tg, ds, ex, time_step, level, ex_num=-1):
 			# don't draw if it goes around the date line
 			if abs(P[0][0] - P[1][0]) > 180 or abs(P[1][0] - P[2][0]) > 180 or abs(P[2][0] - P[1][0]) > 180:
 				continue
+			P = [glob2rot(P[0][0], P[0][1], pole_longitude, pole_latitude),
+				 glob2rot(P[1][0], P[1][1], pole_longitude, pole_latitude),
+				 glob2rot(P[2][0], P[2][1], pole_longitude, pole_latitude)]				
 			# fill with the color
 			# get the value from the datastore
 			ds_idx = TRI.get_ds_index()
@@ -309,29 +328,30 @@ def plot_original_grid(sp, lat_vals, lon_vals):
 
 ###############################################################################
 
-def plot_wind_speed(sp, lat, lon, wnd_speed):
+def plot_wind_speed(sp, lat, lon, wnd_speed, max_wnd):
 	wind_skp = 1
 	print "Plotting winds"
 	sc = 0.175
 	# plot the wind for the lat / lon coordinates
 	for th in range(0, lat.shape[0], wind_skp):
-		for lm in range(0, lat.shape[1], wind_skp):
-			la = lat[th, lm]
-			lo = lon[th, lm]
+		for lm in range(0, lon.shape[0], wind_skp):
+			la = lat[th]
+			lo = lon[lm]
 			if lo > 180.0:
 				lo -= 360.0
-			sp.plot(lo, la, 'k.', markersize = wnd_speed[0, th, lm] * sc, zorder=1, alpha=0.25, mec='k')
+			a = wnd_speed[0,th,lm] / max_wnd
+			sp.plot(lo, la, 'k.', markersize = wnd_speed[0,th,lm] * sc, zorder=1, alpha=a, mec='k')
 
 ###############################################################################
 
 def load_wind(wind_file, t_step):
 	fh = netcdf_file(wind_file)
-	lon = fh.variables["global_longitude1"][:,:]
-	lat = fh.variables["global_latitude1"][:,:]
+	lon = fh.variables["longitude1"][:]
+	lat = fh.variables["latitude1"][:]
 	wnd = fh.variables["field50"][t_step]
 	print "Max " + str(numpy.max(wnd))
 	
-	return wnd, lon, lat
+	return wnd, lon, lat, numpy.max(wnd)
 	
 ###############################################################################
 
@@ -400,17 +420,18 @@ if __name__ == "__main__":
 		trk = load_track_file(trk_file)
 		
 	# decide what to do with the data
-	sp = plt.subplot("111")
+	projection = ccrs.RotatedPole(pole_latitude=pole_latitude, pole_longitude=pole_longitude)
+	sp = plt.subplot("111", projection=projection)
 	colmap=cm.RdYlBu_r
 	if regrid_file != "":
-		plot_data(sp, tg, ds, time_step, grid_level, colmap=colmap, dzt=1, keep_scale=False, symmetric_cb=False)
+		plot_data(sp, tg, ds, time_step, grid_level, colmap=colmap, dzt=10, keep_scale=False, symmetric_cb=False)
 
 	if mesh_file != "" and draw_mesh:
 		plot_mesh(sp, tg, grid_level)
 
 	if wind_file != "":
-		wnd, wnd_lon, wnd_lat = load_wind(wind_file, time_step)
-		plot_wind_speed(sp, wnd_lat, wnd_lon, wnd)
+		wnd, wnd_lon, wnd_lat, wnd_max = load_wind(wind_file, time_step)
+		plot_wind_speed(sp, wnd_lat, wnd_lon, wnd, wnd_max)
 
 	if ex_file != "":
 		plot_extrema(sp, tg, ex, time_step, ex_num)
@@ -420,10 +441,10 @@ if __name__ == "__main__":
 		lon, lat = load_original_grid(orig_mesh_file, orig_mesh_var)
 		plot_original_grid(sp, lon, lat)
 	
-	draw_continents(sp)
-	sp.set_aspect(1.0)
+	sp.coastlines()
+	sp.gridlines()
 	print "Done"
-	sp.set_xlim(lon_limits)
-	sp.set_ylim(lat_limits)
+	sp.get_axes().set_extent([-15.5, 39.0, 28.5, 72.0])
+	sp.set_aspect(1.0)
 	plt.savefig(out_name, bbox_inches='tight', dpi=500)
 	print "Saved to file: " + out_name
