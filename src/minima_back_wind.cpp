@@ -211,9 +211,9 @@ bool minima_back_wind::wind_test(indexed_force_tri_3D* O_TRI,
 	wnd_test = wnd_test && dist < dist_thresh;
 	// how much over the wind_thresh? - special case for very strong winds on
 	// edge of 1000km radius
-	FP_TYPE wnd_ratio = c_wnd_spd / wind_thresh_value;
+/*	FP_TYPE wnd_ratio = c_wnd_spd / wind_thresh_value;
 	if (c_wnd_spd >= wind_thresh_value && dist < dist_thresh * wnd_ratio && dist < 1500)
-		wnd_test = true;
+		wnd_test = true;*/
 	return wnd_test;
 }
 
@@ -264,12 +264,12 @@ void minima_back_wind::expand_objects(void)
 							*it_c_shell_labs) == svex->object_labels.end())
 						{
 							svex->object_labels.push_back(*it_c_shell_labs);
-							if (std::find(shell_in_object.begin(), shell_in_object.end(), 
-								*it_c_shell_labs) == shell_in_object.end())
-							{
-								shell_in_object.push_back(*it_c_shell_labs);							
-							}
 						}
+						if (std::find(shell_in_object.begin(), shell_in_object.end(), 
+							*it_c_shell_labs) == shell_in_object.end())
+						{
+							shell_in_object.push_back(*it_c_shell_labs);							
+						}						
 					}
 				}
 				c_shell.recalculate(&tg, &shell_in_object);
@@ -302,9 +302,8 @@ void minima_back_wind::calculate_object_position(int o, int t)
 		indexed_force_tri_3D* c_tri = tg.get_triangle(*it_ll);
 		// just based on position
 
-		// get the data value from the datastore
+		// get the data value from the datastore and the centroid
 		FP_TYPE V = ds.get_data(t, c_tri->get_ds_index());
-		// only add for the position if it is less than min_v+one contour
 		vector_3D C = c_tri->centroid();
 		// get the weight assigned to this point
 		FP_TYPE w = calculate_point_weight(V, min_v, max_v);
