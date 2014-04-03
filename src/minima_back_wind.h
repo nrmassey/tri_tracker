@@ -38,6 +38,7 @@ class minima_back_wind : public minima_background
 		ncdata* wind_spd_field;
 		int ptile_thresh;
 		FP_TYPE wind_thresh_value;
+		FP_TYPE wind_high_value;
 		int perim;
 
 		/*********************************************************************/

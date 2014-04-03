@@ -56,6 +56,8 @@ bool minima_back_wind::process_data(void)
 	// wind speed
 	int idx = int(FP_TYPE(all_wind_distr.size()) / 100 * ptile_thresh);
 	wind_thresh_value = all_wind_distr[idx];
+	idx = int(FP_TYPE(all_wind_distr.size()) / 100 * 90);
+	wind_high_value = all_wind_distr[idx];
 	return minima_background::process_data();
 }
 
@@ -211,9 +213,9 @@ bool minima_back_wind::wind_test(indexed_force_tri_3D* O_TRI,
 	wnd_test = wnd_test && dist < dist_thresh;
 	// how much over the wind_thresh? - special case for very strong winds on
 	// edge of 1000km radius
-/*	FP_TYPE wnd_ratio = c_wnd_spd / wind_thresh_value;
-	if (c_wnd_spd >= wind_thresh_value && dist < dist_thresh * wnd_ratio && dist < 1500)
-		wnd_test = true;*/
+	FP_TYPE wnd_ratio = c_wnd_spd / wind_thresh_value;
+	if (c_wnd_spd >= wind_high_value && dist < 1500)
+		wnd_test = true;
 	return wnd_test;
 }
 
