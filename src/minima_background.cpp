@@ -178,7 +178,7 @@ bool minima_background::is_in_object(indexed_force_tri_3D* O_TRI,
 
 void minima_background::calculate_background_field(void)
 {
-	std::cout << "# Calculating background field : ";
+	std::cout << "# Calculating background field" << std::endl;
 	
 	// load in the field first
 	bck_field_ds = new data_store();
@@ -348,7 +348,7 @@ bool minima_background::process_data(void)
 	// contour the data
 	if (contour_value != 1.0)
 		contour_data();
-//	ds.save("/Volumes/MacintoshHD2/shared/WaH_Data/OSTIA_ins0/1986/hadam3p_eu_j7u7_1986_1_008502004_0/ds_background_removed.rgd");
+//	ds.save("/Volumes/MacintoshHD2/shared/WaH_Data/OSTIA_ins0/1985/hadam3p_eu_ins0_1985_1_008476005_0/ds_background_removed.rgd");
 	return true;
 }
 /******************************************************************************/
@@ -416,13 +416,9 @@ FP_TYPE minima_background::calculate_point_weight(FP_TYPE V, FP_TYPE min_v, FP_T
 void minima_background::trim_objects(void)
 {
 	std::cout << "# Trimming objects, timestep: ";
-	FP_TYPE min_diameter = 50;
-	FP_TYPE max_diameter = 1000;
-
-	// calculate surface area of a triangle
-	LABEL tri_lab_0 = ex_list.get(0,0)->object_labels[0];
-	indexed_force_tri_3D* tri_0 = tg.get_triangle(tri_lab_0);
-	FP_TYPE tri_surf_area = tri_0->surface_area(6371);
+	FP_TYPE min_diameter = 25;
+	FP_TYPE max_diameter = 2000;
+	FP_TYPE tri_surf_area = -1.0;
 
 	for (int t=0; t<ex_list.size(); t++)
 	{
@@ -430,7 +426,15 @@ void minima_background::trim_objects(void)
 		int o_s = ex_list.number_of_extrema(t);
 		for (int o1=0; o1<o_s; o1++)
 		{
+			// calculate surface area of a triangle if not already calculated
+				
 			LABEL_STORE* o1_labs = &(ex_list.get(t, o1)->object_labels);
+			if (tri_surf_area == -1)
+			{
+				LABEL tri_lab_0 = (*o1_labs)[0];
+				indexed_force_tri_3D* tri_0 = tg.get_triangle(tri_lab_0);
+				tri_surf_area = tri_0->surface_area(6371);
+			}
 			FP_TYPE object_area = o1_labs->size() * tri_surf_area;
 			FP_TYPE object_diameter = sqrt(object_area / M_PI);
 			if (object_diameter < min_diameter || object_diameter > max_diameter)
