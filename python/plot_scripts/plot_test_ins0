@@ -1,23 +1,28 @@
 #! /usr/bin/env bash
-DATA_PATH=/Volumes/MacintoshHD2/shared/WaH_Data/OSTIA_ins0/1986/hadam3p_eu_j7u7_1986_1_008502004_0
+#DATA_PATH=/Volumes/MacintoshHD2/shared/WaH_Data/OSTIA_ins0/1986/hadam3p_eu_j7u7_1986_1_008502004_0
+DATA_PATH=/Volumes/MacintoshHD2/shared/WaH_Data/OSTIA_ins0/1985/hadam3p_eu_ins0_1985_1_008476005_0
 
 T_STEP=$1
+N_STEPS=$2
 LEV=7
 PLT_LEV=7
-WU_NAME=j7u7ga.pdi6dec
-RGD_NAME=$WU_NAME"_field8_1w"
-WND_NAME=$WU_NAME"_field50_1w"
+#WU_NAME=j7u7ga.pdi6dec
+#RGD_NAME=$WU_NAME"_field8_1w"
+#WND_NAME=$WU_NAME"_field50_1w"
+WU_NAME=ins0ga.pdi5dec
+RGD_NAME=$WU_NAME"_l7"
+BCK_FIELD="/Volumes/MacintoshHD2/shared/WaH_Data/OSTIA_ins0/back_ens/ens_mean_ins0_1985_dec.rgd"
 
-RGD_FILE=$DATA_PATH/$RGD_NAME"_l"$LEV".rgd"
+RGD_FILE=$DATA_PATH/$RGD_NAME".rgd"
+EX_FILE=$DATA_PATH/$RGD_NAME".ex"
+WND_FILE=$DATA_PATH/$WU_NAME".nc"
 RGD_FILE=$DATA_PATH/ds_background_removed.rgd
-EX_FILE=$DATA_PATH/$RGD_NAME"_l"$LEV".ex"
-WND_FILE=$DATA_PATH/$WND_NAME".nc"
 
 GRD_FILE=../../grids/eu_mesh_N0_L7_P4.msh
-OUT_FILE=../output/regional/$WU_NAME""_$T_STEP".png"
+OUT_FILE=../output/regional/$WU_NAME".png"
+OUT_FILE=/Users/massey/google_drive/Wind_Footprints/$WU_NAME".png"
 
-cmd="../plot_tri_tracker.py -m $GRD_FILE -r $RGD_FILE -o $OUT_FILE -l $PLT_LEV -t $T_STEP -x [-50,75] -y [10,80] -e $EX_FILE -w $WND_FILE"
-#cmd="../plot_tri_tracker.py -m $GRD_FILE -o $OUT_FILE -l $PLT_LEV -t $T_STEP -x [-50,75] -y [10,80] -e $EX_FILE -w $WND_FILE"
-#cmd="../plot_tri_tracker.py -m $GRD_FILE -o $OUT_FILE -l $PLT_LEV -t $T_STEP -x [-50,75] -y [10,80] -e $EX_FILE"
+#cmd="../plot_tri_tracker.py -m $GRD_FILE -o $OUT_FILE -l $PLT_LEV -t $T_STEP -s $N_STEPS -x [-50,75] -y [10,80] -e $EX_FILE -r $RGD_FILE -w $WND_FILE"
+cmd="../plot_tri_tracker.py -m $GRD_FILE -o $OUT_FILE -l $PLT_LEV -t $T_STEP -s $N_STEPS -x [-50,75] -y [10,80] -e $EX_FILE -w $WND_FILE"
 echo $cmd
-$cmd
+$cmd&
