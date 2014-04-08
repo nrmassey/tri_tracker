@@ -1,0 +1,16 @@
+BASE_PATH="/Volumes/MacintoshHD2/shared/WaH_Data/OSTIA_ins0/back_ens"
+#BASE_PATH="/Volumes/MacintoshHD2/shared/WaH_Data/OSTIA_ins0/back_clim"
+GRD_FILE=../../grids/eu_mesh_N0_L7_P4.msh
+PLT_LEV=7
+T_STEP=0
+
+for BCK_FILE in $BASE_PATH/*.rgd
+do
+	FNAME=${BCK_FILE/$BASE_PATH/}
+	FNAME=${FNAME:1}
+	OUTNAME=${FNAME/.rgd/.png}
+	OUTNAME=$BASE_PATH"/"$OUTNAME
+	cmd="../plot_tri_tracker.py -m $GRD_FILE -o $OUTNAME -l $PLT_LEV -t $T_STEP -x [-50,75] -y [10,80] -r $BCK_FILE"
+	$cmd
+	echo $OUTNAME
+done
