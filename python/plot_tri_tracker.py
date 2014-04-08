@@ -12,6 +12,7 @@ from netcdf_file import *
 
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+import matplotlib.colors as col
 import cartopy.crs as ccrs
 
 from tri_grid import *
@@ -30,8 +31,8 @@ pole_longitude=198.0
 def draw_colorbar(min_V, max_V, n_ticks, colmap, format="%i", title="none"):
 	# block plot has been drawn so add the colorbar
 	fig = plt.gcf()
-	cbh = 0.025
-	cbb = 0.05
+	cbh = 0.0325
+	cbb = -0.0125
 #	self.sp.set_position([self.cbb, self.cbh+2*self.cbb, 
 #						  1.0-2*self.cbb, 1.0-self.cbh-3*self.cbb])
 	cb = fig.add_subplot("212")
@@ -41,7 +42,7 @@ def draw_colorbar(min_V, max_V, n_ticks, colmap, format="%i", title="none"):
 	xt = []
 	n = 1.0/(max_V-min_V)
 	w = (max_V - min_V) / n_ticks
-	for c in range(min_V, max_V+n_ticks, n_ticks):
+	for c in range(int(min_V), int(max_V)+n_ticks, int(w)):
 		col = colmap.__call__((c-min_V)*n)
 		cb.fill([c,c,c+w,c+w],[0,1,1,0],fc=col,ec=col)
 		xt.append(c)
@@ -102,7 +103,9 @@ def plot_data(sp, tg, ds, time_step, level, colmap=cm.RdYlBu_r, dzt=1, keep_scal
 	
 	max_V = float(int(max_V / 100))
 	min_V = float(int(min_V / 100))
-	
+
+#	max_V = 1050
+#	min_V = 950
 	max_V = 50
 	min_V = -50
 	
@@ -165,7 +168,7 @@ def plot_extrema(sp, tg, ex, time_step, ex_num=-1):
 		ex_t = ex_t_step[ex_n]
 		lon = ex_t.lon
 		P = glob2rot(lon, ex_t.lat, pole_longitude, pole_latitude)
-		sp.plot(P[0], P[1],'wo', ms=2.5, mec='w')
+		sp.plot(P[0], P[1],'mo', ms=5.0, mec='w')
 		# plot the triangles in the object from their labels
 		for tl in ex_t.object_list:
 			# get the triangle from the grid via its label
@@ -180,11 +183,11 @@ def plot_extrema(sp, tg, ex, time_step, ex_num=-1):
 				 glob2rot(P[2][0], P[2][1], pole_longitude, pole_latitude)]				
 			# draw see-through triangle with black border
 			fc = [1,1,1,0]
-#			ec = [[0,0,0,1], [1,0,0,1]][cur%2]
+#			ec = [[0,0,0,0.5], [1,0,0,0.5], [0,1,0,0.5], [0,0,1,0.5]][cur%4]
 			ec = [0,0,0,1]
 			sp.fill([P[0][0], P[1][0], P[2][0], P[0][0]], \
 					[P[0][1], P[1][1], P[2][1], P[0][1]], \
-					facecolor=fc, edgecolor=ec, lw=0.25, zorder=2)
+					facecolor=fc, edgecolor=ec, lw=0.5, zorder=2)
 		cur+=1
 		
 ###############################################################################
@@ -344,15 +347,33 @@ def plot_wind_speed(sp, lat, lon, wnd_speed, max_wnd):
 
 ###############################################################################
 
-def load_wind(wind_file, t_step):
+def load_wind(wind_file):
 	fh = netcdf_file(wind_file)
 	lon = fh.variables["longitude1"][:]
 	lat = fh.variables["latitude1"][:]
-	wnd = fh.variables["field50"][t_step]
+	wnd = fh.variables["field50"][:]
 	print "Max " + str(numpy.max(wnd))
 	
 	return wnd, lon, lat, numpy.max(wnd)
 	
+###############################################################################
+
+def create_wind_color_map(levels):
+    # replicate XWS colours for wind speed
+    #
+    cmap = ["#ffffff", "#fff4e8", "#ffe1c1", "#ffaa4e", "#ff6d00",
+    		"#d33100", "#890000"] #, "#650000", "#390000"]
+    ccmap, norm = col.from_levels_and_colors(levels, cmap, 'neither')
+    return ccmap, norm
+
+###############################################################################
+
+def plot_wind_field(sp, wnd_lat, wnd_lon, wnd, wnd_max):
+	cbar_vals = [x for x in range(0,40,5)]
+	cmap, norm = create_wind_color_map(cbar_vals)
+	pmesh = sp.pcolormesh(wnd_lon, wnd_lat, wnd, cmap=cmap, vmax=cbar_vals[-1], vmin=cbar_vals[0], norm=norm)
+	draw_colorbar(cbar_vals[0], cbar_vals[-1]-5, len(cbar_vals)-2, cmap, format="%i", title="Max wind speed m/s")
+
 ###############################################################################
 
 if __name__ == "__main__":
@@ -370,9 +391,10 @@ if __name__ == "__main__":
 	orig_mesh_file = ""
 	orig_mesh_var = ""	
 	wnd_file    = ""
+	n_steps     = 0
 	
-	opts, args = getopt.getopt(sys.argv[1:], 'm:o:r:t:e:l:f:x:y:n:g:w:d', 
-							   ['mesh_file=', 'out_name=', 'regrid_file=', 't_step=', 
+	opts, args = getopt.getopt(sys.argv[1:], 'm:o:r:t:s:e:l:f:x:y:n:g:w:d', 
+							   ['mesh_file=', 'out_name=', 'regrid_file=', 't_step=', 'n_steps',
 							   	'extrema_file=', 'level=', 'track_file=', 'draw_mesh',
 							   	'lat_limits=', 'lon_limits=', 'extrema_num=',
 							   	'orig_file=', 'orig_var=',						   	
@@ -385,6 +407,8 @@ if __name__ == "__main__":
 			regrid_file = val
 		if opt in ['--t_step',      '-t']:
 			time_step = int(val)
+		if opt in ['--n_steps',     '-s']:
+			n_steps = int(val)
 		if opt in ['--out_name',    '-o']:
 			out_name = val
 		if opt in ['--extrema',     '-e']:
@@ -418,33 +442,44 @@ if __name__ == "__main__":
 		ex = load_extrema_file(ex_file)
 	if trk_file != "":
 		trk = load_track_file(trk_file)
+	if wind_file != "":
+		wnd, wnd_lon, wnd_lat, wnd_max = load_wind(wind_file)
+		
+	if orig_mesh_file != "" and orig_mesh_var != "":
+		# load and plot the original mesh as dots
+		o_lon, o_lat = load_original_grid(orig_mesh_file, orig_mesh_var)
 		
 	# decide what to do with the data
 	projection = ccrs.RotatedPole(pole_latitude=pole_latitude, pole_longitude=pole_longitude)
-	sp = plt.subplot("111", projection=projection)
 	colmap=cm.RdYlBu_r
-	if regrid_file != "":
-		plot_data(sp, tg, ds, time_step, grid_level, colmap=colmap, dzt=10, keep_scale=False, symmetric_cb=False)
+	for t_step in range(time_step, time_step+n_steps):
+		sp = plt.subplot("111", projection=projection)
+		if regrid_file != "":
+			plot_data(sp, tg, ds, t_step, grid_level, colmap=colmap, dzt=10, keep_scale=False, symmetric_cb=False)
 
-	if mesh_file != "" and draw_mesh:
-		plot_mesh(sp, tg, grid_level)
+		if mesh_file != "" and draw_mesh:
+			plot_mesh(sp, tg, grid_level)
 
-	if wind_file != "":
-		wnd, wnd_lon, wnd_lat, wnd_max = load_wind(wind_file, time_step)
-		plot_wind_speed(sp, wnd_lat, wnd_lon, wnd, wnd_max)
+		if wind_file != "":
+			if regrid_file != "":
+				plot_wind_speed(sp, wnd_lat, wnd_lon, wnd[t_step], wnd_max)
+			else:
+				plot_wind_field(sp, wnd_lat, wnd_lon, wnd[t_step,0], wnd_max)
 
-	if ex_file != "":
-		plot_extrema(sp, tg, ex, time_step, ex_num)
+		if ex_file != "":
+			plot_extrema(sp, tg, ex, t_step, ex_num)
 	
-	if orig_mesh_file != "" and orig_mesh_var != "":
-		# load and plot the original mesh as dots
-		lon, lat = load_original_grid(orig_mesh_file, orig_mesh_var)
-		plot_original_grid(sp, lon, lat)
+		if orig_mesh_file != "" and orig_mesh_var != "":
+			plot_original_grid(sp, o_lon, o_lat)
 	
-	sp.coastlines()
-	sp.gridlines()
-	print "Done"
-	sp.get_axes().set_extent([-15.5, 39.0, 28.5, 72.0])
-	sp.set_aspect(1.0)
-	plt.savefig(out_name, bbox_inches='tight', dpi=500)
-	print "Saved to file: " + out_name
+		sp.coastlines()
+		sp.gridlines()
+		sp.get_axes().set_extent([-15.5, 39.0, 28.5, 72.0])
+		sp.set_aspect(1.0)
+		if n_steps > 0:
+			this_out_name = out_name[:-4] + "_%03i" % t_step + ".png"
+		else:
+			this_out_name = out_name
+		plt.savefig(this_out_name, bbox_inches='tight', dpi=125)
+		print "Saved to file: " + this_out_name
+		plt.close()
