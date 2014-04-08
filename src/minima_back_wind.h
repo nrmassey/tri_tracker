@@ -25,9 +25,9 @@ class minima_back_wind : public minima_background
 		// Virtual functions that require overloading
 		virtual void parse_arg_string(std::string method_string);		
 		virtual void locate(void);
-		virtual bool process_data(void);
 		virtual bool is_in_object(indexed_force_tri_3D* O_TRI, 
 								  indexed_force_tri_3D* C_TRI, int t_step);
+		virtual bool process_data(void);
 		
 	protected:
 
@@ -36,7 +36,6 @@ class minima_back_wind : public minima_background
 		std::string wind_file_name;
 		std::string wind_spd_field_name;
 		ncdata* wind_spd_field;
-		int ptile_thresh;
 		FP_TYPE wind_thresh_value;
 		FP_TYPE wind_high_value;
 		int perim;

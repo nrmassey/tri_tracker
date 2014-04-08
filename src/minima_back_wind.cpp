@@ -33,36 +33,6 @@ minima_back_wind::~minima_back_wind(void)
 
 /******************************************************************************/
 
-bool minima_back_wind::process_data(void)
-{
-	// load the netcdf data and then call the base class process_data
-	wind_spd_field = new ncdata(wind_file_name, wind_spd_field_name);
-	std::vector<FP_TYPE> all_wind_distr;
-	// calculate the threshold values for the wind speed test in each frame	
-	for (int t=0; t<wind_spd_field->get_t_len(); t++)
-	{
-		// calculate the wind speed at each grid point for this time step
-		for (int i=perim; i<wind_spd_field->get_lon_len()-perim; i++)
-		{
-			for (int j=perim; j<wind_spd_field->get_lat_len()-perim; j++)
-			{
-				FP_TYPE wnd_speed = wind_spd_field->get_data(i,j,0,t);
-				all_wind_distr.push_back(wnd_speed);
-			}
-		}
-	}	
-	std::sort(all_wind_distr.begin(), all_wind_distr.end());
-	// we have now got all the data and sorted so calculate the threshold value of the 
-	// wind speed
-	int idx = int(FP_TYPE(all_wind_distr.size()) / 100 * ptile_thresh);
-	wind_thresh_value = all_wind_distr[idx];
-	idx = int(FP_TYPE(all_wind_distr.size()) / 100 * 90);
-	wind_high_value = all_wind_distr[idx];
-	return minima_background::process_data();
-}
-
-/******************************************************************************/
-
 void minima_back_wind::locate(void)
 {
 	process_data();
@@ -80,6 +50,14 @@ void minima_back_wind::locate(void)
 	expand_objects();
 	merge_objects();
 	ex_points_from_objects();
+}
+
+/******************************************************************************/
+
+bool minima_back_wind::process_data(void)
+{
+	wind_spd_field = new ncdata(wind_file_name, wind_spd_field_name);
+	return minima_background::process_data();
 }
 
 /******************************************************************************/
@@ -124,8 +102,9 @@ void minima_back_wind::parse_arg_string(std::string method_string)
 	c_pos = read_from_string(method_string, c_pos, ",", wind_spd_field_name);
 	
 	std::stringstream stream2(method_string.substr(c_pos, e_pos));	
-	stream2 >> ptile_thresh;
-		
+	stream2 >> wind_thresh_value >> dummy
+			>> wind_high_value;
+	
 	// add to the metadata
 	std::stringstream ss;
 	meta_data["method"] = "minima_back_wind";
@@ -142,8 +121,9 @@ void minima_back_wind::parse_arg_string(std::string method_string)
 	meta_data["minimum_delta"] = ss.str();
 	meta_data["wind_file_name"] = wind_file_name;
 	meta_data["wind_var_name"] = wind_spd_field_name;	
-	ss.str(""); ss << ptile_thresh;
-	meta_data["wind_ptile_thresh"] = ss.str();
+	ss.str(""); ss << wind_thresh_value;
+	meta_data["wind_thresh_value"] = ss.str();
+	ss.str(""); ss << wind_high_value;
 }
 				  
 /******************************************************************************/
