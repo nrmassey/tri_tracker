@@ -28,7 +28,7 @@ std::string read_string(std::ifstream& in)
 	for (int sc=0; sc<sl; sc++)
 	{
 		char c;
-		in >> c;
+		in >> std::noskipws >> c;
 		in_string += c;
 	}
 	return in_string;
