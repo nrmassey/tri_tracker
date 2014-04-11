@@ -7,6 +7,7 @@ REGRID_NAME = ../exe/regrid
 EXTREMA_NAME = ../exe/extrema
 TRACK_NAME = ../exe/track
 TRI_GRID_TO_NC_NAME = ../exe/tri_grid_to_netcdf
+EVENT_SET_NAME = ../exe/event_set
 
 # Compiler variables
 CPP = g++ -stdlib=libstdc++
@@ -59,7 +60,10 @@ TRACK_CPP = track.cpp track_list.cpp tracker.cpp extrema_list.cpp \
 			spline.cpp get_bearing.cpp haversine.cpp
 TRACK_OBJ = $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(TRACK_CPP))
 
-all: $(GEN_GRID_NAME) $(REGRID_NAME) $(TRI_GRID_TO_NC_NAME) $(EXTREMA_NAME) $(TRACK_NAME) $(TRACK_TO_EVENT_SET_NAME)
+EVENT_SET_CPP = event_set.cpp eventor.cpp extrema_list.cpp
+EVENT_SET_OBJ = $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(EVENT_SET_CPP))
+
+all: $(GEN_GRID_NAME) $(REGRID_NAME) $(TRI_GRID_TO_NC_NAME) $(EXTREMA_NAME) $(TRACK_NAME) $(EVENT_SET_NAME)
 
 obj:
 	@mkdir -p $@
@@ -78,13 +82,13 @@ $(REGRID_NAME): $(REGRID_OBJ) $(COMMON_OBJ) $(NETCDF_OBJ)
 $(TRI_GRID_TO_NC_NAME): $(TRI_GRID_TO_NC_OBJ) $(COMMON_OBJ) $(NETCDF_OBJ)
 	$(LD) $^ $(COMMON_LIBS) -o $(OUT_DIR)$@ $(LDFLAGS)
 
-$(EXTREMA_NAME): $(EXTREMA_OBJ) $(COMMON_OBJ) $(EXTREMA_PARENT_OBJ) $(NETCDF_OBJ)
+$(EXTREMA_NAME): $(EXTREMA_OBJ) $(COMMON_OBJ) $(NETCDF_OBJ)
 	$(LD) $^ $(COMMON_LIBS) -o $(OUT_DIR)$@ $(LDFLAGS)
 
-$(TRACK_NAME): $(TRACK_PARENT_OBJ) $(COMMON_OBJ) $(TRACK_OBJ) $(NETCDF_OBJ)
+$(TRACK_NAME): $(TRACK_OBJ) $(COMMON_OBJ) $(NETCDF_OBJ)
 	$(LD) $^ $(COMMON_LIBS) -o $(OUT_DIR)$@ $(LDFLAGS)
 
-$(TRACK_TO_EVENT_SET_NAME): $(TRACK_TO_EVENT_SET_PARENT_OBJ) $(COMMON_OBJ) $(TRACK_TO_EVENT_SET_OBJ) $(NETCDF_OBJ)
+$(EVENT_SET_NAME): $(EVENT_SET_OBJ) $(COMMON_OBJ) $(NETCDF_OBJ)
 	$(LD) $^ $(COMMON_LIBS) -o $(OUT_DIR)$@ $(LDFLAGS)
 
 clean:

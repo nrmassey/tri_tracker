@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-BASE_PATH=/Volumes/MacintoshHD2/shared/WaH_Data/OSTIA_ins0
+BASE_PATH=/Volumes/MacintoshHD2/shared/WaH_Data/OSTIA_ins0/
 INS0_DIR=$BASE_PATH/1985/hadam3p_eu_ins0_1985_1_008476005_0
 EU_FILE=$INS0_DIR/ins0ga.pdi5dec.nc
 WND_FILE=$INS0_DIR/ins0ga.pdi5dec.nc
@@ -14,13 +14,14 @@ NC_VAR=field8
 RGD_FILE=${EU_FILE%.nc}_l$LEV"".rgd
 OUT_FILE=${EU_FILE%.nc}_l$LEV"".png
 EX_FILE=${EU_FILE%.nc}_l$EX_LEV"".ex
+EV_FILE=${EU_FILE%.nc}_l$EX_LEV"".evt
 TRK_FILE=${EU_FILE%.nc}_l$LEV"".trk
 WND_FIELD=
 BCK_FIELD="$BASE_PATH/back_ens/ens_mean_ins0_1985_dec.rgd"
 EX_ARGS='minima_back_wind('$BCK_FIELD',5,1,5,200.0,1000.0,'$WND_FILE',field50,5.495520385,9.508252308)'
 GP_ARGS='geostrophic('$GP_FILE',field1,0)'
 TRK_WTS=" -0 1.0 -1 49.36 -2 5.54 -3 35.0 "
-TRK_ARGS="-r 1000 -p 1 -d 0 -l 0 -t 1 -k 1 -s 0 "
+TRK_ARGS="-r 1000 -p 1 -d 0 -l 0 -t 1 -k 1 -s 0 -T"
 
 # generate a grid
 #cmd="$EXE_PATH/gen_grid -f $EU_FILE -v $NC_VAR -o $GRID_FILE -n $N_PTS -I 0 -l $LEV -p $PERIM"
@@ -33,11 +34,16 @@ TRK_ARGS="-r 1000 -p 1 -d 0 -l 0 -t 1 -k 1 -s 0 "
 #$cmd
 
 # locate the extrema
-cmd="$EXE_PATH/extrema -i $RGD_FILE -o $EX_FILE -m $GRID_FILE -l $EX_LEV --method $EX_ARGS --steering $GP_ARGS"
-echo $cmd
-$cmd
-
-# track the extrema
-#cmd="$EXE_PATH/track -i $EX_FILE -o $TRK_FILE $TRK_WTS $TRK_ARGS"
+#cmd="$EXE_PATH/extrema -i $RGD_FILE -o $EX_FILE -m $GRID_FILE -l $EX_LEV --method $EX_ARGS --steering $GP_ARGS"
 #echo $cmd
 #$cmd
+
+# build an event set from the extrema
+#cmd="$EXE_PATH/event_set -i $EX_FILE -o $EV_FILE -p 6 -d 0.0 -l 0.0 -r 1000.0 -t 12 -v 10"
+#echo $cmd
+#$cmd
+
+# track the extrema
+cmd="$EXE_PATH/track -i $EX_FILE -o $TRK_FILE $TRK_WTS $TRK_ARGS"
+echo $cmd
+$cmd
