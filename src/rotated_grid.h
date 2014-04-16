@@ -8,6 +8,8 @@
 #ifndef ROTATED_GRID_H
 #define ROTATED_GRID_H
 
+#include <list>
+
 class rotated_grid
 {
 	public:
@@ -18,6 +20,7 @@ class rotated_grid
 		FP_TYPE get_global_longitude_value(int i, int j);
 		FP_TYPE get_rotated_pole_longitude(void);
 		FP_TYPE get_rotated_pole_latitude(void);
+		std::list<FP_TYPE> get_global_grid_box_values(int i, int j);
 	private:
 		// this function fills in the global_latitude_values and global_longitude_values
 		void calculate_global_coordinates(void);
