@@ -76,9 +76,6 @@ class extrema_locator
 								 const LABEL_STORE* o2);
 		void tstep_out_begin(int t);
 		void tstep_out_end(int t);
-		
-		int read_from_string(std::string str, int c_pos, const char* delim,
-							 std::string& ret_str);
 };
 
 #endif
