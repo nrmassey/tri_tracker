@@ -15,6 +15,7 @@
 #include "concentric_shell.h"
 #include "haversine.h"
 #include "geo_convert.h"
+#include "read_from_string.h"
 
 /******************************************************************************/
 
