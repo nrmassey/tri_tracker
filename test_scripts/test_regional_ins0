@@ -61,9 +61,9 @@ if [ ! -e $EV_TV_DIR ]; then
 	mkdir $EV_TV_DIR
 fi
 
-#cmd="$EXE_PATH/event_set -i $EX_FILES -o $EV_FILE -p 6 -d 0.0 -l 0.0 -r 1000.0 -t 12 -v 10 -m "$EU_FILES" -w "$WND_FILES" -s "$LSM_FILE" -g "$GRID_FILE
-#echo $cmd
-#$cmd
+cmd="$EXE_PATH/event_set -i $EX_FILES -o $EV_FILE -p 6 -d 0.0 -l 0.0 -r 1000.0 -t 12 -v 10 -m "$EU_FILES" -w "$WND_FILES" -s "$LSM_FILE" -g "$GRID_FILE
+echo $cmd
+$cmd
 
 cmd="mv $INS0_DIR"/*_72h.csv" $EV_72HR_DIR"
 $cmd
