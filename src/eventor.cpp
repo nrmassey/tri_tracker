@@ -299,6 +299,8 @@ void eventor::save(std::string output_fname)
         std::cout.flush();
 		// output name construction
 		std::stringstream ss;
+		ss.width(2);
+		ss.fill('0');
 		ss << e;
 		std::string out_72h_name = output_fname + "_e" + ss.str() + "_72h.csv";
 		save_72hour_footprint(out_72h_name, e);
@@ -328,6 +330,8 @@ void eventor::save(std::string output_fname)
             std::cout << "\b";
         }		
 		std::stringstream ss;
+		ss.width(2);
+		ss.fill('0');		
 		ss << e;
 		std::string out_tv_name = output_fname + "_e" + ss.str() + "_tv.csv";
 		save_time_varying_footprint(out_tv_name, e);
