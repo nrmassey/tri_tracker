@@ -605,11 +605,16 @@ void eventor::write_footprint(std::ofstream& fh)
 				// get the grid box corner points
 				std::list<FP_TYPE> gb_corners = mslp_field[0]->get_rotated_grid()->get_global_grid_box_values(i,j);
 				// write the data
-				fh << tru_lon << ", " << tru_lat << ", ";
+				fh.precision(2);
+				fh << std::fixed;
+				fh << tru_lon << "," << tru_lat << ",";
 				for (std::list<FP_TYPE>::iterator it_gbc = gb_corners.begin(); 
 					 it_gbc != gb_corners.end(); it_gbc++)
-					fh << *it_gbc << ", ";		// order is lon0,lat0, lon1,lat1, lon2,lat2, lon3,lat3
-				fh << mslp_footprint[idx] << ", " << wind_footprint[idx] << ", " << std::endl;
+					fh << *it_gbc << ",";		// order is lon0,lat0, lon1,lat1, lon2,lat2, lon3,lat3
+				fh.precision(0);
+				fh << mslp_footprint[idx] << ",";
+				fh.precision(2);
+				fh << wind_footprint[idx] << "," << std::endl;
 			}
 		}
 }
@@ -635,8 +640,10 @@ void eventor::save_72hour_footprint(std::string out_name, int e)
 	FP_TYPE t_val = get_time(central_t_step);
 	fh << days_since_to_date_string(t_val) << "," << std::endl;
 	fh << n_timesteps * hours_per_t_step << "," << std::endl;
-	fh << max_ws << ", " << std::endl;
-	fh << min_mslp << ", " << std::endl;
+	fh.precision(2);
+	fh << max_ws << "," << std::endl;
+	fh.precision(0);
+	fh << min_mslp << "," << std::endl;
 	fh << n_points << "," << std::endl;
 	write_footprint(fh);
 	fh.close();
@@ -713,7 +720,9 @@ void eventor::save_time_varying_footprint(std::string out_name, int e)
 	int n_timesteps = evt->get_persistence();
 	fh <<  n_timesteps * hours_per_t_step << ", " << std::endl;
 	// write the max windspeed and minimum mslp out
+	fh.precision(2);
 	fh << max_ws << ", " << std::endl;
+	fh.precision(0);
 	fh << min_mslp << ", " << std::endl;
 	// write the number of timesteps out
 	fh << n_timesteps << ", " << std::endl;
