@@ -645,6 +645,7 @@ void eventor::save_72hour_footprint(std::string out_name, int e)
 	fh << days_since_to_date_string(t_val) << "," << std::endl;
 	fh << n_timesteps * hours_per_t_step << "," << std::endl;
 	fh.precision(2);
+	fh << std::fixed;
 	fh << max_ws << "," << std::endl;
 	fh.precision(0);
 	fh << min_mslp << "," << std::endl;
@@ -722,26 +723,32 @@ void eventor::save_time_varying_footprint(std::string out_name, int e)
 	fh << days_since_to_date_string(start_t_val) << "," << std::endl;
 	// write the time period out
 	int n_timesteps = evt->get_persistence();
-	fh <<  n_timesteps * hours_per_t_step << ", " << std::endl;
+	fh <<  n_timesteps * hours_per_t_step << "," << std::endl;
 	// write the max windspeed and minimum mslp out
 	fh.precision(2);
-	fh << max_ws << ", " << std::endl;
+	fh << std::fixed;
+	fh << max_ws << "," << std::endl;
 	fh.precision(0);
-	fh << min_mslp << ", " << std::endl;
+	fh << min_mslp << "," << std::endl;
 	// write the number of timesteps out
-	fh << n_timesteps << ", " << std::endl;
+	fh << n_timesteps << "," << std::endl;
 	
 	// now loop over the track
 	for (int p=0; p<evt_track->size(); p++)
 	{
 		// write the time out
 		FP_TYPE t_val = start_t_val + p * 0.25;
-		if (!(t_val > mv))	// bogus time value?
-			t_val = get_time((*evt_track)[p].timestep+1);
 		fh << days_since_to_date_string(t_val) << "," << std::endl;
 		int n_points = 0;
 		calculate_time_step_footprint(e, p, n_points);
-		fh << n_points << ", " << std::endl;
+		fh.precision(2);
+		fh << std::fixed;
+		// write out the lon, lat, intensity and delta of the pressure minimum
+		steering_extremum* svex = (*evt_track)[p].svex;
+		fh << svex->lon << "," << svex->lat << ",";
+		fh.precision(0);
+		fh << svex->intensity << "," << svex->delta << std::endl;
+		fh << n_points << "," << std::endl;
 		write_footprint(fh);
 	}
 	fh.close();
