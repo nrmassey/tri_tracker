@@ -128,6 +128,10 @@ void extrema_locator::find_extrema(void)
 			{
 				// add to the extrema list, via the object list - the location and
 				// value of the svex is currently just filled with the missing value
+/*				vector_3D C = c_tri->centroid();
+				FP_TYPE lon, lat;
+				cart_to_model(C, lon, lat);
+				steering_extremum svex(lon, lat, mv, mv, mv, mv);*/
 				steering_extremum svex(mv, mv, mv, mv, mv, mv);
 				svex.object_labels.push_back(c_tri->get_label());
 				// now add to the extrema list
@@ -329,9 +333,9 @@ void extrema_locator::get_min_max_values(FP_TYPE& min_v, FP_TYPE& max_v,
 		indexed_force_tri_3D* c_tri = tg.get_triangle(*it_ll);
 		FP_TYPE val = ds.get_data(t, c_tri->get_ds_index());
 		// find the min and max values
-		if (fabs(val) < 0.99*fabs(mv) && val > max_v)
+		if (fabs(val) < 0.99*fabs(mv) && val > max_v && fabs(val) < 1e10)
 			max_v = val;
-		if (fabs(val) < 0.99*fabs(mv) && val < min_v)
+		if (fabs(val) < 0.99*fabs(mv) && val < min_v && fabs(val) < 1e10)
 			min_v = val;
 	}	
 }
@@ -397,7 +401,7 @@ void extrema_locator::calculate_object_intensity(int o, int t)
 	// find min / max of values in the object
 	FP_TYPE min_v = 2e20f;	// minimum value in object
 	FP_TYPE max_v = 0;		// maximum value in object
-	get_min_max_values(min_v, max_v, o, t);	
+	get_min_max_values(min_v, max_v, o, t);		
 	
 	// loop through the triangle objects
 	for (LABEL_STORE::iterator it_ll = object_labels->begin(); 
@@ -452,7 +456,7 @@ void extrema_locator::calculate_object_delta(int o, int t)
 	// the maximum value of the object
 	// find min / max of values in the object
 	FP_TYPE min_v = 2e20f;	// minimum value in object
-	FP_TYPE max_v = 0;		// maximum value in object
+	FP_TYPE max_v = -2e20f;		// maximum value in object
 	get_min_max_values(min_v, max_v, o, t);	
 	steering_extremum* svex = ex_list.get(t, o);
 	svex->delta = fabs(max_v - min_v);
@@ -483,8 +487,8 @@ void extrema_locator::ex_points_from_objects(void)
 			calculate_object_position(o, t);
 			if (sv != NULL)
 				calculate_steering_vector(o, t);
-			calculate_object_intensity(o, t);
 			calculate_object_delta(o, t);
+			calculate_object_intensity(o, t);
 		}
 		tstep_out_end(t);
 	}

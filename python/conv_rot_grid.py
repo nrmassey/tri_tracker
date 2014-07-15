@@ -126,6 +126,33 @@ def rot2glob(lon, lat, pole_lon, pole_lat):
 	return lon_out, lat_out
 
 ########################################################################################
+### Convert rotated (regional) to global grid - for latitude only (for weights)
+
+def rot2glob_lat_only(lon, lat, pole_lat):
+	# Make sure rotlon is between 0 and 360
+	while (lon >= 360.0):
+		lon -= 360.0
+	while (lon <    0.0):
+		lon += 360.0
+
+	# Convert inputs to radians
+	lon = math.radians(lon)
+	lat = math.radians(lat)
+	pole_lat = math.radians(pole_lat)
+
+	cpart = math.cos(lon) * math.cos(lat)
+	x = math.cos(pole_lat) * cpart + math.sin(pole_lat) * math.sin(lat)
+
+	if (x >=  1.0):
+		x =  1.0
+	if (x <= -1.0):
+		x = -1.0
+	lat_out = math.asin(x)
+	lat_out = math.degrees(lat_out)
+
+	return lat_out
+
+########################################################################################
 
 rot2reg = rot2glob
 reg2rot = glob2rot
@@ -137,6 +164,8 @@ if __name__ == "__main__":
 	lat = 38.5
 	lon_r, lat_r = glob2rot(lon, lat, pole_lon, pole_lat)
 	lon_g, lat_g = rot2glob(lon_r, lat_r, pole_lon, pole_lat)
+	lat_o = rot2glob_lat_only(lon_r, lat_r, pole_lat)
 	print lon, lat
 	print lon_r, lat_r
 	print lon_g, lat_g
+	print lat_o

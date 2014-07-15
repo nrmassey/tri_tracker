@@ -271,8 +271,11 @@ void minima_back_wind::calculate_object_position(int o, int t)
 	LABEL_STORE* object_labels = &(svex->object_labels);
 	// find min / max of values in the object
 	FP_TYPE min_v = 2e20f;	// minimum value in object
-	FP_TYPE max_v = 0;		// maximum value in object
+	FP_TYPE max_v = -2e20f;		// maximum value in object
 	get_min_max_values(min_v, max_v, o, t);
+	
+	if (min_v == 2e20f)
+		return;
 	
 	// position vector in Cartesian coordinates
 	vector_3D P;
@@ -283,8 +286,6 @@ void minima_back_wind::calculate_object_position(int o, int t)
 	{
 		// get the triangle and its centroid
 		indexed_force_tri_3D* c_tri = tg.get_triangle(*it_ll);
-		// just based on position
-
 		// get the data value from the datastore and the centroid
 		FP_TYPE V = ds.get_data(t, c_tri->get_ds_index());
 		vector_3D C = c_tri->centroid();
@@ -325,8 +326,11 @@ void minima_back_wind::calculate_object_intensity(int o, int t)
 	
 	// find min / max of values in the object
 	FP_TYPE min_v = 2e20f;	// minimum value in object
-	FP_TYPE max_v = 0;		// maximum value in object
+	FP_TYPE max_v = -2e20f;		// maximum value in object
 	get_min_max_values(min_v, max_v, o, t);
+	if (min_v == 2e20f)
+		return;
+	FP_TYPE mv = ds.get_missing_value();
 	// loop through the triangle objects to get maximum distance
 	for (LABEL_STORE::iterator it_ll = object_labels->begin();
 		 it_ll != object_labels->end(); it_ll++)
@@ -336,7 +340,7 @@ void minima_back_wind::calculate_object_intensity(int o, int t)
 		// get the data value from the datastore
 		FP_TYPE V = ds.get_data(t, c_tri->get_ds_index());
 		// calculate the distance if the value is < min_v + one contour
-		if (V <= min_v+contour_value)
+		if (V <= min_v+contour_value && fabs(V) < 20000)
 		{
 			// get the centroid and convert to lat / lon
 			vector_3D C = c_tri->centroid();
@@ -359,7 +363,7 @@ void minima_back_wind::calculate_object_intensity(int o, int t)
 		// now get the value from the datastore
 		FP_TYPE V = ds.get_data(t, c_tri->get_ds_index());
 		// only add if V <= min_v + one contour
-		if (V <= min_v+contour_value)
+		if (V <= min_v+contour_value && fabs(V) < 20000)
 		{
 			// get the centroid and convert to lat / lon
 			vector_3D C = c_tri->centroid();

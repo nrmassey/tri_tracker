@@ -13,20 +13,21 @@ EX_FILE=${EU_FILE%.nc}_l$EX_LEV"".ex
 TRK_FILE=${EU_FILE%.nc}_l$LEV"".trk
 NC_RE_FILE=$RGD_FILE"_0D8".nc
 DEG=0.80
-EX_ARGS='minima(101300,0,12,0.0000)'
+minima_back_wind=('$BCK_FIELD',5,1,5,200.0,1000.0,'$WND_FILE',wind,5.495520385,9.508252308)'
+EX_ARGS='
 GP_ARGS='geostrophic('$EU_FILE',field8,0)'
 TRK_WTS=" -0 1.0 -1 49.36 -2 5.54 -3 35.0 "
 TRK_ARGS="-r 1000 -p 1 -d 0 -l 0 -t 1 -k 1 -s 0 "
 
 # generate a grid
-cmd="$EXE_PATH/gen_grid -f $EU_FILE -v $NC_VAR -o $GRID_FILE -n $N_PTS -I 0 -l $LEV"
-echo $cmd
-$cmd
+#cmd="$EXE_PATH/gen_grid -f $EU_FILE -v $NC_VAR -o $GRID_FILE -n $N_PTS -I 0 -l $LEV"
+#echo $cmd
+#$cmd
 
 # regrid the netCDF file
-cmd="$EXE_PATH/regrid -i $EU_FILE -v $NC_VAR -m $GRID_FILE -o $RGD_FILE -S 0.07"
-echo $cmd
-$cmd
+#cmd="$EXE_PATH/regrid -i $EU_FILE -v $NC_VAR -m $GRID_FILE -o $RGD_FILE -S 0.07"
+#echo $cmd
+#$cmd
 
 # convert back to netCDF file
 #cmd=./tri_grid_to_netcdf -i $RGD_FILE -m $GRID_FILE -v $NC_VAR -o $NC_RE_FILE -l $LEV -s $DEG -t $DEG
@@ -34,9 +35,9 @@ $cmd
 #$cmd
 
 # locate the extrema
-#cmd="$EXE_PATH/extrema -i $RGD_FILE -o $EX_FILE -m $GRID_FILE -l $EX_LEV --method $EX_ARGS"
-#echo $cmd
-#$cmd
+cmd="$EXE_PATH/extrema -i $RGD_FILE -o $EX_FILE -m $GRID_FILE -l $EX_LEV --method $EX_ARGS"
+echo $cmd
+$cmd
 
 # track the extrema
 #cmd="$EXE_PATH/track -i $EX_FILE -o $TRK_FILE $TRK_WTS $TRK_ARGS"

@@ -10,14 +10,14 @@
 #include "haversine.h"
 #include <sstream>
 #include <netcdfcpp.h>
-const FP_TYPE mv = -2e20;
+const FP_TYPE w_mv = -2e20;
 
 /*****************************************************************************/
 
 std::string days_since_to_date_string(FP_TYPE days_since)
 {
 	// should be able to pass in base date, and calendar type, but we don't have time!
-	int base_year  = 1959;
+	int base_year  = 1989;
 	int base_month = 12;
 	int base_day   = 1;
 	
@@ -112,7 +112,8 @@ eventor::eventor(std::vector<std::string> iinput_fname, int imin_per,
 	{
 		NcFile* nc_file = new NcFile(mslp_file_name[i].c_str());
 		// get the time netCDF variable
-		NcVar* nc_var = nc_file->get_var("time1");
+//		NcVar* nc_var = nc_file->get_var("time1");
+		NcVar* nc_var = nc_file->get_var("t");
 		int t_len = nc_var->get_dim(0)->size();
 		FP_TYPE* time_data = new FP_TYPE[t_len];
 		nc_var->get(time_data, t_len);
@@ -523,8 +524,8 @@ void eventor::calculate_wind_footprint(int event_track_number, int event_point_i
 	for (int j=0; j<footprint_height; j++)
 		for (int i=0; i<footprint_width; i++)
 		{
-			mslp_footprint[j*footprint_width+i] = mv;
-			wind_footprint[j*footprint_width+i] = mv;
+			mslp_footprint[j*footprint_width+i] = w_mv;
+			wind_footprint[j*footprint_width+i] = w_mv;
 		}
 	// get the event track
 	event_track* evt = event_list.get_event_track(event_track_number);
@@ -567,10 +568,10 @@ void eventor::calculate_wind_footprint(int event_track_number, int event_point_i
 				FP_TYPE mslp = get_mslp_data(t_step, it_gi->j, it_gi->i);
 				// check if this wind is greater than the current wind in the footprint at
 				// these indices
-				if (wind_ws > wind_footprint[it_gi->j*footprint_width+it_gi->i] && 
+				int idx = it_gi->j*footprint_width+it_gi->i;
+				if (wind_ws > wind_footprint[idx] && 
 					wind_ws > 0.0 && mslp > 0.0)
 				{
-					int idx = it_gi->j*footprint_width+it_gi->i;
 					wind_footprint[idx] = wind_ws;
 					mslp_footprint[idx] = mslp;
 				}
@@ -587,7 +588,7 @@ void eventor::calculate_wind_footprint(int event_track_number, int event_point_i
 	n_points = 0;
 	for (int j=0; j<footprint_height; j++)
 		for (int i=0; i<footprint_width; i++)
-			if (wind_footprint[j*footprint_width+i] > mv)
+			if (wind_footprint[j*footprint_width+i] > w_mv)
 				n_points++;
 }
 
@@ -600,7 +601,7 @@ void eventor::write_footprint(std::ofstream& fh)
 		for (int i=0; i<footprint_width; i++)
 		{
 			int idx = j*footprint_width+i;
-			if (wind_footprint[idx] > mv)
+			if (wind_footprint[idx] > w_mv)
 			{
 				// get the true latitude / longitude from the rotated grid
 				FP_TYPE tru_lon, tru_lat;
@@ -663,8 +664,8 @@ void eventor::calculate_time_step_footprint(int event_track_number, int event_po
 	for (int j=0; j<footprint_height; j++)
 		for (int i=0; i<footprint_width; i++)
 		{
-			mslp_footprint[j*footprint_width+i] = mv;
-			wind_footprint[j*footprint_width+i] = mv;
+			mslp_footprint[j*footprint_width+i] = w_mv;
+			wind_footprint[j*footprint_width+i] = w_mv;
 		}
 	// get the event track
 	event_track* evt = event_list.get_event_track(event_track_number);
@@ -682,11 +683,11 @@ void eventor::calculate_time_step_footprint(int event_track_number, int event_po
 			FP_TYPE wind_ws = get_wind_speed_data(evp.timestep, it_gi->j, it_gi->i);
 			FP_TYPE mslp = get_mslp_data(evp.timestep, it_gi->j, it_gi->i);
 			// check if this wind is greater than the current wind in the footprint at
-			// these indices
-			if (wind_ws > wind_footprint[it_gi->j*footprint_width+it_gi->i] && 
+			// these indices			
+			int idx = it_gi->j*footprint_width+it_gi->i;
+			if (wind_ws > wind_footprint[idx] && 
 				wind_ws > 0.0 && mslp > 0.0)
 			{
-				int idx = it_gi->j*footprint_width+it_gi->i;
 				wind_footprint[idx] = wind_ws;
 				mslp_footprint[idx] = mslp;
 			}
@@ -696,7 +697,7 @@ void eventor::calculate_time_step_footprint(int event_track_number, int event_po
 	n_points = 0;
 	for (int j=0; j<footprint_height; j++)
 		for (int i=0; i<footprint_width; i++)
-			if (wind_footprint[j*footprint_width+i] > mv)
+			if (wind_footprint[j*footprint_width+i] > w_mv)
 				n_points++;	
 }
 

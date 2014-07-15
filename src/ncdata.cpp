@@ -86,7 +86,7 @@ ncdata::ncdata(std::string file_name, std::string var_name) :
 	{
 		throw std::string("file " + file_name + " not found or not a netCDF file.");
 	}
-	std::cout << "# Loading netCDF file" << std::endl;
+	std::cout << "# Loading netCDF file " << file_name << std::endl;
 	// get the netCDF variable
 	nc_var = nc_file->get_var(var_name.c_str());
 	// get the grid spacing

@@ -1,7 +1,7 @@
 #! /usr/bin/env bash
 DATA_PATH=../../test_data/hadam3p_eu_2kci_1962_1_007425047_1
 
-T_STEP=0
+T_STEP=1
 LEV=7
 PLT_LEV=7
 WU_NAME=2kciga.pdg2dec
@@ -11,6 +11,7 @@ RGD_FILE=$DATA_PATH/$WU_NAME"_l"$LEV".rgd"
 GRD_FILE=../../grids/eu_mesh_0_7.msh
 OUT_FILE=../output/regional/$WU_NAME""_$T_STEP".png"
 
-cmd="../plot_tri_tracker.py -m $GRD_FILE -r $RGD_FILE -o $OUT_FILE -l $PLT_LEV -t $T_STEP -x [-50,75] -y [10,80] -d"
+cmd="../plot_tri_tracker.py -m $GRD_FILE -r $RGD_FILE -o $OUT_FILE -l $PLT_LEV -t $T_STEP -x [-15.5,39.0] -y [28.5,72.0] -p 198.0 -q 39.25"
+#cmd="../plot_tri_tracker.py -m $GRD_FILE -o $OUT_FILE -l $PLT_LEV -t $T_STEP -x [-15.5,39.0] -y [28.5,72.0] -p 198.0 -q 39.25"
 echo $cmd
 $cmd
