@@ -4,6 +4,9 @@
 ** Date    : 05/08/13
 ** Purpose : Calculate the geostrophic wind from a file passed in.  Inherits
 **           from steering vector class
+** Modified: 18/08/14 - updated to use spherical coordinate version of 
+**           geostrophic wind equation and to directly calculated the 
+**           derivatives from the 5 point splines
 ******************************************************************************/
 
 #include "geo_wind_vector.h"
@@ -12,6 +15,10 @@
 #include <math.h>
 #include "haversine.h"
 #include "spline.h"
+
+/*****************************************************************************/
+
+const FP_TYPE f_deg_to_rad = M_PI/180.0;
 
 /*****************************************************************************/
 
@@ -102,35 +109,14 @@ spline form_lon_spline(ncdata* nc_data, int lon_idx, int lat_idx, int z, int t)
 {
     // construct a 5 pt spline from the data in the lon direction
     std::vector<FP_TYPE> lon_vals(5, 0.0);
+	std::vector<FP_TYPE> x_vals(5);
     for (int i=-2; i<3; i++)
     {
         int lat_i, lon_i;
         get_lon_lat_idx(nc_data, lon_idx, lat_idx, i, 0, lon_i, lat_i);
         lon_vals[i+2] = nc_data->get_data(lon_i, lat_i, z, t);
+        x_vals[i+2] = (nc_data->get_lon_s() + nc_data->get_lon_d()*lon_i)* f_deg_to_rad;
     }
-	// check to see if any of the values are the missing value
-	const int l[5] = {4,3,2,3,4};
-	for (int i=0; i<5; i++)
-	{
-		if (lon_vals[i] == nc_data->get_missing_value())
-		{
-			int dir = 1;
-			if (i > 2)
-				dir = -1;
-			for (int j=1; j<l[i]; j++)
-			{
-				int p = i + j*dir;
-				if (lon_vals[p] != nc_data->get_missing_value())
-				{
-					lon_vals[i] = lon_vals[p];
-					break;
-				}
-			}
-		}
-	}
-	std::vector<FP_TYPE> x_vals(5);
-	for (int i=0; i<5; i++)
-		x_vals[i] = i;
     spline lon_spline(lon_vals, x_vals, nc_data->get_missing_value());
     return lon_spline;
 }
@@ -141,67 +127,23 @@ spline form_lat_spline(ncdata* nc_data, int lon_idx, int lat_idx, int z, int t)
 {
     // construct a 5 pt spline from the data in the lat direction
     std::vector<FP_TYPE> lat_vals(5, 0.0);
+	std::vector<FP_TYPE> y_vals(5);
+	
     for (int j=-2; j<3; j++)
     {
         int lat_i, lon_i;
         get_lon_lat_idx(nc_data, lon_idx, lat_idx, 0, j, lon_i, lat_i);
-        lat_vals[j+2] = nc_data->get_data(lon_i, lat_i, z, t);
+        // put the data values in backwards
+        lat_vals[2-j] = nc_data->get_data(lon_i, lat_i, z, t);
+        y_vals[2-j] = (nc_data->get_lat_s() + lat_i*nc_data->get_lat_d()) * f_deg_to_rad;
     }
-    // check to see if any of the values are the missing value
-    const int l[5] = {4,3,2,3,4};
-    for (int j=0; j<5; j++)
-    {
-        if (lat_vals[j] == nc_data->get_missing_value())
-        {
-            int dir = 1;
-            if (j > 2)
-                dir = -1;
-            for (int k=1; k<l[j]; k++)
-            {
-                int p = j + k*dir;
-                if (lat_vals[p] != nc_data->get_missing_value())
-                {
-                    lat_vals[j] = lat_vals[p];
-                    break;
-                }
-            }
-        }
-    }
-	std::vector<FP_TYPE> y_vals(5);
-	for (int i=0; i<5; i++)
-		y_vals[i] = i;
-
     spline lat_spline(lat_vals, y_vals, nc_data->get_missing_value());
     return lat_spline;
 }
 
 /*****************************************************************************/
 
-FP_TYPE calc_five_pt_difference(spline& spl, FP_TYPE mv)
-{
-    // calculate centred difference from the 5 point spline
-    // set h to 1 to use the actual values
-    const FP_TYPE h = 0.1;
-    const FP_TYPE y = 2.0;
-
-    // calculate the terms in the difference
-    FP_TYPE t1 = -spl.evaluate(y+2*h);   // first term -S(y+2h)
-    FP_TYPE t2 = 8*spl.evaluate(y+h);    // 8S(y+h)
-    FP_TYPE t3 = -8*spl.evaluate(y-h);   // -8S(y-h)
-    FP_TYPE t4 = spl.evaluate(y-2*h);    // S(y-2h)
-
-	FP_TYPE t;
-	if (t1 == mv || t2 == mv || t3 == mv || t4 == mv)
-		t = mv;
-	else
-		t = (t1+t2+t3+t4) / (12*h);
-    return t;
-}
-
-/*****************************************************************************/
-
-void calc_geo_wind(ncdata* gph_data, int t, int gph_z,
-				   int lon_idx, int lat_idx,
+void calc_geo_wind(ncdata* gph_data, int t, int gph_z, int lon_idx, int lat_idx,
                    FP_TYPE& u, FP_TYPE& v)
 {
     // calculate the geostrophic wind
@@ -214,29 +156,17 @@ void calc_geo_wind(ncdata* gph_data, int t, int gph_z,
     spline lon_spline = form_lon_spline(gph_data, lon_idx, lat_idx, gph_z, t);
     spline lat_spline = form_lat_spline(gph_data, lon_idx, lat_idx, gph_z, t);
 
-    FP_TYPE lat = gph_data->get_lat_from_idx(lat_idx);
-    FP_TYPE lon = gph_data->get_lon_from_idx(lon_idx);
+    FP_TYPE lat = gph_data->get_lat_from_idx(lat_idx) * f_deg_to_rad;
+    FP_TYPE lon = gph_data->get_lon_from_idx(lon_idx) * f_deg_to_rad;
 
-    // calculate the derivatives
-	FP_TYPE mv = gph_data->get_missing_value();
-    FP_TYPE dphi_dx = calc_five_pt_difference(lon_spline, mv);
-    FP_TYPE dphi_dy = calc_five_pt_difference(lat_spline, mv);
-    FP_TYPE f = 2 * 7.292e-5 * sin(lat * M_PI/180.0);
-
-    // calculate the width and height of the grid boxes for this latitude
-    FP_TYPE dy = haversine(0.0, lat-gph_data->get_lat_d()/2.0,
-                          0.0, lat+gph_data->get_lat_d()/2.0, EARTH_R);
-    FP_TYPE dx = haversine(lon, lat, lon+gph_data->get_lon_d(), lat, EARTH_R);
-
-	if (dphi_dx == mv || dphi_dy == mv)
-		u = v = mv;
-	else if (f != 0.0)
-	{
-	    u = g_sc/f * dphi_dy * 1.0/dy;		// latitude running opposite way to equations
-    	v = g_sc/f * dphi_dx * 1.0/dx;
-	}
-	else
-		u = v = 0.0;
+    // calculate the Coriolis parameter
+    const FP_TYPE O = 7.292e-5;
+    FP_TYPE f = 2 * O * sin(lat);
+    // radius of the Earth
+    const FP_TYPE R = 6371 * 1000;
+    // calculate the u and v of the wind using the derivatives from the spline
+    u = g_sc / (-f*R) * lat_spline.evaluate_dx(lat); 
+    v = g_sc / (f*R*cos(lat)) * lon_spline.evaluate_dx(lon);
 }
 
 /*****************************************************************************/
