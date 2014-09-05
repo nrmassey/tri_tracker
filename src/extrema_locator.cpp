@@ -222,19 +222,6 @@ bool extrema_locator::objects_share_nodes(const LABEL_STORE* o1,
 	return false;
 }
 
-/******************************************************************************/
-
-FP_TYPE calculate_triangle_distance(indexed_force_tri_3D* O_TRI, 
-				  					indexed_force_tri_3D* C_TRI)
-{
-	FP_TYPE o_lon, o_lat;
-	FP_TYPE c_lon, c_lat;
-	cart_to_model(O_TRI->centroid(), o_lon, o_lat);
-	cart_to_model(C_TRI->centroid(), c_lon, c_lat);
-	FP_TYPE dist = haversine(o_lon, o_lat, c_lon, c_lat, EARTH_R);
-	return dist / 1000.0;
-}
-
 /*****************************************************************************/
 
 void extrema_locator::merge_objects(void)
@@ -281,11 +268,7 @@ void extrema_locator::merge_objects(void)
 				if (!test) test = objects_share_nodes(o1_labs, o2_shell_labs);
 				// 4th - labels in 1st object overlaps 2nd object
 				if (!test) test = objects_share_nodes(o1_labs, o2_labs);
-				
-				indexed_force_tri_3D* O2_TRI = get_original_triangle(o2, t);
-				FP_TYPE dist = calculate_triangle_distance(O1_TRI, O2_TRI);
-				test = test && dist < 1500.0;
-				
+
 				if (test)
 				{
 					// add to the first object
@@ -468,7 +451,6 @@ void extrema_locator::calculate_steering_vector(int o, int t)
 {
 	// get the extremum first and the list of labels in the object
 	steering_extremum* svex = ex_list.get(t, o);
-	FP_TYPE sv_u, sv_v;
 	FP_TYPE mv = ds.get_missing_value();
 	sv->calculate_steering_vector(&tg, svex, t, mv);
 }
@@ -493,61 +475,18 @@ void extrema_locator::ex_points_from_objects(void)
 		tstep_out_end(t);
 	}
 	ex_list.consolidate(ds.get_missing_value());	// remove any undefined objects	
-	std::cout << std::endl << "# Final merge, timestep ";
-	FP_TYPE mv = ds.get_missing_value();
-	for (int t=0; t<ex_list.size(); t++)	// time
-	{
-		tstep_out_begin(t);
-		// can we merge two or more objects based on the distance between them? (<1000km)
-		for (int o1=0; o1<ex_list.number_of_extrema(t); o1++)
-		{
-			for (int o2=0; o2<ex_list.number_of_extrema(t); o2++)
-			{
-				if (o1 == o2)
-					continue;
-				// get the extremum
-				steering_extremum* svex_1 = ex_list.get(t, o1);
-				steering_extremum* svex_2 = ex_list.get(t, o2);
-				FP_TYPE dist = haversine(svex_1->lon, svex_1->lat, svex_2->lon, svex_2->lat, EARTH_R) / 1000.0;
-				if (dist < 1000.0)
-				{
-					// which object gets all the labels?
-					steering_extremum* del_svex;
-					steering_extremum* tgt_svex;
-					if (svex_1->delta < svex_2->delta)
-					{
-						// svex_1 is the lowest so svex_1 gets all the objects
-						tgt_svex = svex_1;
-						del_svex = svex_2;						
-					}
-					else
-					{
-						// svex_2 is the lowest so svex_2 gets all the objects
-						tgt_svex = svex_2;
-						del_svex = svex_1;						
-					}
-					// set del_svex to mv
-					del_svex->lon = mv;
-					del_svex->lat = mv;
-					del_svex->delta = mv;
-					del_svex->intensity = mv;
-					// copy the labels from del_svex to tgt_svex
-					for (LABEL_STORE::iterator it_del = del_svex->object_labels.begin(); 
-						 it_del != del_svex->object_labels.end(); it_del++)
-					{
-						// if it's not already in the object
-						if (find(tgt_svex->object_labels.begin(), tgt_svex->object_labels.end(), *it_del) == tgt_svex->object_labels.end())
-							tgt_svex->object_labels.push_back(*it_del);
-					}
-					// delete the labels - free some memory
-					del_svex->object_labels.clear();
-				}
-			}
-		}
-		tstep_out_end(t);
-	}
-	ex_list.consolidate(ds.get_missing_value());	// remove any undefined objects		
 	std::cout << std::endl;
 }
 
 /*****************************************************************************/
+
+FP_TYPE calculate_triangle_distance(indexed_force_tri_3D* O_TRI, 
+				  					indexed_force_tri_3D* C_TRI)
+{
+	FP_TYPE o_lon, o_lat;
+	FP_TYPE c_lon, c_lat;
+	cart_to_model(O_TRI->centroid(), o_lon, o_lat);
+	cart_to_model(C_TRI->centroid(), c_lon, c_lat);
+	FP_TYPE dist = haversine(o_lon, o_lat, c_lon, c_lat, EARTH_R);
+	return dist / 1000.0;
+}

@@ -24,7 +24,7 @@
 
 FP_TYPE calculate_triangle_distance(indexed_force_tri_3D* O_TRI, 
 				  					indexed_force_tri_3D* C_TRI);
-				  					
+
 /*****************************************************************************/
 
 class extrema_locator

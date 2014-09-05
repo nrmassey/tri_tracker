@@ -57,6 +57,7 @@ class eventor
 		
 		// post processing of tracks
 		void trim_tracks(void);
+		bool merge_events(void);
 		
 		// queue to assign extremas
 		std::queue<steering_extremum*> ex_queue;
@@ -70,6 +71,9 @@ class eventor
 		std::vector<FP_TYPE*> time_field;
 		std::vector<int> time_length;
 		ncdata* lsm;
+		// reference time
+		int ref_year, ref_month, ref_day;
+		FP_TYPE ref_day_sc, ref_ndays_py;
 		
 		// functions to get the mslp data / wind speed data / lsm
 		FP_TYPE get_mslp_data(int t, int y, int x);
@@ -79,7 +83,7 @@ class eventor
 		
 		// calculate the maximum wind speed of an event
 		void calc_max_ws_min_mslp(int event_track_number, int& event_point_index, 
-								  FP_TYPE& max_ws, FP_TYPE& min_mslp);
+								  FP_TYPE& max_ws, FP_TYPE& min_mslp, int& t_step);
 		// calculate the footprint
 		FP_TYPE* wind_footprint;
 		FP_TYPE* mslp_footprint;

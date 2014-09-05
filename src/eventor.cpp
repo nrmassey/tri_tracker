@@ -10,42 +10,73 @@
 #include "haversine.h"
 #include <sstream>
 #include <netcdfcpp.h>
+#include <ctime>
+#include <math.h>
+#include <algorithm>
 const FP_TYPE w_mv = -2e20;
 
 /*****************************************************************************/
 
-std::string days_since_to_date_string(FP_TYPE days_since)
-{
-	// should be able to pass in base date, and calendar type, but we don't have time!
-	int base_year  = 1989;
-	int base_month = 12;
-	int base_day   = 1;
-	
+std::string days_since_to_date_string(FP_TYPE days_since, int ref_year, 
+									  int ref_month, int ref_day, FP_TYPE day_sc,
+									  FP_TYPE ref_ndays_py)
+{	
 	// get the number of years, months and days in the days_since
-	FP_TYPE remainder;
-	int year = int(days_since)/360;
-	remainder = days_since - year * 360;
-	int month = int(remainder)/30;
-	remainder = remainder - month*30;
-	int day = int(remainder);
-	remainder = remainder-day;
-	int hours = remainder*24;
-	
-	// add to the base date
-	day += base_day;
-	if (day > 30)
+	int year, month, day, hours;
+	std::string date_string;
+	// for a 360 day year we have to do the conversion ourselves
+	if (ref_ndays_py == 360.0)
 	{
-		day = day - 30;
-		month += 1;
-	}
-	month += base_month;
-	if (month > 12)
-	{
-		month = month - 12;
-		year += 1;
-	}
-	year += base_year;
+		FP_TYPE remainder;
+		// scale first to hours, etc.  Most of the time day_sc should be 1.0
+		days_since = days_since * day_sc;
+		year = int(days_since)/ref_ndays_py;
+		remainder = days_since - year * ref_ndays_py;
+		month = int(remainder)/30;
+		remainder = remainder - month*30;
+		day = int(remainder);
+		remainder = remainder-day;
+		hours = remainder*24;
 	
+		// add to the base date
+		day += ref_day;
+		if (day > 30)
+		{
+			day = day - 30;
+			month += 1;
+		}
+		month += ref_month;
+		if (month > 12)
+		{
+			month = month - 12;
+			year += 1;
+		}
+		year += ref_year;
+	
+	}
+	// if the calendar has a 365.25 day year then we can use c functions
+	// mktime and localtime
+	if (ref_ndays_py == 365.25)
+	{
+		// create the reference time object
+		std::tm cur_time;
+		memset(&cur_time, 0, sizeof(std::tm));
+		cur_time.tm_year = ref_year;
+		cur_time.tm_mon  = ref_month-1;
+		cur_time.tm_mday = ref_day;
+		std::mktime(&cur_time);
+		// number of seconds per day
+		const int n_secs_pd = 24 * 60 * 60;
+		// add the number of days to the time
+		cur_time.tm_mday += days_since * day_sc;
+		cur_time.tm_hour = (days_since*day_sc - int(days_since*day_sc))*24;
+		// correct the fields
+		std::mktime(&cur_time);
+		year  = cur_time.tm_year;
+		month = cur_time.tm_mon+1;
+		day   = cur_time.tm_mday;
+		hours = cur_time.tm_hour;
+	}
 	// construct the string
 	std::stringstream ss;
 	ss.fill('0');
@@ -62,7 +93,8 @@ std::string days_since_to_date_string(FP_TYPE days_since)
 	ss << 0 << ":";
 	ss.width(2);
 	ss << 0;
-	return ss.str();
+	date_string = ss.str();
+	return date_string;
 }
 
 /*****************************************************************************/
@@ -112,13 +144,15 @@ eventor::eventor(std::vector<std::string> iinput_fname, int imin_per,
 	{
 		NcFile* nc_file = new NcFile(mslp_file_name[i].c_str());
 		// get the time netCDF variable
-//		NcVar* nc_var = nc_file->get_var("time1");
-		NcVar* nc_var = nc_file->get_var("t");
-		int t_len = nc_var->get_dim(0)->size();
+		NcVar* nc_t_var = nc_file->get_var(mslp_field[0]->get_time_dim_name().c_str());
+		int t_len = nc_t_var->get_dim(0)->size();
 		FP_TYPE* time_data = new FP_TYPE[t_len];
-		nc_var->get(time_data, t_len);
+		nc_t_var->get(time_data, t_len);
 		time_field.push_back(time_data);
 		time_length.push_back(t_len);
+		// if this is the first netCDF file then get the reference time
+		if (i==0)
+			mslp_field[0]->get_reference_time(ref_year, ref_month, ref_day, ref_day_sc, ref_ndays_py);
 	}
 	
 	// create the wind and mslp footprints
@@ -283,6 +317,8 @@ void eventor::find_events(void)
         }		
 	}
 	std::cout << std::endl;
+	// merge any events that occur over the same date, at the same location
+	while (merge_events()){}
 	// remove any short / short lived / slow moving tracks
 	trim_tracks();
 }
@@ -382,6 +418,265 @@ void eventor::trim_tracks(void)
 
 /*****************************************************************************/
 
+bool event_times_overlap(std::vector<event_point>* evt_trk_0,
+						 std::vector<event_point>* evt_trk_1)
+{
+	int evt_0s = (*evt_trk_0)[0].timestep;
+	int evt_0e = evt_0s + evt_trk_0->size();
+	int evt_1s = (*evt_trk_1)[0].timestep;
+	int evt_1e = evt_1s + evt_trk_1->size();
+	
+	// six possible overlap cases:
+	// e0:   --   ----  ---    ---     ---  ---
+	// e1:  ----   --    ---  ---   ---        ---
+	bool overlap = false;
+	if (evt_0s >= evt_1s && evt_0e <= evt_1e)
+		overlap = true;
+	if (evt_0s <= evt_1s && evt_0e >= evt_1e)
+		overlap = true;
+	if (evt_0s <= evt_1s && evt_0e >= evt_1s)
+		overlap = true;
+	if (evt_0s >= evt_1s && evt_0e <= evt_1s)
+		overlap = true;
+//	if (evt_0e+1 == evt_1s)
+//		overlap = true;
+//	if (evt_0s == evt_1e+1)
+//		overlap = true;
+	return overlap;
+}						 
+
+/*****************************************************************************/
+
+FP_TYPE calculate_overlap_percentage(std::vector<event_point>* evt_pts_0,
+									 std::vector<event_point>* evt_pts_1)
+{
+	// calculate by how much two events overlap during the timesteps which
+	// they do overlap
+	LABEL_STORE e0_labels;
+	LABEL_STORE e1_labels;
+	
+	// build two lists of the labels in each object
+	for (int e0=0; e0 < evt_pts_0->size(); e0++)
+	{
+		LABEL_STORE svex_labs_e0 = (*evt_pts_0)[e0].svex->object_labels;
+		for (LABEL_STORE::iterator it_e0 = svex_labs_e0.begin();
+			 it_e0 != svex_labs_e0.end(); it_e0++)
+		{
+			if (std::find(e0_labels.begin(), e0_labels.end(), *it_e0) ==
+						  e0_labels.end())
+				e0_labels.push_back(*it_e0);
+		}
+	}
+	
+	for (int e1=0; e1 < evt_pts_1->size(); e1++)
+	{
+		LABEL_STORE svex_labs_e1 = (*evt_pts_1)[e1].svex->object_labels;
+		for (LABEL_STORE::iterator it_e1 = svex_labs_e1.begin();
+			 it_e1 != svex_labs_e1.end(); it_e1++)
+		{
+			if (std::find(e1_labels.begin(), e1_labels.end(), *it_e1) ==
+						  e1_labels.end())
+				e1_labels.push_back(*it_e1);
+		}
+	}
+	
+	// now calculate the overlap between the two lists
+	FP_TYPE overlap_e1 = 0;
+	for (LABEL_STORE::iterator it_e1 = e1_labels.begin(); it_e1 != e1_labels.end();
+		 it_e1 ++)
+	{
+		if (std::find(e0_labels.begin(), e0_labels.end(), *it_e1) != e0_labels.end())
+			overlap_e1 += 1;
+	}
+
+	FP_TYPE overlap_e0 = 0;
+	for (LABEL_STORE::iterator it_e0 = e0_labels.begin(); it_e0 != e0_labels.end();
+		 it_e0 ++)
+	{
+		if (std::find(e1_labels.begin(), e1_labels.end(), *it_e0) != e1_labels.end())
+			overlap_e0 += 1;
+	}
+	
+	overlap_e1 = overlap_e1 / e1_labels.size() * 100.0;
+	overlap_e0 = overlap_e0 / e0_labels.size() * 100.0;
+	
+	if (overlap_e1 > overlap_e0)
+		return overlap_e1;
+	else
+		return overlap_e0;
+}
+
+/*****************************************************************************/
+
+FP_TYPE calculate_distance_over_track(std::vector<event_point>* evt_pts_0,
+									  std::vector<event_point>* evt_pts_1)
+{
+	FP_TYPE mean_dist = 0.0;
+	int n_pts = 0;
+	for (int e0=0; e0 < evt_pts_0->size(); e0++)
+	{
+		FP_TYPE lon_0 = (*evt_pts_0)[e0].svex->lon;
+		FP_TYPE lat_0 = (*evt_pts_0)[e0].svex->lat;
+		int evt_0 = (*evt_pts_0)[e0].timestep;
+		
+		for (int e1=0; e1 < evt_pts_1->size(); e1++)
+		{
+			int evt_1 = (*evt_pts_0)[e0].timestep;
+			if (evt_0 == evt_1)
+			{
+				FP_TYPE lon_1 = (*evt_pts_1)[e1].svex->lon;
+				FP_TYPE lat_1 = (*evt_pts_1)[e1].svex->lat;
+				FP_TYPE dist = haversine(lon_0, lat_0, lon_1, lat_1, EARTH_R);
+				mean_dist += dist / 1000.0;
+				n_pts += 1;
+			}
+		}
+	}
+	if (n_pts == 0)
+		return 2e20;
+	else
+		return mean_dist / n_pts;
+}
+
+/*****************************************************************************/
+
+
+void merge_event_points(std::vector<event_point>* evt_pts_0,
+						std::vector<event_point>* evt_pts_1)
+{
+	// three ways to merge evt_pts_1 into evt_pts_0
+	// 1 - the timestep is less than the first in evt_pts_0 - add the event point to the
+	//     beginning of evt_pts_0
+	// 2 - the timestep is greater than the last in evt_pts_0 - add the event point to the
+	//     end of evt_pts_1
+	// 3 - the timestep is contained within the timesteps in evt_pts_0 - add the object
+	//     labels from evt_pts_1 to evt_pts_0
+	int evt_0s = (*evt_pts_0)[0].timestep;
+	int evt_0e = evt_0s + evt_pts_0->size();
+	int evt_1s = (*evt_pts_0)[1].timestep;
+	
+	// this operation will change the size of the vector so do the 3rd case afterwards
+	for (int e1=0; e1 < evt_pts_1->size(); e1++)
+	{
+		int evt_1 = (*evt_pts_1)[e1].timestep;
+		if (evt_1 < evt_0s)
+			evt_pts_0->insert(evt_pts_0->begin(), (*evt_pts_1)[e1]);
+		if (evt_1 > evt_0e)
+			evt_pts_0->push_back((*evt_pts_1)[e1]);
+	}
+	
+	// now merge the objects which have timesteps between evt_0s and evt_0e
+	for (int e1=0; e1 < evt_pts_1->size(); e1++)
+	{
+		int evt_1 = (*evt_pts_1)[e1].timestep;
+		if (evt_1 >= evt_0s && evt_1 <= evt_0e)
+		{
+			// get the index into the evt_pts_0 list
+			int evt_idx = -1;
+			for (int e0=0; e0 < evt_pts_0->size(); e0++)
+				if ((*evt_pts_0)[e0].timestep == evt_1)
+					evt_idx = e0;
+			if (evt_idx == -1)
+				continue;
+			// get the two steering extremums								
+			steering_extremum* svex_e0 = (*evt_pts_0)[evt_idx].svex;
+			steering_extremum* svex_e1 = (*evt_pts_1)[e1].svex;
+			// now merge the labels
+			for (LABEL_STORE::iterator it_e1_labs = svex_e1->object_labels.begin();
+				 it_e1_labs != svex_e1->object_labels.end(); it_e1_labs++)
+			{
+				if (std::find(svex_e0->object_labels.begin(), 
+							  svex_e0->object_labels.end(),
+							  *it_e1_labs) == svex_e0->object_labels.end())
+				{
+					svex_e0->object_labels.push_back(*it_e1_labs);
+				}
+			}
+		}
+	}
+}
+
+/*****************************************************************************/
+
+bool eventor::merge_events(void)
+{
+	// merge the events together based on three criteria:
+	// 1. the date - the events must overlap
+	// 2. the distance between the minimum MSLP positions (from the triangle centroid)
+	// 3. the value of the MSLP minima
+	// 4. the value of the maximum wind speed
+	
+	// consider every combination of event
+	std::cout << "# Merging events : " << event_list.get_number_of_event_tracks() << " events" << std::endl;
+	bool merged=false;
+	for (int e0=0; e0<event_list.get_number_of_event_tracks(); e0++)
+	{
+		// get the event track from the event list
+		event_track* evt_0 = event_list.get_event_track(e0);
+		std::vector<event_point>* evt_pts_0 = evt_0->get_track();
+		if (evt_pts_0->size() == 0)
+			continue;
+		
+		for (int e1=e0+1; e1<event_list.get_number_of_event_tracks(); e1++)
+		{
+			// don't merge the same
+			if (e0 == e1)
+				continue;
+			// get the event track from the event list
+			event_track* evt_1 = event_list.get_event_track(e1);
+			std::vector<event_point>* evt_pts_1 = evt_1->get_track();
+			// already merged objects have had tracks cleared!
+			if (evt_pts_1->size() == 0)
+				continue;
+			bool overlap = event_times_overlap(evt_pts_0, evt_pts_1);
+			// get the min mslp and max windspeed for this event
+			if (overlap)
+			{
+				FP_TYPE overlap_pct = calculate_overlap_percentage(evt_pts_0, evt_pts_1);
+				FP_TYPE mean_dist = calculate_distance_over_track(evt_pts_0, evt_pts_1);
+				if (overlap_pct >= 85.0)
+				{
+					merge_event_points(evt_pts_0, evt_pts_1);
+					merged=true;
+					evt_pts_1->clear();
+				}
+			}
+			else
+			{
+				int evt_0e = (*evt_pts_0)[0].timestep + evt_pts_0->size();
+				int evt_1s = (*evt_pts_1)[0].timestep;
+				if (evt_0e == evt_1s-1 && 
+					(evt_pts_1->size() < event_t_steps || evt_pts_0->size() < event_t_steps))
+				{
+					FP_TYPE overlap_pct = calculate_overlap_percentage(evt_pts_0, evt_pts_1);
+					if (overlap_pct >= 85.0)
+					{
+						merge_event_points(evt_pts_0, evt_pts_1);
+						merged=true;
+						evt_pts_1->clear();
+					}
+				
+				}
+			}
+		}
+	}
+	// consolidate the events
+	event_track_list new_event_list;
+	for (int e0=0; e0<event_list.get_number_of_event_tracks(); e0++)
+	{
+		// get the event track from the event list
+		event_track* evt_0 = event_list.get_event_track(e0);
+		std::vector<event_point>* evt_pts_0 = evt_0->get_track();
+		if (evt_pts_0->size() == 0)
+			continue;
+		new_event_list.add_event_track(*evt_0);		
+	}
+	event_list = new_event_list;
+	return merged;
+}
+
+/*****************************************************************************/
+
 FP_TYPE eventor::get_mslp_data(int t, int y, int x)
 {
 	// which netCDF data should we use?
@@ -473,7 +768,7 @@ FP_TYPE eventor::get_lsm(int y, int x)
 /*****************************************************************************/
 
 void eventor::calc_max_ws_min_mslp(int event_track_number, int& event_point_index, 
-								   FP_TYPE& max_ws, FP_TYPE& min_mslp)
+								   FP_TYPE& max_ws, FP_TYPE& min_mslp, int& t_step)
 {
 	// get the event track
 	event_track* evt = event_list.get_event_track(event_track_number);
@@ -505,6 +800,7 @@ void eventor::calc_max_ws_min_mslp(int event_track_number, int& event_point_inde
 				{
 					max_ws = wind_ws;
 					event_point_index = current_evpi;
+					t_step = it_p->timestep;
 				}
 				FP_TYPE mslp_ws = get_mslp_data(it_p->timestep, it_gi->j, it_gi->i);
 				if (mslp_ws < min_mslp && mslp_ws > 0.0)
@@ -553,7 +849,6 @@ void eventor::calculate_wind_footprint(int event_track_number, int event_point_i
 		// get the svex from the event point
 		steering_extremum* svex = (*evt_track)[t].svex;
 		int t_step = (*evt_track)[t].timestep;
-				
 		// loop over all the labels in the extremum
 		for (LABEL_STORE::iterator it_l = svex->object_labels.begin();
 			 it_l != svex->object_labels.end(); it_l++)
@@ -635,16 +930,20 @@ void eventor::save_72hour_footprint(std::string out_name, int e)
 	int n_timesteps = 0;
 	int n_points = 0;
 	int central_t_step;
-	calc_max_ws_min_mslp(e, evp, max_ws, min_mslp);
+	int max_tstep = 0;
+	calc_max_ws_min_mslp(e, evp, max_ws, min_mslp, max_tstep);
 	calculate_wind_footprint(e, evp, n_timesteps, n_points, central_t_step);
 	
 	// open the file as a text file
 	std::ofstream fh;
 	fh.open(out_name.c_str());
 	// get the value of the central timestep
-	FP_TYPE t_val = get_time(central_t_step);
-	fh << days_since_to_date_string(t_val) << "," << std::endl;
+	FP_TYPE t_val = get_time(max_tstep);
+	fh << days_since_to_date_string(t_val, ref_year, ref_month, ref_day, ref_day_sc, ref_ndays_py) << "," << std::endl;
 	fh << n_timesteps * hours_per_t_step << "," << std::endl;
+	event_track* evt = event_list.get_event_track(e);
+//	std::vector<event_point>* evt_track = evt->get_track();
+//	fh << (*evt_track)[0].timestep << " " << (*evt_track)[evt_track->size()-1].timestep << "," << std::endl;	
 	fh.precision(2);
 	fh << std::fixed;
 	fh << max_ws << "," << std::endl;
@@ -711,9 +1010,9 @@ void eventor::save_time_varying_footprint(std::string out_name, int e)
 	std::vector<event_point>* evt_track = evt->get_track();
 
 	// get the min mslp, max windspeed and time at which the track starts
-	int evp;
+	int evp, max_tstep;
 	FP_TYPE max_ws, min_mslp;
-	calc_max_ws_min_mslp(e, evp, max_ws, min_mslp);
+	calc_max_ws_min_mslp(e, evp, max_ws, min_mslp, max_tstep);
 	FP_TYPE start_t_val = get_time((*evt_track)[0].timestep);
 	start_t_val = float(int(start_t_val*4))/4;
 	
@@ -721,7 +1020,7 @@ void eventor::save_time_varying_footprint(std::string out_name, int e)
 	std::ofstream fh;
 	fh.open(out_name.c_str());
 	// write the date out
-	fh << days_since_to_date_string(start_t_val) << "," << std::endl;
+	fh << days_since_to_date_string(start_t_val, ref_year, ref_month, ref_day, ref_day_sc, ref_ndays_py) << "," << std::endl;
 	// write the time period out
 	int n_timesteps = evt->get_persistence();
 	fh <<  n_timesteps * hours_per_t_step << "," << std::endl;
@@ -739,7 +1038,7 @@ void eventor::save_time_varying_footprint(std::string out_name, int e)
 	{
 		// write the time out
 		FP_TYPE t_val = start_t_val + p * 0.25;
-		fh << days_since_to_date_string(t_val) << "," << std::endl;
+		fh << days_since_to_date_string(t_val, ref_year, ref_month, ref_day, ref_day_sc, ref_ndays_py) << "," << std::endl;
 		int n_points = 0;
 		calculate_time_step_footprint(e, p, n_points);
 		fh.precision(2);

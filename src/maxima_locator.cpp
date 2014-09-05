@@ -38,7 +38,6 @@ bool maxima_locator::is_extrema(indexed_force_tri_3D* tri, int t_step)
 bool maxima_locator::is_in_object(indexed_force_tri_3D* O_TRI, 
 							  	  indexed_force_tri_3D* C_TRI, int t_step)
 {
-	
 	return true;
 }
 
@@ -53,6 +52,7 @@ bool maxima_locator::process_data(void)
 
 FP_TYPE maxima_locator::calculate_point_weight(FP_TYPE V, FP_TYPE min_v, FP_TYPE max_v)
 {
+	return 0.0;
 }
 
 /*****************************************************************************/

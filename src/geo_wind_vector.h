@@ -30,7 +30,6 @@ class geo_wind_vector : public steering_vector
 	private:
 		ncdata* geopot_ht;
 		int z_level;
-		FP_TYPE f_deg_to_rad;
 };
 
 #endif

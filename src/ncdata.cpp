@@ -8,6 +8,7 @@
 #include "ncdata.h"
 #include <netcdfcpp.h>
 #include <exception>
+#include <sstream>
 
 /*****************************************************************************/
 
@@ -46,6 +47,8 @@ void get_dimension_pos(NcVar* nc_var, int& t_dim, int& z_dim,
     if (z_dim == -1) z_dim = get_dim_pos(nc_var, "p");
 	// next try "surface"
 	if (z_dim == -1) z_dim = get_dim_pos(nc_var, "surface");
+	// next try "lev" (ERA_Interim)
+	if (z_dim == -1) z_dim = get_dim_pos(nc_var, "lev");
 }
 
 /*****************************************************************************/
@@ -304,4 +307,54 @@ std::string ncdata::get_file_name(void)
 std::string ncdata::get_var_name(void)
 {
 	return vname;
+}
+
+/*****************************************************************************/
+
+std::string ncdata::get_time_dim_name(void)
+{
+	return nc_var->get_dim(t_dim)->name();
+}
+
+/*****************************************************************************/
+
+void ncdata::get_reference_time(int& year, int& month, int& day, FP_TYPE& day_sc, FP_TYPE& n_days_py)
+{
+    // get the reference time from the netcdf file and variable
+	NcError error(NcError::silent_nonfatal);
+	// get the time variable
+    NcVar* time_var = nc_file->get_var(nc_var->get_dim(t_dim)->name());
+
+	NcAtt* tu_att = time_var->get_att("units");
+	char dummy;
+	std::string scale;
+	std::string dummy_string;
+	std::string time_string;
+	if (tu_att != 0)
+	{
+		std::string time_units = tu_att->as_string(0);
+		// parse the string - format is <scale> since <year>-<month>-<day> 00:00:00
+		std::stringstream stream(time_units);
+		stream >> scale >> dummy_string >> time_string;
+		std::stringstream (time_string.substr(0,4)) >> year;
+		std::stringstream (time_string.substr(5,2)) >> month;
+		std::stringstream (time_string.substr(8,2)) >> day;
+		// if the scale is "days since" - day_sc is 1, if it's "hours since" - day_sc is 1.0/24
+		if (scale == "days")
+			day_sc = 1.0;
+		if (scale == "hours")
+			day_sc = 1.0/24.0;		
+		delete tu_att;
+	}
+	// get the number of days per year
+	NcAtt* dpy_att = time_var->get_att("calendar");
+	if (dpy_att != 0)
+	{
+		std::string cal_type = dpy_att->as_string(0);
+		if (cal_type == "standard")
+			n_days_py = 365.25;
+		if (cal_type == "360_day")
+			n_days_py = 360.0;
+		delete dpy_att;
+	}
 }

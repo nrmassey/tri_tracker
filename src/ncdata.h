@@ -37,6 +37,8 @@ class ncdata
 		std::string get_units(void);
 		std::string get_file_name(void);
 		std::string get_var_name(void);
+		std::string get_time_dim_name(void);
+		void get_reference_time(int& year, int& month, int& day, FP_TYPE& day_scale, FP_TYPE& n_days_py);
 
 	private:
 		class NcFile* nc_file;

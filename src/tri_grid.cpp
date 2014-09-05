@@ -522,8 +522,6 @@ void tri_grid::fill_index_holes(void)
 	for (int l=1; l<get_max_level(); l++)
 	{
 		std::list<QT_TRI_NODE*> tri_list = get_triangles_at_level(l);
-		int added =0;
-		int missed =0;
 		// go through the tri list and find those triangles with no indices
 		for (std::list<QT_TRI_NODE*>::iterator it = tri_list.begin();
 			 it != tri_list.end(); it++)

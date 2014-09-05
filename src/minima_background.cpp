@@ -454,7 +454,6 @@ void minima_background::refine_objects(void)
 	// refine the object (after the initial merge) so that any triangle which is not
 	// the minimum value is removed from this initial object
 	std::cout << "# Refining objects, timestep: ";
-	FP_TYPE mv = ds.get_missing_value();
 	for (int t=0; t<ex_list.size(); t++)
 	{
 		tstep_out_begin(t);

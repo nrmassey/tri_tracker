@@ -19,8 +19,8 @@
 
 /******************************************************************************/
 
-minima_back_wind::minima_back_wind(void) : wind_spd_field(NULL),
-										   minima_background()
+minima_back_wind::minima_back_wind(void) : minima_background(),
+										   wind_spd_field(NULL)
 {
 	perim=4;
 }
@@ -44,6 +44,7 @@ void minima_back_wind::locate(void)
 		refine_objects();
 	}
 	find_objects();
+	merge_objects();
 	if (grid_level > 5)
 	{
 		trim_objects();
@@ -167,7 +168,6 @@ FP_TYPE minima_back_wind::calculate_average_wind(indexed_force_tri_3D* TRI, int 
 {
 	const std::list<grid_index>* c_tri_idxs = TRI->get_grid_indices();
 	FP_TYPE c_wnd_spd = 0.0;
-	FP_TYPE c_distance = 0.0;
 	// candidate triangle wind speed
 	for (std::list<grid_index>::const_iterator c_t_idx = c_tri_idxs->begin();
 		 c_t_idx != c_tri_idxs->end(); c_t_idx++)
@@ -194,7 +194,6 @@ bool minima_back_wind::wind_test(indexed_force_tri_3D* O_TRI,
 	wnd_test = wnd_test && dist < dist_thresh;
 	// how much over the wind_thresh? - special case for very strong winds on
 	// edge of 1000km radius
-	FP_TYPE wnd_ratio = c_wnd_spd / wind_thresh_value;
 	if (c_wnd_spd >= wind_high_value && dist < 1500)
 		wnd_test = true;
 	return wnd_test;
@@ -239,7 +238,8 @@ void minima_back_wind::expand_objects(void)
 					// get the candidate triangle
 					indexed_force_tri_3D* C_TRI = tg.get_triangle(*it_c_shell_labs);
 					FP_TYPE V = ds.get_data(t, C_TRI->get_ds_index());
-					if (wind_test(O_TRI, C_TRI, t))
+					if (wind_test(O_TRI, C_TRI, t) && fabs(V) < fabs(ds.get_missing_value()*0.99) &&
+					    V > ds.get_data(t, O_TRI->get_ds_index()) )
 					{
 						keep_adding_to_obj = true;
 						// add to object but only if not already added
@@ -270,13 +270,8 @@ void minima_back_wind::calculate_object_position(int o, int t)
 	steering_extremum* svex = ex_list.get(t, o);
 	LABEL_STORE* object_labels = &(svex->object_labels);
 	// find min / max of values in the object
-	FP_TYPE min_v = 2e20f;	// minimum value in object
-	FP_TYPE max_v = -2e20f;		// maximum value in object
-	get_min_max_values(min_v, max_v, o, t);
-	
-	if (min_v == 2e20f)
-		return;
-	
+	FP_TYPE min_v = 2e20;
+
 	// position vector in Cartesian coordinates
 	vector_3D P;
 	FP_TYPE sum_w = 0.0;
@@ -289,25 +284,18 @@ void minima_back_wind::calculate_object_position(int o, int t)
 		// get the data value from the datastore and the centroid
 		FP_TYPE V = ds.get_data(t, c_tri->get_ds_index());
 		vector_3D C = c_tri->centroid();
-		// get the weight assigned to this point
-		FP_TYPE w = calculate_point_weight(V, min_v, max_v);
-		// update the position
-		P += C * w;
-		// sum the weights
-		sum_w += w;
+		if (V < min_v && fabs(V) < 20000)
+		{
+			P = C;
+			min_v = V;
+		}
 	}
-	// divide by the sum of the weights
-	if (sum_w > 0.0)
-	{
-		P = P / sum_w;
-		// project / normalise to sphere
-		P *= 1.0 / P.mag();
-		// put the values back in the geo extremum
-		FP_TYPE lon, lat;
-		cart_to_model(P, lon, lat);
-		svex->lon = lon;
-		svex->lat = lat;
-	}
+
+	// put the values back in the geo extremum
+	FP_TYPE lon, lat;
+	cart_to_model(P, lon, lat);
+	svex->lon = lon;
+	svex->lat = lat;
 }
 
 /*****************************************************************************/
@@ -322,65 +310,22 @@ void minima_back_wind::calculate_object_intensity(int o, int t)
 	// get the extremum - the lat and lon will have been set already
 	steering_extremum* svex = ex_list.get(t, o);
 	LABEL_STORE* object_labels = &(svex->object_labels);
-	FP_TYPE max_dist = -1.0;
 	
 	// find min / max of values in the object
 	FP_TYPE min_v = 2e20f;	// minimum value in object
-	FP_TYPE max_v = -2e20f;		// maximum value in object
-	get_min_max_values(min_v, max_v, o, t);
-	if (min_v == 2e20f)
-		return;
-	FP_TYPE mv = ds.get_missing_value();
-	// loop through the triangle objects to get maximum distance
-	for (LABEL_STORE::iterator it_ll = object_labels->begin();
-		 it_ll != object_labels->end(); it_ll++)
-	{
-		// get the triangle
-		indexed_force_tri_3D* c_tri = tg.get_triangle(*it_ll);
-		// get the data value from the datastore
-		FP_TYPE V = ds.get_data(t, c_tri->get_ds_index());
-		// calculate the distance if the value is < min_v + one contour
-		if (V <= min_v+contour_value && fabs(V) < 20000)
-		{
-			// get the centroid and convert to lat / lon
-			vector_3D C = c_tri->centroid();
-			FP_TYPE lat, lon;
-			cart_to_model(C, lon, lat);
-			FP_TYPE dist = haversine(svex->lon, svex->lat, lon, lat, 1.0);
-			// check against max
-			if (dist > max_dist)
-				max_dist = dist;
-		}
-	}
-	// repeat the loop, but work out the values this time
-	FP_TYPE sum_intensity = 0.0;
-	FP_TYPE sum_w = 0.0;
+	
+		// get the position and weight for each triangle in the object
 	for (LABEL_STORE::iterator it_ll = object_labels->begin(); 
-		 it_ll != object_labels->end(); it_ll++)
+		 it_ll != object_labels->end(); it_ll++)	// tri labels
 	{
-		// get the triangle
+		// get the data value from the datastore
 		indexed_force_tri_3D* c_tri = tg.get_triangle(*it_ll);
-		// now get the value from the datastore
 		FP_TYPE V = ds.get_data(t, c_tri->get_ds_index());
-		// only add if V <= min_v + one contour
-		if (V <= min_v+contour_value && fabs(V) < 20000)
+		if (V < min_v && fabs(V) < 20000)
 		{
-			// get the centroid and convert to lat / lon
-			vector_3D C = c_tri->centroid();
-			FP_TYPE lat, lon;
-			cart_to_model(C, lon, lat);
-			// calculate the distance
-			FP_TYPE dist = haversine(svex->lon, svex->lat, lon, lat, 1.0);
-			// calculate the weight
-			FP_TYPE w = 1.0;
-			if (max_dist != 0.0)
-				w = 1.0 - dist / max_dist;
-			sum_intensity += w * V;
-			sum_w += w;
+			min_v = V;
 		}
 	}
-	if (sum_w == 0.0)
-		svex->intensity = min_v;
-	else
-		svex->intensity = sum_intensity / sum_w;
+	
+	svex->intensity = min_v;
 }
