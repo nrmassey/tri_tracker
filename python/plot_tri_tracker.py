@@ -108,6 +108,7 @@ def plot_data(sp0, sp1, tg, ds, time_step, level, colmap=cm.RdYlBu_r, dzt=1, kee
 	
 	max_V = float(int(max_V / 100))
 	min_V = float(int(min_V / 100))
+	print min_V, max_V
 
 #	max_V = 1050
 #	min_V = 950
@@ -182,9 +183,9 @@ def plot_extrema(sp, tg, ex, time_step, ex_num=-1, pole_longitude=0.0, pole_lati
 			C = cart_to_model(TRI.centroid)
 			lon = C[0]
 			lat = C[1]
-		P = glob2rot(lon, lat, pole_longitude, pole_latitude)
+		E = glob2rot(lon, lat, pole_longitude, pole_latitude)
 #		sp.plot(P[0], P[1],'ro', ms=5.0, mec='w')
-		sp.plot(P[0], P[1],'ro', ms=2.5, mec='r', zorder=3)
+		sp.plot(E[0], E[1],'ro', ms=2.5, mec='r', zorder=3)
 		# plot the triangles in the object from their labels
 		for tl in ex_t.object_list:
 			# get the triangle from the grid via its label
@@ -205,6 +206,9 @@ def plot_extrema(sp, tg, ex, time_step, ex_num=-1, pole_longitude=0.0, pole_lati
 			sp.fill([P[0][0], P[1][0], P[2][0], P[0][0]], \
 					[P[0][1], P[1][1], P[2][1], P[0][1]], \
 					facecolor=fc, edgecolor=ec, lw=0.5, zorder=2)
+		# plot geostrophic wind if necessary
+		sc = 0.05
+		sp.arrow(E[0], E[1], ex_t.steer_x*sc, ex_t.steer_y*sc, head_width=0.3, fc='k', ec='k')
 		cur+=1
 		
 ###############################################################################
@@ -479,7 +483,7 @@ if __name__ == "__main__":
 	
 	projection = ccrs.RotatedPole(pole_latitude=pole_latitude, pole_longitude=pole_longitude)
 	colmap=cm.RdYlBu_r
-	for t_step in range(time_step, time_step+n_steps+1):
+	for t_step in range(time_step, time_step+n_steps):
 		sp0 = plt.subplot(gs[0:6,:], projection=projection)
 		if regrid_file != "":
 			sp1 = plt.subplot(gs[6,1:-1])

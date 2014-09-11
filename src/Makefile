@@ -53,7 +53,7 @@ TRI_GRID_TO_NC_OBJ = $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(TRI_GRID_TO_NC_CPP))
 
 EXTREMA_CPP = extrema.cpp extrema_locator.cpp data_store.cpp \
               maxima_locator.cpp minima_locator.cpp extrema_list.cpp \
-              minima_background.cpp minima_back_wind.cpp geo_wind_vector.cpp \
+              minima_background.cpp geo_wind_vector.cpp \
               concentric_shell.cpp spline.cpp
 EXTREMA_OBJ = $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(EXTREMA_CPP))
 

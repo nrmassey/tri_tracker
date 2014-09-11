@@ -1,0 +1,22 @@
+#! /usr/bin/env bash
+LEV=7
+
+BASE_DIR=../../test_data/hadam3p_eu_2kci_1962_1_007425047_1
+WU_NAME=2kciga.pdg2dec
+EU_FILE=$BASE_DIR/$WU_NAME"".nc
+RGD_FILE=${EU_FILE%.nc}_l$LEV"_bck".rgd
+EX_FILE=${EU_FILE%.nc}_l$LEV".ex"
+
+T_STEP=$2
+PLT_LEV=$1
+N_PTS=0
+
+GRID_FILE=../../grids/eu_mesh_$N_PTS"_"$LEV".msh"
+OUT_FILE=../output/regional/$WU_NAME"_bck"_$T_STEP".png"
+OUT_FILE_EX=../output/regional/$WU_NAME"_bck_ex"_$T_STEP".png"
+
+cmd="../plot_tri_tracker.py -m $GRID_FILE -r $RGD_FILE -e $EX_FILE -o $OUT_FILE_EX -l $PLT_LEV -t $T_STEP -x [-20,50] -y [10,82] -p 198.0 -q 39.25"
+#cmd="../plot_tri_tracker.py -m $GRID_FILE -e $EX_FILE -o $OUT_FILE -l $PLT_LEV -t $T_STEP -x [-20,50.0] -y [10.5,82.0] -p 198.0 -q 39.25"
+#cmd="../plot_tri_tracker.py -m $GRID_FILE -r $RGD_FILE -o $OUT_FILE -l $PLT_LEV -t $T_STEP -x [-20,50] -y [10,82] -p 198.0 -q 39.25"
+echo $cmd
+$cmd

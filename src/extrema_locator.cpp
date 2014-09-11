@@ -65,7 +65,10 @@ void extrema_locator::locate(void)
 
 void extrema_locator::save(std::string output_fname, bool save_text)
 {
-	std::cout << "# Number of extrema: " << ex_list.size() << std::endl;
+	int n_ex = 0;
+	for (int t=0; t<ex_list.size(); t++)
+		n_ex += ex_list.number_of_extrema(t);
+	std::cout << "# Number of extrema: " << n_ex << std::endl;
 	ex_list.set_meta_data(&meta_data);
 
 	if (sv != NULL)
@@ -88,6 +91,7 @@ void extrema_locator::set_inputs(std::string input_fname, std::string mesh_fname
 								 int i_grid_level, ADJACENCY i_adj_type)
 {
 	// load the data
+	ds_fname = input_fname;
 	ds.load(input_fname);
 	tg.load(mesh_fname);
 	// set the other inputs
@@ -128,10 +132,6 @@ void extrema_locator::find_extrema(void)
 			{
 				// add to the extrema list, via the object list - the location and
 				// value of the svex is currently just filled with the missing value
-/*				vector_3D C = c_tri->centroid();
-				FP_TYPE lon, lat;
-				cart_to_model(C, lon, lat);
-				steering_extremum svex(lon, lat, mv, mv, mv, mv);*/
 				steering_extremum svex(mv, mv, mv, mv, mv, mv);
 				svex.object_labels.push_back(c_tri->get_label());
 				// now add to the extrema list
@@ -166,7 +166,7 @@ void extrema_locator::find_objects(void)
 				continue;
 			// get the "original triangle" for this object 
 			// - i.e. the one at the centre of the object
-			indexed_force_tri_3D* O_TRI = get_original_triangle(e, t);
+			indexed_force_tri_3D* O_TRI = tg.get_triangle(svex->object_labels[0]);
 			bool keep_adding_to_obj = true;
 			// continue until no more triangles are added to the object
 			c_shell.calculate_inner_ring(&tg, svex);	// calculate the initial shape
@@ -242,10 +242,9 @@ void extrema_locator::merge_objects(void)
 			obj_c_shells.push_back(o_c_shell);
 		}
 		for (int o1=0; o1<o_s; o1++)
-		{
-			indexed_force_tri_3D* O1_TRI = get_original_triangle(o1, t);
-			
+		{			
 			LABEL_STORE* o1_shell_labs = obj_c_shells[o1].get_labels();
+			indexed_force_tri_3D* O1_TRI = tg.get_triangle((*o1_shell_labs)[0]);
 			if (o1_shell_labs->size() == 0)	// deleted object as above
 				continue;
 			// get the labels in the object as well as the shell
@@ -325,128 +324,6 @@ void extrema_locator::get_min_max_values(FP_TYPE& min_v, FP_TYPE& max_v,
 
 /*****************************************************************************/
 
-void extrema_locator::calculate_object_position(int o, int t)
-{
-	steering_extremum* svex = ex_list.get(t, o);
-	LABEL_STORE* object_labels = &(svex->object_labels);
-	// find min / max of values in the object
-	FP_TYPE min_v = 2e20f;	// minimum value in object
-	FP_TYPE max_v = 0;		// maximum value in object
-	get_min_max_values(min_v, max_v, o, t);
-	
-	// position vector in Cartesian coordinates
-	vector_3D P;
-	FP_TYPE sum_w = 0.0;
-	// get the position and weight for each triangle in the object
-	for (LABEL_STORE::iterator it_ll = object_labels->begin(); 
-		 it_ll != object_labels->end(); it_ll++)	// tri labels
-	{
-		// get the triangle and its centroid
-		indexed_force_tri_3D* c_tri = tg.get_triangle(*it_ll);
-		vector_3D C = c_tri->centroid();
-		// get the data value from the datastore
-		FP_TYPE V = ds.get_data(t, c_tri->get_ds_index());
-		// get the weight assigned to this point
-		FP_TYPE w = calculate_point_weight(V, min_v, max_v);
-		// update the position
-		P += C * w;
-		// sum the weights
-		sum_w += w;
-	}
-	// divide by the sum of the weights
-	if (sum_w > 0.0)
-	{
-		P = P / sum_w;
-		// project / normalise to sphere
-		P *= 1.0 / P.mag();
-		// put the values back in the geo extremum
-		FP_TYPE lon, lat;
-		cart_to_model(P, lon, lat);
-		svex->lon = lon;
-		svex->lat = lat;
-	}
-}
-
-/*****************************************************************************/
-
-void extrema_locator::calculate_object_intensity(int o, int t)
-{
-	// object intensity is calculated as a weighted sum of the intensities of
-	// the triangles in the object.  The weight is defined as 1.0 - dist/max_dist
-	// where dist is the distance between the lat and lon of the feature point
-	// and max_dist is the maximum distance of all the objects
-
-	// get the extremum - the lat and lon will have been set already
-	steering_extremum* svex = ex_list.get(t, o);
-	LABEL_STORE* object_labels = &(svex->object_labels);
-	FP_TYPE max_dist = -1.0;
-	
-	// find min / max of values in the object
-	FP_TYPE min_v = 2e20f;	// minimum value in object
-	FP_TYPE max_v = 0;		// maximum value in object
-	get_min_max_values(min_v, max_v, o, t);		
-	
-	// loop through the triangle objects
-	for (LABEL_STORE::iterator it_ll = object_labels->begin(); 
-		 it_ll != object_labels->end(); it_ll++)
-	{
-		// get the triangle
-		indexed_force_tri_3D* c_tri = tg.get_triangle(*it_ll);
-		// get the centroid and convert to lat / lon
-		vector_3D C = c_tri->centroid();
-		FP_TYPE lat, lon;
-		cart_to_model(C, lon, lat);
-		// calculate the distance
-		FP_TYPE dist = haversine(svex->lon, svex->lat, lon, lat, 1.0);
-		// check against max
-		if (dist > max_dist)
-			max_dist = dist;
-	}
-	// repeat the loop, but work out the values this time
-	FP_TYPE sum_intensity = 0.0;
-	FP_TYPE sum_w = 0.0;
-	for (LABEL_STORE::iterator it_ll = object_labels->begin(); 
-		 it_ll != object_labels->end(); it_ll++)
-	{
-		// get the triangle
-		indexed_force_tri_3D* c_tri = tg.get_triangle(*it_ll);
-		// get the centroid and convert to lat / lon
-		vector_3D C = c_tri->centroid();
-		FP_TYPE lat, lon;
-		cart_to_model(C, lon, lat);
-		// calculate the distance
-		FP_TYPE dist = haversine(svex->lon, svex->lat, lon, lat, 1.0);
-		// now get the value from the datastore
-		FP_TYPE val = ds.get_data(t, c_tri->get_ds_index());
-		// calculate the weight
-		FP_TYPE w = 1.0;
-		if (max_dist != 0.0)
-			w = 1.0 - dist / max_dist;
-		sum_intensity += w * val;
-		sum_w += w;
-	}
-	if (sum_w == 0.0)
-		svex->intensity = min_v;
-	else
-		svex->intensity = sum_intensity / sum_w;
-}
-
-/*****************************************************************************/
-
-void extrema_locator::calculate_object_delta(int o, int t)
-{
-	// calculate the delta as the absolute difference between the minimum and
-	// the maximum value of the object
-	// find min / max of values in the object
-	FP_TYPE min_v = 2e20f;	// minimum value in object
-	FP_TYPE max_v = -2e20f;		// maximum value in object
-	get_min_max_values(min_v, max_v, o, t);	
-	steering_extremum* svex = ex_list.get(t, o);
-	svex->delta = fabs(max_v - min_v);
-}
-
-/*****************************************************************************/
-
 void extrema_locator::calculate_steering_vector(int o, int t)
 {
 	// get the extremum first and the list of labels in the object
@@ -476,17 +353,4 @@ void extrema_locator::ex_points_from_objects(void)
 	}
 	ex_list.consolidate(ds.get_missing_value());	// remove any undefined objects	
 	std::cout << std::endl;
-}
-
-/*****************************************************************************/
-
-FP_TYPE calculate_triangle_distance(indexed_force_tri_3D* O_TRI, 
-				  					indexed_force_tri_3D* C_TRI)
-{
-	FP_TYPE o_lon, o_lat;
-	FP_TYPE c_lon, c_lat;
-	cart_to_model(O_TRI->centroid(), o_lon, o_lat);
-	cart_to_model(C_TRI->centroid(), c_lon, c_lat);
-	FP_TYPE dist = haversine(o_lon, o_lat, c_lon, c_lat, EARTH_R);
-	return dist / 1000.0;
 }

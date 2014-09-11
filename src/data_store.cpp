@@ -157,7 +157,7 @@ void data_store::load(std::string f_name)
 
 void data_store::save(std::string f_name)
 {
-	std::cout << "# Saving regridded data" << std::endl;
+	std::cout << "# Saving regridded data to file: " << f_name << std::endl;
 	std::ofstream out;
 	out.open(f_name.c_str(), std::ios::out | std::ios::binary);
 	if (!out)

@@ -40,8 +40,8 @@ extrema_locator* create_extrema_locator(std::string method_string)
 		el = new maxima_locator();
 	else if (method=="minima_back")		// minima with background removal
 		el = new minima_background();
-	else if (method=="minima_back_wind")
-		el = new minima_back_wind();
+/*	else if (method=="minima_back_wind")
+		el = new minima_back_wind();*/
 	else
 		throw (std::string("Unsupported extrema location method: " + method));
 	return el;

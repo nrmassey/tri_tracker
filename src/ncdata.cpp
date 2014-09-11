@@ -253,6 +253,7 @@ int ncdata::get_lat_idx(FP_TYPE lat)
 
 FP_TYPE ncdata::get_lon_from_idx(int lon_idx)
 {
+	
 	return lon_s + lon_idx * lon_d;
 }
 

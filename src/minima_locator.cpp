@@ -2,6 +2,7 @@
 ** Program : minima_locator.cpp
 ** Author  : Neil Massey
 ** Date    : 10/07/13
+** Modified: 09/09/14
 ** Purpose : class inherited from extrema_locator that searches for minima 
 **           in data regridded onto a regional hierarchical triangular mesh
 ******************************************************************************/
@@ -9,6 +10,7 @@
 #include "minima_locator.h"
 #include <sstream>
 #include <math.h>
+#include "geo_convert.h"
 
 /*****************************************************************************/
 
@@ -31,7 +33,6 @@ void minima_locator::parse_arg_string(std::string method_string)
 	// 1 = threshold
 	// 2 = min delta
 	// 3 = min number of surrounding triangles that are greater than current triangle
-	// 4 = tolerance for region growing routine
 	
 	// get the first bracket
 	int c_pos = method_string.find_first_of("(")+1;
@@ -39,9 +40,9 @@ void minima_locator::parse_arg_string(std::string method_string)
 	char dummy;
 	// check whether the text is "help" and print the method parameters if it is
 	if (method_string.substr(c_pos, e_pos-c_pos) == "help")
-		throw(std::string("minima parameters = (threshold, minimum delta, minimum number of surrounding triangles, tolerance in object finding)"));
+		throw(std::string("minima parameters = (threshold, minimum delta, minimum number of surrounding triangles)"));
 	std::stringstream stream(method_string.substr(c_pos, e_pos-c_pos));
-	stream >> thresh >> dummy >> min_delta >> dummy >> min_sur_tri >> dummy >> TOL;	// dummy reads the comma
+	stream >> thresh >> dummy >> min_delta >> dummy >> min_sur_tri;	// dummy reads the comma
 	// add to the meta data
 	std::stringstream ss;
 	meta_data["method"] = "minima";
@@ -51,8 +52,6 @@ void minima_locator::parse_arg_string(std::string method_string)
 	meta_data["minimum_delta"] = ss.str();
 	ss.str(""); ss << min_sur_tri;
 	meta_data["minimum_number_of_surrounding_triangles"] = ss.str();
-	ss.str(""); ss << TOL;
-	meta_data["tolerance_in_gradient_ascent"] = ss.str();
 }
 
 /*****************************************************************************/
@@ -63,7 +62,6 @@ bool minima_locator::is_extrema(indexed_force_tri_3D* tri, int t_step)
 	// thresh = threshold
 	// min_delta = min delta
 	// min_sur_tri = min number of surrounding triangles that are greater than current triangle
-	// TOL = tolerance for region growing routine
 	// get the value of the triangle
 	
 	// build a list of surrounding triangles first
@@ -126,46 +124,61 @@ bool minima_locator::is_in_object(indexed_force_tri_3D* O_TRI,
 
 /*****************************************************************************/
 
-bool minima_locator::process_data(void)
+void minima_locator::calculate_object_position(int o, int t)
 {
-	return true;
-}
-
-/*****************************************************************************/
-
-FP_TYPE minima_locator::calculate_point_weight(FP_TYPE V, FP_TYPE min_v, FP_TYPE max_v)
-{
-	// for minima the weight is 1.0 - (V-min_v) / (max_v-min_v)
-	return 1.0 - (V-min_v) / (max_v-min_v);
-}
-
-/*****************************************************************************/
-
-indexed_force_tri_3D* minima_locator::get_original_triangle(int o, int t)
-{
-	// get the original triangle - i.e. the one at the centre of the object
-	// for the minima this is defined as the triangle with the lowest value
-	FP_TYPE c_val = 2e20f;
-	indexed_force_tri_3D* o_tri = NULL;
-	LABEL_STORE* object_labels = &(ex_list.get(t, o)->object_labels);
-	// if there are no labels do not try to find the min/max
-	if (object_labels->size() == 0)
-		return NULL;
-	// get the missing value
-	FP_TYPE mv = ds.get_missing_value();
-	// loop over all the triangles in the object
+	steering_extremum* svex = ex_list.get(t, o);
+	LABEL_STORE* object_labels = &(svex->object_labels);
+	// find min / max of values in the object
+	FP_TYPE min_v = 2e20f;	// minimum value in object
+	FP_TYPE max_v = 0;		// maximum value in object
+	get_min_max_values(min_v, max_v, o, t);
+	
+	// position vector in Cartesian coordinates
+	vector_3D P;
+	// get the position and weight for each triangle in the object
 	for (LABEL_STORE::iterator it_ll = object_labels->begin(); 
-		 it_ll != object_labels->end(); it_ll++)	// tri indices
+		 it_ll != object_labels->end(); it_ll++)	// tri labels
 	{
-		// get the triangle
+		// get the triangle and its centroid
 		indexed_force_tri_3D* c_tri = tg.get_triangle(*it_ll);
-		FP_TYPE val = ds.get_data(t, c_tri->get_ds_index());
-		// find the min and max values
-		if (fabs(val) < 0.99*fabs(mv) && val < c_val)
-		{
-			c_val = val;
-			o_tri = c_tri;
-		}
+		vector_3D C = c_tri->centroid();
+		// get the data value from the datastore
+		FP_TYPE V = ds.get_data(t, c_tri->get_ds_index());
+		// if this value equals the min value then this is the object position
+		if (V == min_v)
+			P = C;
 	}
-	return o_tri;
+	// put the values back in the geo extremum
+	FP_TYPE lon, lat;
+	cart_to_model(P, lon, lat);
+	svex->lon = lon;
+	svex->lat = lat;
+}
+
+/*****************************************************************************/
+
+void minima_locator::calculate_object_intensity(int o, int t)
+{
+	// get the extremum - the lat and lon will have been set already
+	steering_extremum* svex = ex_list.get(t, o);
+	
+	// find min / max of values in the object
+	FP_TYPE min_v = 2e20f;	// minimum value in object
+	FP_TYPE max_v = 0;		// maximum value in object
+	get_min_max_values(min_v, max_v, o, t);		
+	svex->intensity = min_v;
+}
+
+/*****************************************************************************/
+
+void minima_locator::calculate_object_delta(int o, int t)
+{
+	// calculate the delta as the absolute difference between the minimum and
+	// the maximum value of the object
+	// find min / max of values in the object
+	FP_TYPE min_v = 2e20f;	// minimum value in object
+	FP_TYPE max_v = -2e20f;		// maximum value in object
+	get_min_max_values(min_v, max_v, o, t);	
+	steering_extremum* svex = ex_list.get(t, o);
+	svex->delta = fabs(max_v - min_v);
 }

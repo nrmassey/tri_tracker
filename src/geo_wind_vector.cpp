@@ -80,42 +80,71 @@ void get_lon_lat_idx(ncdata* nc_data, int lon_idx, int lat_idx,
     n_lon_idx = lon_idx + lon_off;
     n_lat_idx = lat_idx + lat_off;
 
-    // wrap around the North Pole if necessary
+    // wrap around the North Pole if necessary and not a rotated grid!
     if (n_lat_idx < 0)
     {
-        n_lat_idx = -n_lat_idx - 1;
-        n_lon_idx += n_lon_idx / 2;
+    	if (nc_data->has_rotated_grid())
+    	{
+    		n_lat_idx = 0;
+    	}
+    	else
+    	{
+	        n_lat_idx = -n_lat_idx - 1;
+    	    n_lon_idx += n_lon_idx / 2;
+    	}
     }
 
     // wrap around the South Pole if necessary
     int lat_len = nc_data->get_lat_len();
     if (n_lat_idx >= lat_len)
     {
-        n_lat_idx = 2 * lat_len - n_lat_idx - 1;
-        n_lon_idx += n_lon_idx / 2;
+    	if (nc_data->has_rotated_grid())
+    	{
+    		n_lat_idx = lat_len-1;
+    	}
+    	else
+    	{
+	        n_lat_idx = 2 * lat_len - n_lat_idx - 1;
+    	    n_lon_idx += n_lon_idx / 2;
+    	}
     }
 
     // wrap around the date line
     int lon_len = nc_data->get_lon_len();
     if (n_lon_idx < 0)
-        n_lon_idx = lon_len + n_lon_idx;
+    {
+    	if (nc_data->has_rotated_grid())
+    		n_lon_idx = 0;
+    	else
+	        n_lon_idx = lon_len + n_lon_idx;
+    }
     if (n_lon_idx >= lon_len)
-        n_lon_idx = n_lon_idx - lon_len;
+    {
+    	if (nc_data->has_rotated_grid())
+    		n_lon_idx = lon_len - 1;
+	    else
+	        n_lon_idx = n_lon_idx - lon_len;
+	}
 }
 
 /*****************************************************************************/
 
 spline form_lon_spline(ncdata* nc_data, int lon_idx, int lat_idx, int z, int t)
 {
+	const int spl_size = 10;
+	int spl2 = spl_size / 2;
     // construct a 5 pt spline from the data in the lon direction
-    std::vector<FP_TYPE> lon_vals(5, 0.0);
-	std::vector<FP_TYPE> x_vals(5);
-    for (int i=-2; i<3; i++)
+    std::vector<FP_TYPE> lon_vals(spl_size, 0.0);
+	std::vector<FP_TYPE> x_vals(spl_size);
+    for (int i=-spl2; i<spl2+1; i++)
     {
         int lat_i, lon_i;
         get_lon_lat_idx(nc_data, lon_idx, lat_idx, i, 0, lon_i, lat_i);
-        lon_vals[i+2] = nc_data->get_data(lon_i, lat_i, z, t);
-        x_vals[i+2] = (nc_data->get_lon_s() + nc_data->get_lon_d()*lon_i)* f_deg_to_rad;
+        lon_vals[i+spl2] = nc_data->get_data(lon_i, lat_i, z, t);
+        if (nc_data->has_rotated_grid())
+	        x_vals[i+spl2] = nc_data->get_rotated_grid()->get_global_longitude_value(lon_i, lat_i) * f_deg_to_rad;
+        else
+	        x_vals[i+spl2] = nc_data->get_lon_from_idx(lon_i)* f_deg_to_rad;
     }
     spline lon_spline(lon_vals, x_vals, nc_data->get_missing_value());
     return lon_spline;
@@ -125,17 +154,22 @@ spline form_lon_spline(ncdata* nc_data, int lon_idx, int lat_idx, int z, int t)
 
 spline form_lat_spline(ncdata* nc_data, int lon_idx, int lat_idx, int z, int t)
 {
+	const int spl_size = 5;
+	int spl2 = spl_size / 2;
     // construct a 5 pt spline from the data in the lat direction
-    std::vector<FP_TYPE> lat_vals(5, 0.0);
-	std::vector<FP_TYPE> y_vals(5);
+    std::vector<FP_TYPE> lat_vals(spl_size, 0.0);
+	std::vector<FP_TYPE> y_vals(spl_size);
 	
-    for (int j=-2; j<3; j++)
+    for (int j=-spl2; j<spl2+1; j++)
     {
         int lat_i, lon_i;
         get_lon_lat_idx(nc_data, lon_idx, lat_idx, 0, j, lon_i, lat_i);
         // put the data values in backwards
-        lat_vals[2-j] = nc_data->get_data(lon_i, lat_i, z, t);
-        y_vals[2-j] = (nc_data->get_lat_s() + lat_i*nc_data->get_lat_d()) * f_deg_to_rad;
+        lat_vals[spl2-j] = nc_data->get_data(lon_i, lat_i, z, t);
+        if (nc_data->has_rotated_grid())
+	        y_vals[spl2-j] = nc_data->get_rotated_grid()->get_global_latitude_value(lon_i, lat_i) * f_deg_to_rad;
+        else
+	        y_vals[spl2-j] = nc_data->get_lat_from_idx(lat_i) * f_deg_to_rad;
     }
     spline lat_spline(lat_vals, y_vals, nc_data->get_missing_value());
     return lat_spline;
@@ -156,17 +190,33 @@ void calc_geo_wind(ncdata* gph_data, int t, int gph_z, int lon_idx, int lat_idx,
     spline lon_spline = form_lon_spline(gph_data, lon_idx, lat_idx, gph_z, t);
     spline lat_spline = form_lat_spline(gph_data, lon_idx, lat_idx, gph_z, t);
 
-    FP_TYPE lat = gph_data->get_lat_from_idx(lat_idx) * f_deg_to_rad;
-    FP_TYPE lon = gph_data->get_lon_from_idx(lon_idx) * f_deg_to_rad;
+    FP_TYPE lat_r;
+    FP_TYPE lon;
+    
+    if (gph_data->has_rotated_grid())
+    {
+    	lat_r = gph_data->get_rotated_grid()->get_global_latitude_value (lon_idx, lat_idx) * f_deg_to_rad;
+    	lon   = gph_data->get_rotated_grid()->get_global_longitude_value(lon_idx, lat_idx) * f_deg_to_rad;
+    }
+    else
+    {
+	    lat_r = gph_data->get_lat_from_idx(lat_idx) * f_deg_to_rad;
+	    lon   = gph_data->get_lon_from_idx(lon_idx) * f_deg_to_rad;
+	}
 
     // calculate the Coriolis parameter
     const FP_TYPE O = 7.292e-5;
-    FP_TYPE f = 2 * O * sin(lat);
+    FP_TYPE f = 2 * O * sin(lat_r);
     // radius of the Earth
     const FP_TYPE R = 6371 * 1000;
     // calculate the u and v of the wind using the derivatives from the spline
-    u = g_sc / (-f*R) * lat_spline.evaluate_dx(lat); 
-    v = g_sc / (f*R*cos(lat)) * lon_spline.evaluate_dx(lon);
+    u = -g_sc / (f*R) * lat_spline.evaluate_dx(lat_r); 
+    v = g_sc / (f*R*cos(lat_r)) * lon_spline.evaluate_dx(lon);
+    // NaN check
+    if (isnan(u)) 
+    	u = 0.0;
+    if (isnan(v))
+    	v = 0.0;
 }
 
 /*****************************************************************************/

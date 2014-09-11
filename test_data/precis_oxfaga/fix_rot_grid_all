@@ -1,0 +1,6 @@
+FNAME=$1
+VNAME=$2
+ncrename -O -d y,latitude -v y,latitude -d x,longitude -v x,longitude -d p,z -v p,z $FNAME
+ncatted -O -a units,longitude,o,c,"degrees" -a units,latitude,o,c,"degrees" -a grid_mapping,$VNAME,c,c,"rotated_pole" $FNAME
+ncks -A /Volumes/OxPEWWES/PRECIS_ERA_Interim_run/scripts/wah_eu_rot.nc $FNAME
+ncatted -O -a grid_north_pole_latitude,rotated_pole,o,f,38.0 -a grid_north_pole_longitude,rotated_pole,o,f,190 $FNAME
