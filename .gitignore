@@ -8,8 +8,5 @@ exe/*
 *.gz
 *.rgd
 *.ex
-
 *.nc.gz
-
-
 exe/test_geo_wind
