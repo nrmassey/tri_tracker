@@ -21,7 +21,7 @@ class regridder
 	public:
 		regridder(const std::string mesh_fname, const std::string nc_fname, 
 				  const std::string nc_vname, const int z_level,
-				  FP_TYPE smooth_weight);
+				  FP_TYPE smooth_weight, const int p_method);
 		~regridder(void);
 		void regrid(void);
 		void save(std::string out_fname);
@@ -38,6 +38,7 @@ class regridder
 		data_store* ds;
 		int z_level;
 		FP_TYPE smooth_weight;
+		FP_TYPE p_method;
 		
 		/*********************************************************************/
 };

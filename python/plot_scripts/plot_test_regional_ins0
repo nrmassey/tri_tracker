@@ -12,7 +12,7 @@ PLT_LEV=$2
 GRID_FILE=../../grids/eu_mesh_$N_PTS"_"$LEV".msh"
 RGD_FILE=${EU_FILE%.nc}_l$LEV""_bck.rgd
 EX_FILE=${EU_FILE%.nc}_l$EX_LEV"".ex
-OUT_FILE=${EU_FILE%.nc}_"$PLT_LEV"_"$T_STEP".png
+OUT_FILE=${EU_FILE%.nc}_"$PLT_LEV".png
 
 cmd="../plot_tri_tracker.py -m $GRID_FILE -r $RGD_FILE -o $OUT_FILE -l $PLT_LEV -t $T_STEP -s $N_STEPS -x [-15.5,39.0] -y [28.5,72.0] -p 198 -q 39.25 -e $EX_FILE -r $RGD_FILE"
 echo $cmd

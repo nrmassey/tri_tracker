@@ -15,8 +15,9 @@
 
 regridder::regridder(const std::string mesh_file_name, const std::string nc_fname, 
 					 const std::string nc_vname, const int iz_level,
-					 FP_TYPE ismooth_weight) 
-          : nc_data(nc_fname, nc_vname), z_level(iz_level), smooth_weight(ismooth_weight)
+					 FP_TYPE ismooth_weight, const int ip_method) 
+          : nc_data(nc_fname, nc_vname), z_level(iz_level), smooth_weight(ismooth_weight),
+            p_method(ip_method)
 {
     // open the grid file
 	tg.load(mesh_file_name);
@@ -39,6 +40,12 @@ regridder::regridder(const std::string mesh_file_name, const std::string nc_fnam
 	meta_data["z_level"] = ss.str();
 	ss.str("");	ss << ismooth_weight;
 	meta_data["smoothing_weight"] = ss.str();
+	switch(ip_method)
+	{
+		case 0: meta_data["parent_method"] = "mean"; break;
+		case 1: meta_data["parent_method"] = "min"; break;
+		case 2: meta_data["parent_method"] = "max"; break;
+	}
 	ds->set_meta_data(&meta_data);
 }
 
@@ -52,12 +59,14 @@ regridder::~regridder(void)
 /*****************************************************************************/
 
 void regrid_node(QT_TRI_NODE* current_node, ncdata* nc_data, int z_level, int t, 
-				 data_store* ds)
+				 data_store* ds, int pmethod)
 {
 	// regridding whilst walking the tree
 	// get the list of indices from the current triangle
 	const std::list<grid_index>* grid_indices = current_node->get_data()->get_grid_indices();
 	FP_TYPE sum = 0.0;
+	FP_TYPE min = 2e20;
+	FP_TYPE max = -2e20;
 	int n = 0;
 	
 	// loop through and recover the values from the nc_data
@@ -70,21 +79,39 @@ void regrid_node(QT_TRI_NODE* current_node, ncdata* nc_data, int z_level, int t,
 #endif
 		FP_TYPE d = nc_data->get_data(it->i, it->j, z_level, t);
 		sum += d;
+		if (d < min)
+			min = d;
+		if (d > max)
+			max = d;
 		n ++;
 	}
 		
 	// complete the average - check for no data and assign mv if non
+	FP_TYPE val;
 	if (n == 0)
-		sum = nc_data->get_missing_value();
+		val = nc_data->get_missing_value();
 	else
 		sum = sum / n;
-	// place the data
-	ds->set_data(t, current_node->get_data()->get_ds_index(), sum);
+	// place the data - if this is a leaf node then assign the mean
+	// if it is not a leaf node then assign what the user wishes
+	if (current_node->is_leaf())
+		val = sum;
+	else
+	{
+		switch(pmethod) // user can choose: 0=mean, 1=min, 2=max
+		{
+			case 0: val = sum; break;
+			case 1: val = min; break;
+			case 2: val = max; break;
+		}
+	}
+	
+	ds->set_data(t, current_node->get_data()->get_ds_index(), val);
 	
 	// regrid any child nodes
 	for (int i=0; i<4; i++)
 		if (current_node->get_child(i) != NULL)
-			regrid_node(current_node->get_child(i), nc_data, z_level, t, ds);
+			regrid_node(current_node->get_child(i), nc_data, z_level, t, ds, pmethod);
 }
 
 /*****************************************************************************/
@@ -102,7 +129,7 @@ void regridder::regrid(void)
 		{
 			// walk the tree doing the regridding as we go
 			QT_TRI_NODE* root_node = tg.get_base_tri(i);
-			regrid_node(root_node, &nc_data, z_level, t, ds);
+			regrid_node(root_node, &nc_data, z_level, t, ds, p_method);
 		}
 		// timestep counter
 		int e = t;

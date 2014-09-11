@@ -50,6 +50,7 @@ void minima_background::locate(void)
 	refine_objects();
 	find_objects();
 	trim_objects();
+	merge_objects();
 	ex_points_from_objects();
 }
 
@@ -177,7 +178,7 @@ bool minima_background::is_extrema(indexed_force_tri_3D* tri, int t_step)
 			continue;
 		}
 		// if the middle triangle is less than or equal to this surrounding triangle
-		if (tri_val <= tri_adj_val)
+		if (tri_val <= min_delta && tri_val <= tri_adj_val)
 			n_st += 1;
 	}
 	int min_sur = tri_adj_labels->size();

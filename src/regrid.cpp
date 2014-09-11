@@ -20,8 +20,9 @@ int main(int argc, char** argv)
 	std::string out_fname;		// output filename
 	int z_level;				// level to regrid in netCDF file
 	bool text_out = false;
-	FP_TYPE smooth_weight = 1.0;	// weight of central triangle.
-									// smoothing is done by assigning point adjacent triangles the weight (1.0-smooth_weight)/12
+	FP_TYPE smooth_weight = 1.0;// weight of central triangle.
+								// smoothing is done by assigning point adjacent triangles the weight (1.0-smooth_weight)/12
+	int p = 0;					// what to do with parent triangles in regrid. 0=mean (default), 1=min, 2=max
 
 	std::cout << "#### regrid" << std::endl;
 
@@ -34,6 +35,7 @@ int main(int argc, char** argv)
 		TCLAP::ValueArg<std::string> nc_vname_arg("v", "nc_var", "Name of variable in netCDF to regrid", true, "", "string", cmd);
 		TCLAP::SwitchArg text_out_arg("T", "text", "Output grid in text format, as well as the binary format", cmd, false);
 		TCLAP::ValueArg<FP_TYPE> smooth_weight_arg("S", "smooth", "Weight of central triangle in smoothing of grid. 1.0 = no smoothing", false, 1.0, "float", cmd);
+		TCLAP::ValueArg<int> p_val_arg("p", "parent", "Method to use when calculating parent triangles. 0=mean (default), 1=min, 2=max", false, 0, "integer", cmd);
 		TCLAP::ValueArg<std::string> out_fname_arg("o", "out_file", "Name of file to output results to", true, "", "string", cmd);
 		cmd.parse(argc, argv);
 
@@ -44,6 +46,7 @@ int main(int argc, char** argv)
 		nc_vname = nc_vname_arg.getValue();
 		text_out = text_out_arg.getValue();
 		smooth_weight = smooth_weight_arg.getValue();
+		p = p_val_arg.getValue();
 		out_fname = out_fname_arg.getValue();
 	}
 	catch (TCLAP::ArgException &e)  // catch exceptions
@@ -65,7 +68,7 @@ int main(int argc, char** argv)
 	// create the regridder
 	try
 	{
-		regridder rg(mesh_fname, nc_fname, nc_vname, z_level, smooth_weight);
+		regridder rg(mesh_fname, nc_fname, nc_vname, z_level, smooth_weight, p);
 		rg.regrid();
 		rg.save(out_fname);
 		std::cout << "# Saved to file: " << out_fname << std::endl;
