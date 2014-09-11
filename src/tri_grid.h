@@ -40,6 +40,8 @@ class tri_grid
 		LABEL_STORE get_path(LABEL SL, LABEL EL, int resolution=1);
 		// get the label of the triangle which the point lies in
 		LABEL get_triangle_for_point(vector_3D* P);
+		// get the distance between two triangles in the tri-grid
+		FP_TYPE distance_between_triangles(LABEL SL, LABEL EL);
 		// get the metadata
 		META_DATA_TYPE* get_meta_data(void);
 		// input / output functions

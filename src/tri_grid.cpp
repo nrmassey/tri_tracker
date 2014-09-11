@@ -837,6 +837,26 @@ LABEL tri_grid::get_triangle_for_point(vector_3D* P)
 
 /*****************************************************************************/
 
+FP_TYPE tri_grid::distance_between_triangles(LABEL SL, LABEL EL)
+{
+	// get each triangle
+	indexed_force_tri_3D* tri_SL = get_triangle(SL);
+	indexed_force_tri_3D* tri_EL = get_triangle(EL);
+	// get the centroid
+	vector_3D vec_SL = tri_SL->centroid();
+	vector_3D vec_EL = tri_EL->centroid();
+	// convert the points to model coordinates (lat-lon)
+	FP_TYPE lon_SL, lat_SL;
+	FP_TYPE lon_EL, lat_EL;
+	cart_to_model(vec_SL, lon_SL, lat_SL);
+	cart_to_model(vec_EL, lon_EL, lat_EL);
+	// get the distance
+	FP_TYPE dist = haversine(lon_SL, lat_SL, lon_EL, lat_EL, EARTH_R);
+	return dist;
+}
+
+/*****************************************************************************/
+
 LABEL_STORE tri_grid::get_path(LABEL SL, LABEL EL, int resolution)
 {
 	// create a path of labels between the starting label (SL) and the 
