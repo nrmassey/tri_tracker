@@ -207,8 +207,9 @@ def plot_extrema(sp, tg, ex, time_step, ex_num=-1, pole_longitude=0.0, pole_lati
 					[P[0][1], P[1][1], P[2][1], P[0][1]], \
 					facecolor=fc, edgecolor=ec, lw=0.5, zorder=2)
 		# plot geostrophic wind if necessary
-		sc = 0.05
-		sp.arrow(E[0], E[1], ex_t.steer_x*sc, ex_t.steer_y*sc, head_width=0.3, fc='k', ec='k')
+		if ex_t.steer_x != 0.0 and abs(ex_t.steer_x) < 1e5:
+			sc = 0.1
+			sp.arrow(E[0], E[1], ex_t.steer_x*sc, ex_t.steer_y*sc, head_width=0.3, fc='r', ec='r', zorder=3)
 		cur+=1
 		
 ###############################################################################
