@@ -49,7 +49,8 @@ void minima_background::locate(void)
 	merge_objects();
 	refine_objects();
 	find_objects();
-	ex_points_from_objects();	
+	trim_objects();
+	ex_points_from_objects();
 }
 
 /******************************************************************************/
@@ -200,7 +201,10 @@ bool minima_background::is_in_object(indexed_force_tri_3D* O_TRI,
 	is_in = cl_v <= ol_v;
 	// not the mv
 	is_in = is_in && fabs(cl_v) <= fabs(0.99 * data_minus_bck->get_missing_value());
+	// less than the minimum delta
 	is_in = is_in && (cl_v <= min_delta);
+	// less than 1000km radius
+	is_in = is_in && tg.distance_between_triangles(O_TRI->get_label(), C_TRI->get_label())/1000.0 < 1000.0;
 	return is_in;
 }
 
@@ -312,31 +316,17 @@ bool minima_background::process_data(void)
 void minima_background::trim_objects(void)
 {
 	std::cout << "# Trimming objects, timestep: ";
-	FP_TYPE min_diameter = 25;
-	FP_TYPE max_diameter = 2000;
-	FP_TYPE tri_surf_area = -1.0;
-
 	for (int t=0; t<ex_list.size(); t++)
 	{
 		tstep_out_begin(t);
 		int o_s = ex_list.number_of_extrema(t);
 		for (int o1=0; o1<o_s; o1++)
 		{
-			// calculate surface area of a triangle if not already calculated
-				
-			LABEL_STORE* o1_labs = &(ex_list.get(t, o1)->object_labels);
-			if (tri_surf_area == -1)
-			{
-				LABEL tri_lab_0 = (*o1_labs)[0];
-				indexed_force_tri_3D* tri_0 = tg.get_triangle(tri_lab_0);
-				tri_surf_area = tri_0->surface_area(6371);
-			}
-			FP_TYPE object_area = o1_labs->size() * tri_surf_area;
-			FP_TYPE object_diameter = sqrt(object_area / M_PI);
-			if (object_diameter < min_diameter || object_diameter > max_diameter)
-			{
-				o1_labs->clear();		// delete!
-			}
+			// remove those greater than minimum delta
+			FP_TYPE min_vd, max_vd;
+			get_min_max_values_delta(min_vd, max_vd, o1, t);
+			if (min_vd > min_delta)
+				ex_list.get(t, o1)->object_labels.clear();// delete!
 		}
 		tstep_out_end(t);	
 	}
