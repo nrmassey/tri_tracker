@@ -9,7 +9,6 @@
 #include "eventor.h"
 #include "haversine.h"
 #include <sstream>
-#include <netcdfcpp.h>
 #include <ctime>
 #include <math.h>
 #include <algorithm>

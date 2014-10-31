@@ -6,7 +6,6 @@
 ******************************************************************************/
 
 #include "extrema_list.h"
-#include <netcdfcpp.h>
 #include <fstream>
 #include <iostream>
 #include "vector_3D.h"
