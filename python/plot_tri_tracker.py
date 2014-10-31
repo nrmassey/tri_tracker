@@ -93,7 +93,6 @@ def plot_mesh(sp, tg, l, tl=-1, pole_longitude=0.0, pole_latitude=90.0):
 
 def plot_data(sp0, sp1, tg, ds, time_step, level, colmap=cm.RdYlBu_r, dzt=1, keep_scale=False,\
 			  symmetric_cb=True, pole_longitude=0.0, pole_latitude=90.0):
-	print "Plotting data"
 	# plot the mesh and the values on the mesh
 	# get the triangles first
 	tri_list = tg.get_triangles_at_level(level)
@@ -108,7 +107,7 @@ def plot_data(sp0, sp1, tg, ds, time_step, level, colmap=cm.RdYlBu_r, dzt=1, kee
 	
 	max_V = float(int(max_V / 100))
 	min_V = float(int(min_V / 100))
-	print min_V, max_V
+	print "Plotting data range: ", min_V, max_V
 
 #	max_V = 1050
 #	min_V = 950
@@ -162,19 +161,61 @@ def plot_data(sp0, sp1, tg, ds, time_step, level, colmap=cm.RdYlBu_r, dzt=1, kee
 
 ###############################################################################
 
+def plot_geostrophic_wind(sp, steer_x, steer_y, lon, lat, pole_longitude=0.0, pole_latitude=90.0):
+	# plot geostrophic wind if necessary
+	n_hrs_per_tstep = 6
+	n_secs_per_tstep = n_hrs_per_tstep * 60 * 60
+	earth_r = 6371 * 1000
+	lat_c = (2*math.pi * earth_r)
+	
+	if steer_x != 0.0 and abs(steer_x) < 1e5:
+		# add the geostrophic wind (in sph. coords.) to the position
+		circ = 2*math.pi * math.cos(math.radians(lat)) * earth_r
+		P_lon = lon + steer_x * n_secs_per_tstep * 360.0 / circ
+		P_lat = lat + steer_y * n_secs_per_tstep * 180.0 / lat_c
+		PG = glob2rot(P_lon, P_lat, pole_longitude, pole_latitude)
+		E = glob2rot(lon, lat, pole_longitude, pole_latitude)
+		# plot arrow between the two points
+		sp.arrow(E[0], E[1], PG[0]-E[0], PG[1]-E[1], head_width=0.3, 
+		         fc='r', ec='r', zorder=1)
+
+###############################################################################
+
+def plot_object_triangles(sp, tg, object_list, pole_longitude=0.0, pole_latitude=90.0):
+	# plot the triangles in the object from their labels
+	for tl in object_list:
+		# get the triangle from the grid via its label
+		TRI = tg.get_triangle(tl)			
+		# get the points
+		P = [cart_to_model(TRI[0]), cart_to_model(TRI[1]), cart_to_model(TRI[2])]
+		# don't draw if it goes around the date line
+		if abs(P[0][0] - P[1][0]) > 180 or abs(P[1][0] - P[2][0]) > 180 or abs(P[2][0] - P[1][0]) > 180:
+			continue
+		if (pole_latitude != 90.0):
+			P = [glob2rot(P[0][0], P[0][1], pole_longitude, pole_latitude),
+				 glob2rot(P[1][0], P[1][1], pole_longitude, pole_latitude),
+				 glob2rot(P[2][0], P[2][1], pole_longitude, pole_latitude)]				
+		# draw see-through triangle with black border
+		fc = [1,1,1,0]
+		ec = [0,0,0,1]
+		sp.fill([P[0][0], P[1][0], P[2][0], P[0][0]], \
+				[P[0][1], P[1][1], P[2][1], P[0][1]], \
+				facecolor=fc, edgecolor=ec, lw=0.5, zorder=2)
+
+###############################################################################
+
 def plot_extrema(sp, tg, ex, time_step, ex_num=-1, pole_longitude=0.0, pole_latitude=90.0):
 	print "Plotting extrema"
 	# plot the extrema triangles
 	# get the extrema for this timestep
 	ex_t_step = ex.get_extrema_for_t_step(time_step)
 	# plot each extrema
-	cur = 0;
+	cur = 0
+	
 	for ex_n in range(0, len(ex_t_step)):
 		if ex_num != -1 and ex_n != ex_num:
 			continue
 		ex_t = ex_t_step[ex_n]
-		if len(ex_t.object_list) == 0:
-			continue
 		lon = ex_t.lon
 		lat = ex_t.lat
 		if abs(lon) > 1000 or abs(lat) > 1000:
@@ -184,32 +225,10 @@ def plot_extrema(sp, tg, ex, time_step, ex_num=-1, pole_longitude=0.0, pole_lati
 			lon = C[0]
 			lat = C[1]
 		E = glob2rot(lon, lat, pole_longitude, pole_latitude)
-#		sp.plot(P[0], P[1],'ro', ms=5.0, mec='w')
 		sp.plot(E[0], E[1],'ro', ms=2.5, mec='r', zorder=3)
-		# plot the triangles in the object from their labels
-		for tl in ex_t.object_list:
-			# get the triangle from the grid via its label
-			TRI = tg.get_triangle(tl)			
-			# get the points
-			P = [cart_to_model(TRI[0]), cart_to_model(TRI[1]), cart_to_model(TRI[2])]
-			# don't draw if it goes around the date line
-			if abs(P[0][0] - P[1][0]) > 180 or abs(P[1][0] - P[2][0]) > 180 or abs(P[2][0] - P[1][0]) > 180:
-				continue
-			if (pole_latitude != 90.0):
-				P = [glob2rot(P[0][0], P[0][1], pole_longitude, pole_latitude),
-					 glob2rot(P[1][0], P[1][1], pole_longitude, pole_latitude),
-					 glob2rot(P[2][0], P[2][1], pole_longitude, pole_latitude)]				
-			# draw see-through triangle with black border
-			fc = [1,1,1,0]
-#			ec = [[0,0,0,0.5], [1,0,0,0.5], [0,1,0,0.5], [0,0,1,0.5]][cur%4]
-			ec = [0,0,0,1]
-			sp.fill([P[0][0], P[1][0], P[2][0], P[0][0]], \
-					[P[0][1], P[1][1], P[2][1], P[0][1]], \
-					facecolor=fc, edgecolor=ec, lw=0.5, zorder=2)
-		# plot geostrophic wind if necessary
-		if ex_t.steer_x != 0.0 and abs(ex_t.steer_x) < 1e5:
-			sc = 0.1
-			sp.arrow(E[0], E[1], ex_t.steer_x*sc, ex_t.steer_y*sc, head_width=0.3, fc='r', ec='r', zorder=3)
+		plot_object_triangles(sp, tg, ex_t.object_list, pole_longitude, pole_latitude)
+		plot_geostrophic_wind(sp, ex.steer_x, ex.steer_y, lon, lat, pole_longitude, pole_latitude)
+
 		cur+=1
 		
 ###############################################################################
@@ -316,8 +335,8 @@ def load_extrema_file(ex_file):
 
 ###############################################################################
 
-def load_track_list(trk_file):
-	trk = trk_list()
+def load_track_file(trk_file):
+	trk = track_list()
 	if os.path.exists(trk_file):
 		fh = open(trk_file, 'rb')
 		trk.load(fh)
@@ -397,6 +416,61 @@ def plot_wind_field(sp, wnd_lat, wnd_lon, wnd, wnd_max):
 	pmesh = sp.pcolormesh(wnd_lon, wnd_lat, wnd, cmap=cmap, vmax=cbar_vals[-1], vmin=cbar_vals[0], norm=norm)
 	draw_colorbar(cbar_vals[0], cbar_vals[-1]-5, len(cbar_vals)-2, cmap, format="%i", title="Max wind speed m/s")
 
+###############################################################################
+
+def plot_track(sp, trk, t_step, pole_longitude, pole_latitude):
+	print "Plotting tracks"
+	# plot the tracks which encompass the current time step
+	six_hrs = 6 * 60 * 60
+	for ct in range(0, trk.get_n_tracks()):
+		c_trk = trk.get_track(ct)
+		# check whether the current timestep is in the range of the track
+		fn = c_trk.get_track_point(0).frame_number
+		np = c_trk.get_n_points()
+		if t_step >= fn and t_step < fn + np:
+			# plot the track - first point first
+			c_tp = c_trk.get_track_point(0)
+			P_0 = glob2rot(c_tp.ex.lon, c_tp.ex.lat, pole_longitude, pole_latitude)
+			sp.plot(P_0[0], P_0[1], 'ko', ms=2.5)
+			earth_r = 6371 * 1000
+			circ = 2*math.pi * math.cos(math.radians(c_tp.ex.lat)) * earth_r
+
+			if c_tp.frame_number == t_step:
+				V = math.sqrt(c_tp.ex.steer_x**2 + c_tp.ex.steer_y**2)
+				if V * six_hrs / 1000.0 < 500:
+					R = 500 * 1000
+				else:
+					R = V * 1.5 * six_hrs
+				P3_lon = c_tp.ex.lon + V * 1.5 * six_hrs * 360.0/circ
+				P3 = glob2rot(P3_lon, c_tp.ex.lat, pole_longitude, pole_latitude)
+				sr = plt.Circle((P_0[0],P_0[1]),P3[0]-P_0[0],color='r', fill=False)
+				sp.add_artist(sr)
+				plot_geostrophic_wind(sp, c_tp.ex.steer_x, c_tp.ex.steer_y, c_tp.ex.lon, c_tp.ex.lat, pole_longitude, pole_latitude)
+				plot_object_triangles(sp, tg, c_tp.ex.object_list, pole_longitude, pole_latitude)
+				
+			for tp in range(1, np):
+				# convert the 2nd point
+				c_tp = c_trk.get_track_point(tp)
+				P_1 = glob2rot(c_tp.ex.lon, c_tp.ex.lat, pole_longitude, pole_latitude)
+				sp.plot(P_1[0], P_1[1], 'ko', ms=2.5)
+				
+				if c_tp.frame_number == t_step:
+					V = math.sqrt(c_tp.ex.steer_x**2 + c_tp.ex.steer_y**2)
+					if V * six_hrs / 1000.0 < 500:
+						R = 500 * 1000
+					else:
+						R = V * 1.5 * six_hrs
+					P3_lon = c_tp.ex.lon + R * 360.0/circ
+					P3 = glob2rot(P3_lon, c_tp.ex.lat, pole_longitude, pole_latitude)
+					sr = plt.Circle((P_1[0],P_1[1]),P3[0]-P_1[0],color='r', fill=False)
+					sp.add_artist(sr)					
+					plot_geostrophic_wind(sp, c_tp.ex.steer_x, c_tp.ex.steer_y, c_tp.ex.lon, c_tp.ex.lat, pole_longitude, pole_latitude)
+					plot_object_triangles(sp, tg, c_tp.ex.object_list, pole_longitude, pole_latitude)
+
+				sp.plot([P_0[0], P_1[0]], [P_0[1], P_1[1]], 'k')
+				
+				P_0 = P_1
+				
 ###############################################################################
 
 if __name__ == "__main__":
@@ -488,7 +562,7 @@ if __name__ == "__main__":
 		sp0 = plt.subplot(gs[0:6,:], projection=projection)
 		if regrid_file != "":
 			sp1 = plt.subplot(gs[6,1:-1])
-			plot_data(sp0, sp1, tg, ds, t_step, grid_level, colmap=colmap, dzt=10, keep_scale=False,\
+			plot_data(sp0, sp1, tg, ds, t_step, grid_level, colmap=colmap, dzt=10, keep_scale=True,\
 					  symmetric_cb=False, pole_longitude=pole_longitude, pole_latitude=pole_latitude)
 
 		if mesh_file != "" and draw_mesh:
@@ -503,6 +577,9 @@ if __name__ == "__main__":
 		if ex_file != "":
 			plot_extrema(sp0, tg, ex, t_step, ex_num, pole_longitude=pole_longitude, pole_latitude=pole_latitude)
 	
+		if trk_file != "":
+			plot_track(sp0, trk, t_step, pole_longitude=pole_longitude, pole_latitude=pole_latitude)
+	    
 		if orig_mesh_file != "" and orig_mesh_var != "":
 			plot_original_grid(sp0, o_lon, o_lat)
 	

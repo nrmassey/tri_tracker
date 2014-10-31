@@ -1,0 +1,14 @@
+#! /usr/bin/env bash
+
+BASE_DIR=../../test_data/hadam3p_eu_ins0_1985_1_008476005_0
+EU_FILE=$BASE_DIR/ins0ga.pdi5dec.nc
+N_PTS=0
+LEV=7
+EX_LEV=7
+
+EX_FILE=${EU_FILE%.nc}_l$EX_LEV"".ex
+OUT_FILE=${EU_FILE%.nc}_"ALL_EX".png
+
+cmd="../plot_all_extrema.py -e $EX_FILE -o $OUT_FILE -x [-45.0,60.0] -y [0.0,90.0]"
+echo $cmd
+$cmd

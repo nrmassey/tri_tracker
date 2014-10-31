@@ -15,6 +15,6 @@ EX_FILE=${EU_FILE%.nc}_l$EX_LEV"".ex
 TRK_FILE=${EU_FILE%.nc}_l$EX_LEV"".trk
 OUT_FILE=${EU_FILE%.nc}_"$PLT_LEV".png
 
-cmd="../plot_tri_tracker.py -m $GRID_FILE -r $RGD_FILE -o $OUT_FILE -l $PLT_LEV -t $T_STEP -s $N_STEPS -x [-15.5,39.0] -y [28.5,72.0] -p 198 -q 39.25 -e $EX_FILE -r $RGD_FILE -f $TRK_FILE"
+cmd="../plot_tri_tracker.py -m $GRID_FILE -o $OUT_FILE -l $PLT_LEV -t $T_STEP -s $N_STEPS -x [-15.5,39.0] -y [28.5,72.0] -p 198 -q 39.25 -f $TRK_FILE -r $RGD_FILE"
 echo $cmd
 $cmd
