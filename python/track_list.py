@@ -17,22 +17,14 @@ class track_point:
 	def __init__(self):
 		self.ex = extremum()
 		self.frame_number = 0
-		self.cost = 0.0
-		self.c0 = 0.0
-		self.c1 = 0.0
-		self.c2 = 0.0
-		self.c3 = 0.0
+		self.rules_bf = 0
 		
 	#**************************************************************************
 
 	def load(self, fh):
 		self.frame_number = read_int(fh)
 		self.ex.load(fh)
-		self.cost = read_float(fh)
-		self.c0 = read_float(fh)
-		self.c1 = read_float(fh)
-		self.c2 = read_float(fh)
-		self.c3 = read_float(fh)
+		self.rules_bf = read_int(fh)
 
 #******************************************************************************
 		
