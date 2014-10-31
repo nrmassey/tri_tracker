@@ -180,7 +180,7 @@ spline form_lat_spline(ncdata* nc_data, int lon_idx, int lat_idx, int z, int t)
 void calc_geo_wind(ncdata* gph_data, int t, int gph_z, int lon_idx, int lat_idx,
                    FP_TYPE& u, FP_TYPE& v)
 {
-    // calculate the geostrophic wind
+    // calculate the geostrophic wind - spherical coordinates
 	// determine the scale factor - do we need to convert geopotential height
 	// to the geopotential?
 	FP_TYPE g_sc = 1.0;
@@ -210,6 +210,7 @@ void calc_geo_wind(ncdata* gph_data, int t, int gph_z, int lon_idx, int lat_idx,
     // radius of the Earth
     const FP_TYPE R = 6371 * 1000;
     // calculate the u and v of the wind using the derivatives from the spline
+    // u and v are now in spherical coordinates
     u = -g_sc / (f*R) * lat_spline.evaluate_dx(lat_r); 
     v = g_sc / (f*R*cos(lat_r)) * lon_spline.evaluate_dx(lon);
     // NaN check
