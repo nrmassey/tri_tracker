@@ -46,7 +46,7 @@ void minima_background::locate(void)
 {
 	process_data();
 	find_extrema();
-	merge_objects();
+//	merge_objects();
 	refine_objects();
 	find_objects();
 	trim_objects();
@@ -199,11 +199,11 @@ bool minima_background::is_in_object(indexed_force_tri_3D* O_TRI,
 	FP_TYPE ol_v = contour_data(data_minus_bck->get_data(t_step, O_TRI->get_ds_index()), contour_value);
 
 	// quick check	
-	is_in = cl_v <= ol_v;
+	is_in = cl_v <= (ol_v + contour_value);  // within 1 contour
 	// not the mv
 	is_in = is_in && fabs(cl_v) <= fabs(0.99 * data_minus_bck->get_missing_value());
 	// less than the minimum delta
-	is_in = is_in && (cl_v <= min_delta);
+	is_in = is_in && (ol_v <= min_delta);
 	// less than 1000km radius
 	is_in = is_in && tg.distance_between_triangles(O_TRI->get_label(), C_TRI->get_label())/1000.0 < 1000.0;
 	return is_in;
@@ -415,7 +415,7 @@ void minima_background::calculate_object_position(int o, int t)
 	
 	// position vector in Cartesian coordinates
 	vector_3D P;
-	int n_pts = 0;
+	FP_TYPE sum_V = 0.0;
 	// get the position and weight for each triangle in the object
 	for (LABEL_STORE::iterator it_ll = object_labels->begin(); 
 		 it_ll != object_labels->end(); it_ll++)	// tri labels
@@ -426,16 +426,13 @@ void minima_background::calculate_object_position(int o, int t)
 		// get the data value from the datastore
 		FP_TYPE V = contour_data(data_minus_bck->get_data(t, c_tri->get_ds_index()), 
 								 contour_value);
-		// if this value equals the min value then this is the object position
-		if (V == min_v)
-		{
-			P += C;
-			n_pts += 1;
-		}
+		// the value is the weight
+		P += C * fabs(V);
+		sum_V += fabs(V);
 	}
 	// divide by the weights and project to the sphere again
-	if (n_pts > 0)
-		P *= 1.0 / (P.mag() * n_pts);
+	if (sum_V > 0.0)
+		P *= 1.0 / (P.mag() * sum_V);
 	// put the values back in the geo extremum
 	FP_TYPE lon, lat;
 	cart_to_model(P, lon, lat);
