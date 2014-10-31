@@ -10,3 +10,9 @@ exe/*
 *.ex
 *.nc.gz
 exe/test_geo_wind
+
+*.gz
+
+test_data/hadam3p_eu_ins0_1985_1_008476005_0/ins0ga.pdi5dec_l7.trk.txt
+
+test_data/hadam3p_eu_ins0_1985_1_008476005_0/ins0ga.pdi5dec_l7.trk
