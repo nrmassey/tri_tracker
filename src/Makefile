@@ -12,8 +12,7 @@ EVENT_SET_NAME = ../exe/event_set
 # Compiler variables
 CPP = g++ -stdlib=libstdc++
 INCLUDE_DIRS = -Itclap/include/ -I./
-LIBRARY_DIRS = -L./
-OBJ_DIR = obj
+LIBRARY_DIRS = -L/usr/local/lib
 
 DEBUG_FLAGS = -Wno-deprecated -O0 -g -Wall
 RELEASE_FLAGS = -Wno-deprecated -O3 -msse3
@@ -25,8 +24,8 @@ FLAGS = $(RELEASE_FLAGS) $(COMMON_FLAGS)
 
 # Linker variables
 LDFLAGS = $(FLAGS) -stdlib=libstdc++
-LD = g++ $(LDFLAGS)
-COMMON_LIBS = -lstdc++ -lnetcdf -lnetcdf_c++
+LD = g++ $(LDFLAGS) $(LIBRARY_DIRS)
+COMMON_LIBS = -lnetcdf_c++
 
 ALL_DEPEND = quadtree.h
 
@@ -61,15 +60,15 @@ TRACK_CPP = track.cpp track_list.cpp tracker.cpp extrema_list.cpp \
 			spline.cpp get_bearing.cpp haversine.cpp
 TRACK_OBJ = $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(TRACK_CPP))
 
-EVENT_SET_CPP = event_set.cpp eventor.cpp extrema_list.cpp event_track_list.cpp
-EVENT_SET_OBJ = $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(EVENT_SET_CPP))
+#EVENT_SET_CPP = event_set.cpp eventor.cpp extrema_list.cpp event_track_list.cpp
+#EVENT_SET_OBJ = $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(EVENT_SET_CPP))
 
-all: $(GEN_GRID_NAME) $(REGRID_NAME) $(TRI_GRID_TO_NC_NAME) $(EXTREMA_NAME) $(TRACK_NAME) $(EVENT_SET_NAME)
+all: $(GEN_GRID_NAME) $(REGRID_NAME) $(TRI_GRID_TO_NC_NAME) $(EXTREMA_NAME) $(TRACK_NAME) #$(EVENT_SET_NAME)
 
-obj:
+../obj:
 	@mkdir -p $@
 	
-$(GEN_GRID_OBJ): | obj
+$(GEN_GRID_OBJ): | ../obj
 
 $(OBJ_DIR)/%.o : %.cpp $(ALL_DEPEND)
 	$(CPP) $(FLAGS) $(INCLUDE_DIRS) -c $< -o $@
@@ -89,8 +88,8 @@ $(EXTREMA_NAME): $(EXTREMA_OBJ) $(COMMON_OBJ) $(NETCDF_OBJ)
 $(TRACK_NAME): $(TRACK_OBJ) $(COMMON_OBJ) $(NETCDF_OBJ)
 	$(LD) $^ $(COMMON_LIBS) -o $(OUT_DIR)$@ $(LDFLAGS)
 
-$(EVENT_SET_NAME): $(EVENT_SET_OBJ) $(COMMON_OBJ) $(NETCDF_OBJ)
-	$(LD) $^ $(COMMON_LIBS) -o $(OUT_DIR)$@ $(LDFLAGS)
+#$(EVENT_SET_NAME): $(EVENT_SET_OBJ) $(COMMON_OBJ) $(NETCDF_OBJ)
+#	$(LD) $^ $(COMMON_LIBS) -o $(OUT_DIR)$@ $(LDFLAGS)
 
 clean:
 	rm -f $(OBJ_DIR)/*.o $(OUT_DIR)$(GEN_GRID_NAME) $(OUT_DIR)$(REGRID_NAME) \
