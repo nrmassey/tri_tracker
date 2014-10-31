@@ -59,7 +59,7 @@ regridder::~regridder(void)
 /*****************************************************************************/
 
 void regrid_node(QT_TRI_NODE* current_node, ncdata* nc_data, int z_level, int t, 
-				 data_store* ds, int pmethod)
+				 data_store* ds, int p_method)
 {
 	// regridding whilst walking the tree
 	// get the list of indices from the current triangle
@@ -92,18 +92,12 @@ void regrid_node(QT_TRI_NODE* current_node, ncdata* nc_data, int z_level, int t,
 		val = nc_data->get_missing_value();
 	else
 		sum = sum / n;
-	// place the data - if this is a leaf node then assign the mean
-	// if it is not a leaf node then assign what the user wishes
-	if (current_node->is_leaf())
-		val = sum;
-	else
+	// place the data - assign what the user wishes, either the mean, min or max
+	switch(p_method) // user can choose: 0=mean, 1=min, 2=max
 	{
-		switch(pmethod) // user can choose: 0=mean, 1=min, 2=max
-		{
-			case 0: val = sum; break;
-			case 1: val = min; break;
-			case 2: val = max; break;
-		}
+		case 0: val = sum; break;
+		case 1: val = min; break;
+		case 2: val = max; break;
 	}
 	
 	ds->set_data(t, current_node->get_data()->get_ds_index(), val);
@@ -111,7 +105,7 @@ void regrid_node(QT_TRI_NODE* current_node, ncdata* nc_data, int z_level, int t,
 	// regrid any child nodes
 	for (int i=0; i<4; i++)
 		if (current_node->get_child(i) != NULL)
-			regrid_node(current_node->get_child(i), nc_data, z_level, t, ds, pmethod);
+			regrid_node(current_node->get_child(i), nc_data, z_level, t, ds, p_method);
 }
 
 /*****************************************************************************/
