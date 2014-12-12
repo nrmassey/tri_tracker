@@ -8,6 +8,8 @@
 #  Purpose   : Project triangular grid to Buckminster Fuller's Dymaxion (tm) grid
 #  Reference : Code adapted from Robert W Gray's website:
 #              http://www.rwgrayprojects.com/rbfnotes/maps/graymap1.html
+#
+#              Robert W Gray's papers on the Dymaxion Map:
 #              Gray, Robert W., Fuller's DymaxionTM Map, Cartography and Geographic Information Systems, 21(4): 243-246, 1994.
 # 			   Gray, Robert W., Exact Transformation Equations For Fuller's World Map, Cartographica, 32(3): 17-25, 1995.
 #
@@ -142,7 +144,7 @@ def init():
 
 #########################################################################################
 
-def s_tri_info(P):
+def s_tri_info(P, tri=-1):
 	# Get which of the twenty triangles the Cartesian coordinate (x,y,z) is in
 	# P = numpy array of (x,y,z)
 	
@@ -156,12 +158,15 @@ def s_tri_info(P):
 	# Which triangle face center is the closest to the given point
 	# is the triangle in which the given point is in.
 
-	for i in range(1, 20):	
-		h = C[i] - P;
-		h_dist[1] = math.sqrt(h[0]**2 + h[1]**2 + h[2]**2)
-		if (h_dist[1] < h_dist[0]):
-			h_tri = i
-			h_dist[0] = h_dist[1]
+	if tri != -1:
+		h_tri = tri
+	else:
+		for i in range(1, 20):	
+			h = C[i] - P;
+			h_dist[1] = math.sqrt(h[0]**2 + h[1]**2 + h[2]**2)
+			if (h_dist[1] < h_dist[0]):
+				h_tri = i
+				h_dist[0] = h_dist[1]
 
 	# Now the LCD triangle is determined.
 	if h_tri == 1:
@@ -541,11 +546,11 @@ def ll_to_dx(lon, lat):
 	v = s_to_c(t, p)
 	tri, lcd = s_tri_info(v)
 	px, py = dymax_point(tri, lcd, v)
-	return px, py
+	return px, py, tri, lcd
 	
 #########################################################################################
 
-def cart_to_dx(v):
-	tri, lcd = s_tri_info(v)
+def cart_to_dx(v, tri=-1):
+	tri, lcd = s_tri_info(v, tri)
 	px, py = dymax_point(tri, lcd, v)
 	return px, py, tri, lcd
