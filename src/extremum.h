@@ -16,7 +16,7 @@
 class extremum
 {
 	public:
-	    extremum(void){}
+	    extremum(void) : lon(0.0), lat(0.0), intensity(0.0), delta(0.0){}
 		extremum(const extremum& ex) : lon(ex.lon), lat(ex.lat), 
 				 intensity(ex.intensity), delta(ex.delta),
 				 object_labels(ex.object_labels) {}

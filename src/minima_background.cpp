@@ -46,7 +46,6 @@ void minima_background::locate(void)
 {
 	process_data();
 	find_extrema();
-//	merge_objects();
 	refine_objects();
 	find_objects();
 	trim_objects();
@@ -124,6 +123,7 @@ void minima_background::find_extrema(void)
 	// get the missing value
 	FP_TYPE mv = data_minus_bck->get_missing_value();
 	// repeat over all timesteps
+	FP_TYPE sum_ex = 0.0;
 	for (int t=0; t<data_minus_bck->get_number_of_time_steps(); t++)
 	{
 		tstep_out_begin(t);	
@@ -139,11 +139,13 @@ void minima_background::find_extrema(void)
 				steering_extremum svex(mv, mv, mv, mv, mv, mv);
 				add_child_labels_to_object(&svex, (*it), grid_level);
 				// now add to the extrema list
-				ex_list.add(t, svex);				
+				ex_list.add(t, svex);
+				sum_ex += 1.0;
 			}
 		}
 		tstep_out_end(t);
 	}
+	std::cout << " Number of extrema: " << sum_ex << " ";
 	std::cout << std::endl;
 }
 
@@ -182,7 +184,7 @@ bool minima_background::is_extrema(indexed_force_tri_3D* tri, int t_step)
 			n_st += 1;
 	}
 	int min_sur = tri_adj_labels->size();
-	return (n_st == min_sur);
+	return (n_st >= min_sur);
 }
 
 /******************************************************************************/
@@ -195,11 +197,12 @@ bool minima_background::is_in_object(indexed_force_tri_3D* O_TRI,
 	bool is_in = false;
 
 	// get the candidate triangle value
-	FP_TYPE cl_v = contour_data(data_minus_bck->get_data(t_step, C_TRI->get_ds_index()), contour_value);
+//	FP_TYPE cl_v = contour_data(data_minus_bck->get_data(t_step, C_TRI->get_ds_index()), contour_value);
+	FP_TYPE cl_v = data_minus_bck->get_data(t_step, C_TRI->get_ds_index());
 	FP_TYPE ol_v = contour_data(data_minus_bck->get_data(t_step, O_TRI->get_ds_index()), contour_value);
 
 	// quick check	
-	is_in = cl_v <= (ol_v + contour_value);  // within 1 contour
+	is_in = cl_v < (ol_v + contour_value);  // within 1 contour
 	// not the mv
 	is_in = is_in && fabs(cl_v) <= fabs(0.99 * data_minus_bck->get_missing_value());
 	// less than the minimum delta
@@ -317,20 +320,26 @@ bool minima_background::process_data(void)
 void minima_background::trim_objects(void)
 {
 	std::cout << "# Trimming objects, timestep: ";
+	FP_TYPE sum_o = 0.0;
 	for (int t=0; t<ex_list.size(); t++)
 	{
 		tstep_out_begin(t);
 		int o_s = ex_list.number_of_extrema(t);
+		sum_o += o_s;
 		for (int o1=0; o1<o_s; o1++)
 		{
 			// remove those greater than minimum delta
 			FP_TYPE min_vd, max_vd;
 			get_min_max_values_delta(min_vd, max_vd, o1, t);
 			if (min_vd > min_delta)
+			{
 				ex_list.get(t, o1)->object_labels.clear();// delete!
+				sum_o -= 1;
+			}
 		}
 		tstep_out_end(t);	
 	}
+	std::cout << " Number of objects: " << sum_o << " ";
 	std::cout << std::endl;
 }
 
@@ -340,7 +349,7 @@ void minima_background::refine_objects(void)
 {
 	// refine the object (after the initial merge) so that any triangle which is not
 	// the minimum value is removed from this initial object
-	std::cout << "# Refining objects, timestep: ";
+	std::cout << "# Refining extrema, timestep: ";
 	FP_TYPE mv = contour_data(data_minus_bck->get_missing_value(), contour_value);
 	for (int t=0; t<ex_list.size(); t++)
 	{
@@ -359,7 +368,7 @@ void minima_background::refine_objects(void)
 				indexed_force_tri_3D* c_tri = tg.get_triangle(*it_ll);
 				FP_TYPE val = data_minus_bck->get_data(t, c_tri->get_ds_index());
 				val = contour_data(val, contour_value);
-				if (val <= min_v && val <= min_delta && !is_mv(val, mv))
+				if (val < min_v + contour_value && val <= min_delta && !is_mv(val, mv))
 					new_labels.push_back(*it_ll);
 			}
 			ex_list.get(t, o1)->object_labels = new_labels;
@@ -424,8 +433,7 @@ void minima_background::calculate_object_position(int o, int t)
 		indexed_force_tri_3D* c_tri = tg.get_triangle(*it_ll);
 		vector_3D C = c_tri->centroid();
 		// get the data value from the datastore
-		FP_TYPE V = contour_data(data_minus_bck->get_data(t, c_tri->get_ds_index()), 
-								 contour_value);
+		FP_TYPE V = data_minus_bck->get_data(t, c_tri->get_ds_index());
 		// the value is the weight
 		P += C * fabs(V);
 		sum_V += fabs(V);

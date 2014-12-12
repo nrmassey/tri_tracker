@@ -28,8 +28,8 @@ const int CURVATURE= 0x08;
 /*****************************************************************************/
 
 tracker::tracker(std::vector<std::string> iinput_fname, FP_TYPE isr,
-				 FP_TYPE ihrs_per_t_step)
-		: sr(isr), hrs_per_t_step(ihrs_per_t_step)
+				 FP_TYPE iov, FP_TYPE ihrs_per_t_step)
+		: sr(isr), ov(iov), hrs_per_t_step(ihrs_per_t_step)
 {
 	input_fname = iinput_fname;
 	for (unsigned int i=0; i<input_fname.size(); i++)
@@ -52,6 +52,10 @@ tracker::tracker(std::vector<std::string> iinput_fname, FP_TYPE isr,
 	}
 	ss.str(""); ss << sr;
 	meta_data["max_search_radius"] = ss.str();
+	ss.str(""); ss << ov;
+	meta_data["overlap_percentage"] = ss.str();
+	ss.str(""); ss << hrs_per_t_step;
+	meta_data["hours_per_timestep"] = ss.str();
 	tr_list.set_meta_data(&meta_data);
 }
 
@@ -88,7 +92,7 @@ void tracker::build_first_frame(void)
 		track new_track;
 		// create a track point and put in the position, but assign zero costs
 		track_point tp;
-		tp.pt = ex_list.get(0, i);
+		tp.pt = *(ex_list.get(0, i));
 		tp.timestep = 0;
 		tp.rules_bf = 0;
 		// add to the track
@@ -114,7 +118,7 @@ FP_TYPE calculate_steering_distance(steering_extremum* EX_svex, FP_TYPE hrs_ts)
 FP_TYPE distance(track* TR, steering_extremum* EX_svex, FP_TYPE sr)
 {
 	// calculate the distance from the track to the candidate point
-	steering_extremum* TR_svex = TR->get_last_track_point()->pt;	
+	steering_extremum* TR_svex = &(TR->get_last_track_point()->pt);
 	FP_TYPE d = haversine(TR_svex->lon, TR_svex->lat, EX_svex->lon, EX_svex->lat, EARTH_R);
 	// check distance - normalise by search radius
 	return d;
@@ -146,10 +150,8 @@ FP_TYPE steering(track* TR, steering_extremum* EX_svex, FP_TYPE hrs_ts)
 	// predict the point based on the steering vector direction and then
 	// measure the bearing between the last track point and the predicted point
 
-	const FP_TYPE deg_to_rad = M_PI/180.0;
-
 	// get the last point
-	steering_extremum* tr_pt = TR->get_last_track_point()->pt;
+	steering_extremum* tr_pt = &(TR->get_last_track_point()->pt);
 	FP_TYPE P_lon, P_lat;
 	project_point_from_steering(tr_pt, hrs_ts, P_lon, P_lat);
 
@@ -170,8 +172,8 @@ FP_TYPE curvature(track* TR, steering_extremum* EX_svex)
 	// Calculate the curvature as the change in bearing between (pt1 -> pt2)
 	// and (pt2 -> candidate point)
 	int pr = TR->get_persistence();	// last point in the track
-	steering_extremum* TR_pt_1 = TR->get_track_point(pr-2)->pt;
-	steering_extremum* TR_pt_2 = TR->get_track_point(pr-1)->pt;
+	steering_extremum* TR_pt_1 = &(TR->get_track_point(pr-2)->pt);
+	steering_extremum* TR_pt_2 = &(TR->get_track_point(pr-1)->pt);
 	FP_TYPE c = 0.0;
 
 	// same point incurs zero cost, rather than undefined
@@ -195,7 +197,7 @@ FP_TYPE overlap(track* TR, steering_extremum* EX_svex)
 {
 	// calculate the percentage (0 to 1) of the amount the object overlaps
 	// in the last track point with the object of the candidate point
-	steering_extremum* trk_pt = TR->get_last_track_point()->pt;
+	steering_extremum* trk_pt = &(TR->get_last_track_point()->pt);
 	int n_overlapping_labels = 0;
 	// loop over these labels and see how many occur in the 
 	for (LABEL_STORE::iterator trk_label = trk_pt->object_labels.begin();
@@ -207,65 +209,70 @@ FP_TYPE overlap(track* TR, steering_extremum* EX_svex)
 			n_overlapping_labels++;
 		}
 	}
-	FP_TYPE overlap = 100.0 * FP_TYPE(n_overlapping_labels) / trk_pt->object_labels.size();
+	FP_TYPE overlap = 100.0 - 100.0 * FP_TYPE(n_overlapping_labels) / trk_pt->object_labels.size();
 	return overlap;
 }
 
 /*****************************************************************************/
 
 bool tracker::should_replace_candidate_point(track* TR, track_point* cur_cand,
-											 track_point* new_cand)
+											 track_point* new_cand, FP_TYPE& cost)
 {
 	// should we replace the current candidate event?
 	// we need to compare values for CURVATURE, STEERING, OVERLAP and DISTANCE
 	// in that order. i.e. CURVATURE is at the top of a hierarchy of rules
 	bool replace = false;
-	if (((cur_cand->rules_bf & CURVATURE) == 0) and ((new_cand->rules_bf & CURVATURE) > 0))
+	if (cur_cand->rules_bf < new_cand->rules_bf)
 	{
 		replace = true;
 	}
-	else if (((cur_cand->rules_bf & STEERING) == 0) and ((cur_cand->rules_bf & STEERING) > 0))
+	else if (cur_cand->rules_bf == new_cand->rules_bf)
 	{
-		replace = true;
+		if (((cur_cand->rules_bf & CURVATURE) != 0) and ((new_cand->rules_bf & CURVATURE) != 0))
+		{
+			FP_TYPE cur_cand_curve = curvature(TR, &(cur_cand->pt));
+			FP_TYPE new_cand_curve = curvature(TR, &(new_cand->pt));
+			if (new_cand_curve < cur_cand_curve)
+			{
+				replace = true;
+				cost = new_cand_curve;
+			}
+		}
+		else if (((cur_cand->rules_bf & STEERING) != 0) and ((new_cand->rules_bf & STEERING) != 0))
+		{
+			FP_TYPE cur_cand_steer = steering(TR, &(cur_cand->pt), hrs_per_t_step);
+			FP_TYPE new_cand_steer = steering(TR, &(new_cand->pt), hrs_per_t_step);
+			if (new_cand_steer < cur_cand_steer)
+			{
+				replace = true;
+				cost = new_cand_steer;
+			}
+		}
+		else if (((cur_cand->rules_bf & OVERLAP) != 0) and ((new_cand->rules_bf & OVERLAP) != 0))
+		{
+			FP_TYPE cur_cand_overlap = overlap(TR, &(cur_cand->pt));
+			FP_TYPE new_cand_overlap = overlap(TR, &(new_cand->pt));
+			if (new_cand_overlap < cur_cand_overlap)
+			{
+				replace = true;
+				cost = new_cand_overlap;
+			}
+		}
+		else
+		{
+			FP_TYPE cur_cand_distance = distance(TR, &(cur_cand->pt), sr);
+			FP_TYPE new_cand_distance = distance(TR, &(new_cand->pt), sr);
+			if (new_cand_distance < cur_cand_distance)
+				replace = true;
+		}
 	}
-	else if (((cur_cand->rules_bf & OVERLAP) == 0) and ((cur_cand->rules_bf & OVERLAP) > 0))
-	{
-		replace = true;
-	}
-	else if (((cur_cand->rules_bf & CURVATURE) > 0) and ((new_cand->rules_bf & CURVATURE) > 0))
-	{
-		FP_TYPE cur_cand_curve = curvature(TR, cur_cand->pt);
-		FP_TYPE new_cand_curve = curvature(TR, new_cand->pt);
-		if (new_cand_curve < cur_cand_curve)
-			replace = true;
-	}
-	else if (((cur_cand->rules_bf & STEERING) > 0) and ((cur_cand->rules_bf & STEERING) > 0))
-	{
-		FP_TYPE cur_cand_steer = steering(TR, cur_cand->pt, hrs_per_t_step);
-		FP_TYPE new_cand_steer = steering(TR, new_cand->pt, hrs_per_t_step);
-		if (new_cand_steer < cur_cand_steer)
-			replace = true;
-	}
-	else if (((cur_cand->rules_bf & OVERLAP) > 0) and ((cur_cand->rules_bf & OVERLAP) > 0))
-	{
-		FP_TYPE cur_cand_overlap = overlap(TR, cur_cand->pt);
-		FP_TYPE new_cand_overlap = overlap(TR, new_cand->pt);
-		if (cur_cand_overlap < new_cand_overlap)
-			replace = true;
-	}
-	else
-	{
-		FP_TYPE cur_cand_distance = distance(TR, cur_cand->pt, sr);
-		FP_TYPE new_cand_distance = distance(TR, new_cand->pt, sr);
-		if (cur_cand_distance < new_cand_distance)
-			replace = true;
-	}
+	
 	return replace;
 }									
 
 /*****************************************************************************/
 
-int tracker::apply_rules(track* TR, steering_extremum* EX_svex)
+int tracker::apply_rules(track* TR, steering_extremum* EX_svex, FP_TYPE& cost)
 {
 	// bit field
 	int rules_bf = 0;
@@ -278,29 +285,38 @@ int tracker::apply_rules(track* TR, steering_extremum* EX_svex)
 		rules_bf |= DISTANCE;
 		
 	// don't do any other processing if rules_bf = 0 (i.e. out of range)
-	if (rules_bf != 0)
+	if (rules_bf > 0)
 	{
 		if (TR->get_persistence() >= 1)
 		{
 			FP_TYPE overlap_val = overlap(TR, EX_svex);
-			// more than 50% overlap
-			if (overlap_val >= 0.50)
+			// more than 25% overlap (note - the cost is 100 - the overlap)
+			if (overlap_val <= (100 - ov))
+			{
 				rules_bf |= OVERLAP;
+				cost = overlap_val;
+			}
 		}
 		//
 		if (TR->get_persistence() >= 1 && EX_svex->sv_u != mv)
 		{
 			// don't allow steering_val to be more than 90 degrees
 			FP_TYPE steering_val = steering(TR, EX_svex, hrs_per_t_step);
-			if (steering_val <= 90.0)
+			if (steering_val < 90.0)
+			{
 				rules_bf |= STEERING;
+				cost = steering_val;
+			}
 		}
 		if (TR->get_persistence() >= 2)
 		{
 			// don't allow tracks to move more than 90 degrees over a timestep
 			FP_TYPE curvature_val = curvature(TR, EX_svex);
-			if (curvature_val <= 90.0)
+			if (curvature_val < 90.0)
+			{
 				rules_bf |= CURVATURE;
+				cost = curvature_val;
+			}
 		}
 	}
 	return rules_bf;
@@ -312,8 +328,7 @@ int tracker::determine_track_for_candidate(steering_extremum* svex, int t)
 {
 	// set up the minimum cost so far
 	int min_tr = -1;
-	FP_TYPE min_c = 2e20f;
-	FP_TYPE c0, c1, c2, c3;
+	FP_TYPE min_cost = 2e20;
 	// loop through each track
 	for (int tr=0; tr<tr_list.get_number_of_tracks(); tr++)
 	{
@@ -328,7 +343,8 @@ int tracker::determine_track_for_candidate(steering_extremum* svex, int t)
 		{
 			// calculate whether we can add this track according to the rules
 			track* TR = tr_list.get_track(tr);
-			int add_track = apply_rules(TR, svex);
+			FP_TYPE cost = 2e20;
+			int add_track = apply_rules(TR, svex, cost);
 			// we don't want the track to just be based on distance - although
 			// it has to pass this rule first
 			if (add_track > DISTANCE)
@@ -338,14 +354,21 @@ int tracker::determine_track_for_candidate(steering_extremum* svex, int t)
 				if (c_cand->timestep != -1)
 				{
 					track_point new_cand;
-					new_cand.pt = svex;
+					new_cand.pt = *svex;
 					new_cand.timestep=t;
 					new_cand.rules_bf = add_track;
-					if (should_replace_candidate_point(TR, c_cand, &new_cand))
+					FP_TYPE replace_cost = 2e20;
+					if (should_replace_candidate_point(TR, c_cand, &new_cand, cost))
+					{
 						min_tr = tr;
+						min_cost = replace_cost;
+					}
 				}
-				else
+				else if (cost < min_cost)
+				{
 					min_tr = tr;
+					min_cost = cost;
+				}
 			}
 		}
 	}
@@ -354,7 +377,7 @@ int tracker::determine_track_for_candidate(steering_extremum* svex, int t)
 
 /*****************************************************************************/
 
-bool tracker::assign_candidate(steering_extremum* c_svex, int min_tr, int t)
+bool tracker::assign_candidate(steering_extremum c_svex, int min_tr, int t)
 {
 	// now the minimum track location has been found - add to the track
 	// check first whether a track was found
@@ -371,14 +394,15 @@ bool tracker::assign_candidate(steering_extremum* c_svex, int min_tr, int t)
 		// if it has then put the old extremum back into the stack
 		if (tr_list.get_track(min_tr)->get_candidate_point()->timestep != -1)
 		{
-			steering_extremum* prev_cand_pt = tr_list.get_track(min_tr)->get_candidate_point()->pt;					
+			steering_extremum prev_cand_pt = tr_list.get_track(min_tr)->get_candidate_point()->pt;	
 			ex_queue.push(prev_cand_pt);
 		}
 		// set as candidate point
 		track_point cand_pt;
 		cand_pt.pt = c_svex;
 		cand_pt.timestep = t;
-		cand_pt.rules_bf = apply_rules(tr_list.get_track(min_tr), c_svex);
+		FP_TYPE cost = 2e20;
+		cand_pt.rules_bf = apply_rules(tr_list.get_track(min_tr), &(c_svex), cost);
 		
 		tr_list.get_track(min_tr)->set_candidate_point(cand_pt);
 		return true;
@@ -392,7 +416,7 @@ void tracker::add_unassigned_points_as_tracks(int t)
 	while (!ex_queue.empty())
 	{
 		// get the unassigned extremum and pop it from the stack
-		steering_extremum* ua_svex = ex_queue.front();
+		steering_extremum ua_svex = ex_queue.front();
 		ex_queue.pop();
 		// create a new track
 		track trk;
@@ -417,7 +441,7 @@ void tracker::build_extrema_queue(int timestep)
 	// now add the points as they occur
 	for (int e=0; e < ex_list.number_of_extrema(timestep); e++)
 	{
-		steering_extremum* svex_cand = ex_list.get(timestep, e);
+		steering_extremum svex_cand = *(ex_list.get(timestep, e));
 		ex_queue.push(svex_cand);
 	}
 }
@@ -446,10 +470,10 @@ void tracker::find_tracks(void)
 			for (int q=0; q<qsize; q++)
 			{
 				// pop an event off the front of the queue
-				steering_extremum* svex_cand = ex_queue.front();
+				steering_extremum svex_cand = ex_queue.front();
 				ex_queue.pop();
 				// determine which track it should be assigned to and assign it
-				int min_tr = determine_track_for_candidate(svex_cand, t);
+				int min_tr = determine_track_for_candidate(&svex_cand, t);
 				assigned = assign_candidate(svex_cand, min_tr, t);
 			}
 		}
@@ -480,75 +504,65 @@ track_point project_point(track* TR, int direction, FP_TYPE hrs_per_ts, int c_st
 	// or the projection of the last (first) two track points
 
 	// calculate projection from steering vector
-	steering_extremum* proj_steer_pt = new steering_extremum;
-	steering_extremum* TR_pt_1;
+	track_point ret_pt;
+	steering_extremum* TR_pt_1 = NULL;
 	int pr = TR->get_persistence();	// last point in the track
 
 	if (direction == 1)
-		TR_pt_1 = TR->get_last_track_point()->pt;
+		TR_pt_1 = &(TR->get_last_track_point()->pt);
 	else if (direction == -1)
-		TR_pt_1 = TR->get_track_point(0)->pt;
-			
+		TR_pt_1 = &(TR->get_track_point(0)->pt);
+	
+	steering_extremum proj_steer_pt;
 	project_point_from_steering(TR_pt_1, direction * c_step * hrs_per_ts, 
-								proj_steer_pt->lon, proj_steer_pt->lat);
+								proj_steer_pt.lon, proj_steer_pt.lat);
 
 	// calculate projection from last two points
-	track_point ret_pt;
-	ret_pt.pt = new steering_extremum;
 	if (pr > 1)
 	{
-		steering_extremum* TR_pt_1; 
-		steering_extremum* TR_pt_2;
+		steering_extremum* TR_pt_1 = NULL; 
+		steering_extremum* TR_pt_2 = NULL;
 		if (direction == 1)
 		{
-			TR_pt_1 = TR->get_track_point(pr-2)->pt;
-			TR_pt_2 = TR->get_track_point(pr-1)->pt;
+			TR_pt_1 = &(TR->get_track_point(pr-2)->pt);
+			TR_pt_2 = &(TR->get_track_point(pr-1)->pt);
 		}
 		else if (direction == -1)
 		{
-			TR_pt_1 = TR->get_track_point(1)->pt;
-			TR_pt_2 = TR->get_track_point(0)->pt;
+			TR_pt_1 = &(TR->get_track_point(1)->pt);
+			TR_pt_2 = &(TR->get_track_point(0)->pt);
 		}
 
-		ret_pt.pt->lon = TR_pt_2->lon + c_step * (TR_pt_2->lon - TR_pt_1->lon);
-		ret_pt.pt->lat = TR_pt_2->lat + c_step * (TR_pt_2->lat - TR_pt_1->lat);
+		ret_pt.pt.lon = TR_pt_2->lon + c_step * (TR_pt_2->lon - TR_pt_1->lon);
+		ret_pt.pt.lat = TR_pt_2->lat + c_step * (TR_pt_2->lat - TR_pt_1->lat);
 		
 		// check which is further from last point - this or the point projected from
 		// the steering vector
-		FP_TYPE proj_dist  = haversine(TR_pt_2->lon, TR_pt_2->lat, ret_pt.pt->lon, ret_pt.pt->lat, EARTH_R);
-		FP_TYPE steer_dist = haversine(TR_pt_2->lon, TR_pt_2->lat, proj_steer_pt->lon, proj_steer_pt->lat, EARTH_R);
+		FP_TYPE proj_dist  = haversine(TR_pt_2->lon, TR_pt_2->lat, ret_pt.pt.lon, ret_pt.pt.lat, EARTH_R);
+		FP_TYPE steer_dist = haversine(TR_pt_2->lon, TR_pt_2->lat, proj_steer_pt.lon, proj_steer_pt.lat, EARTH_R);
 		
 		if (steer_dist > proj_dist)
-		{
-			delete ret_pt.pt;
 			ret_pt.pt = proj_steer_pt;
-		}
-		else
-			delete proj_steer_pt;
 	}
 	else
-	{
 		ret_pt.pt = proj_steer_pt;
-	}
 	// check for wrapping around the date line
-	if (ret_pt.pt->lon > 360.0)
-		ret_pt.pt->lon -= 360.0;
-	if (ret_pt.pt->lon < 0.0)
-		ret_pt.pt->lon += 360.0;
+	if (ret_pt.pt.lon > 360.0)
+		ret_pt.pt.lon -= 360.0;
+	if (ret_pt.pt.lon < 0.0)
+		ret_pt.pt.lon += 360.0;
 	
 	// add the timestep
 	if (direction == 1)
 		ret_pt.timestep = TR->get_last_track_point()->timestep + c_step;
 	else
-	{
 		ret_pt.timestep = TR->get_track_point(0)->timestep - c_step;
-	}
 	return ret_pt;
 }
 
 /*****************************************************************************/
 
-void merge_tracks(track* forw_track, track* back_track, int c_step)
+void tracker::merge_tracks(track* forw_track, track* back_track, int c_step)
 {
 	// create the interpolated point first - average all values for last point
 	// in forw_track and first point in back_track
@@ -561,19 +575,26 @@ void merge_tracks(track* forw_track, track* back_track, int c_step)
 	interp_pt.timestep = forw_pt->timestep+c_step;
 	// all "phantom" points will have 0 for their rules bitfield
 	interp_pt.rules_bf = 0;
-	// create the interpolated point
-	interp_pt.pt = new steering_extremum;
+	// create the interpolated point - in the extrema list to prevent a
+	// memory leak (as previous)
+	steering_extremum interp_pt_pt;
+	
 	// check for wrapping around the meridian
-	FP_TYPE forw_lon = forw_pt->pt->lon;
-	FP_TYPE back_lon = back_pt->pt->lon;
+	FP_TYPE forw_lon = forw_pt->pt.lon;
+	FP_TYPE back_lon = back_pt->pt.lon;
 	if (forw_lon > 180.0) forw_lon -= 360.0;
 	if (back_lon > 180.0) back_lon -= 360.0;
-	interp_pt.pt->lon = (forw_lon + back_lon) * 0.5;
-	interp_pt.pt->lat = (forw_pt->pt->lat + back_pt->pt->lat) * 0.5;
-	interp_pt.pt->intensity = (forw_pt->pt->intensity + back_pt->pt->intensity) * 0.5;
-	interp_pt.pt->delta = (forw_pt->pt->delta + back_pt->pt->delta) * 0.5;
-	interp_pt.pt->sv_u = (forw_pt->pt->sv_u + back_pt->pt->sv_u) * 0.5;
-	interp_pt.pt->sv_v = (forw_pt->pt->sv_v + back_pt->pt->sv_v) * 0.5;
+	interp_pt_pt.lon = (forw_lon + back_lon) * 0.5;
+	interp_pt_pt.lat = (forw_pt->pt.lat + back_pt->pt.lat) * 0.5;
+	interp_pt_pt.intensity = (forw_pt->pt.intensity + back_pt->pt.intensity) * 0.5;
+	interp_pt_pt.delta = (forw_pt->pt.delta + back_pt->pt.delta) * 0.5;
+	interp_pt_pt.sv_u = (forw_pt->pt.sv_u + back_pt->pt.sv_u) * 0.5;
+	interp_pt_pt.sv_v = (forw_pt->pt.sv_v + back_pt->pt.sv_v) * 0.5;
+	if (interp_pt_pt.lon < 0.0) interp_pt_pt.lon += 360.0;
+	
+	interp_pt.pt = interp_pt_pt;
+	
+	// add the interpolated points svex to the track as a created track point
 	// add it to the end of the forward track
 	forw_track->set_candidate_point(interp_pt);
 	forw_track->consolidate_candidate_point();
@@ -593,13 +614,16 @@ void merge_tracks(track* forw_track, track* back_track, int c_step)
 
 void tracker::apply_merge_tracks(void)
 {
-	std::cout << "# Merging tracks";
+	std::cout << "# Merging tracks, track number: ";
 	// merge tracks that end because they are obscured by other features over
 	// one or more timesteps
 	// loop through each track in turn
 	int c_step=1;
 	for (int tr=0; tr<tr_list.get_number_of_tracks(); tr++)
 	{
+		std::cout << tr;
+        std::cout.flush();
+        
 		track* forw_track = tr_list.get_track(tr);
 		track_point forw_proj_pt = project_point(forw_track, 1, hrs_per_t_step, c_step); // forward projection
 		// loop through and project backwards from other tracks and see if the
@@ -617,8 +641,8 @@ void tracker::apply_merge_tracks(void)
 			track_point back_proj_pt = project_point(back_track, -1, hrs_per_t_step, c_step);	// backwards projection
 			// calculate the distance between the projected candidate point and
 			// the current track candidate point
-			FP_TYPE dist = haversine(forw_proj_pt.pt->lon, forw_proj_pt.pt->lat,
-									 back_proj_pt.pt->lon, back_proj_pt.pt->lat, EARTH_R);
+			FP_TYPE dist = haversine(forw_proj_pt.pt.lon, forw_proj_pt.pt.lat,
+									 back_proj_pt.pt.lon, back_proj_pt.pt.lat, EARTH_R);
 			// check distance against search radius
 			if (dist < sr and back_proj_pt.timestep == forw_proj_pt.timestep)
 			{
@@ -636,6 +660,14 @@ void tracker::apply_merge_tracks(void)
 			track* back_track = tr_list.get_track(min_tr);
 			merge_tracks(forw_track, back_track, c_step);
 		}
+        int e = tr;
+        if (tr == 0)
+            std::cout << "\b";
+        while (e > 0)
+        {
+            e = e / 10;
+            std::cout << "\b";
+        }
 	}
 	// now delete the tracks that have been merged with other tracks by
 	// creating a new track list excluding those with timestep = -1

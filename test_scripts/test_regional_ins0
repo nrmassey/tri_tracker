@@ -16,7 +16,7 @@ TRK_FILE=${EU_FILE%.nc}_l$LEV"".trk
 BCK_FILE=$BASE_DIR/ens_mean_ins0_1985_dec.rgd
 EX_ARGS='minima_back('$BCK_FILE',1,3,200.0,-1000.0)'
 GP_ARGS='geostrophic('$EU_FILE',field1,0)'
-TRK_ARGS="-r 1000 -T -f 6"
+TRK_ARGS="-r 1000 -T -f 6 -v 25"
 
 # generate a grid
 #cmd="$EXE_PATH/gen_grid -f $EU_FILE -v $NC_VAR -o $GRID_FILE -n $N_PTS -I 0 -l $LEV -p $PERIM"

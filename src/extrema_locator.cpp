@@ -75,7 +75,10 @@ void extrema_locator::save(std::string output_fname, bool save_text)
 		ex_list.set_meta_data(sv->get_meta_data());
 	ex_list.save(output_fname, ds.get_missing_value());
 	if (save_text)
+	{
+		std::cout << output_fname + ".txt" << std::endl;
 		ex_list.save_text(output_fname+".txt", &tg);
+	}
 }
 
 /*****************************************************************************/

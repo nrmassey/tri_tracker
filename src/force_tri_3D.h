@@ -29,7 +29,7 @@ class force_tri_3D
 
 		FP_TYPE surface_area(FP_TYPE radius=1.0) const;       // surface area of the triangle
 		inline vector_3D centroid(void) const {return c0;}
-		vector_3D plane_normal(void) const; // calculate the normal to the plane defined by the tri$
+		vector_3D plane_normal(void) const; // calculate the normal to the plane defined by the tri
 
 	protected:
 		int p[3];							// 3 indices to the vertices

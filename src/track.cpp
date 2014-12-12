@@ -17,8 +17,8 @@ int main(int argc, char** argv)
 	std::vector<std::string> input_fname;
 	std::string output_fname;
 	FP_TYPE search_rad;			// search radius (km)
-	FP_TYPE w0, w1, w2, w3;		// weights
 	FP_TYPE hrs_per_ts;			// hours per timestep
+	FP_TYPE overlap;			// percentage overlap
 	bool text_out = false;
 
 	try
@@ -26,7 +26,8 @@ int main(int argc, char** argv)
 		TCLAP::CmdLine cmd("Track extrema located using extrema program");
 
 		TCLAP::ValueArg<FP_TYPE> hrs_arg("f", "hours", "Hours per timestep in original data", false, 24, "FP_TYPE", cmd);
-		TCLAP::SwitchArg text_out_arg("T", "text", "Output grid in text format, as well as the binary format", cmd, false);	
+		TCLAP::ValueArg<FP_TYPE> ov_arg("v", "overlap", "Overlap between objects between timesteps", false, 50, "FP_TYPE", cmd);
+		TCLAP::SwitchArg text_out_arg("T", "text", "Output tracks in text format, as well as the binary format", cmd, false);	
 		TCLAP::ValueArg<FP_TYPE> sr_arg("r", "search_radius", "Radius, in km, to search when locating tracks", false, 500.0, "FP_TYPE", cmd);
 		TCLAP::ValueArg<std::string> output_fname_arg("o", "output", "Output file name", true, "", "string", cmd);
 		TCLAP::MultiArg<std::string> input_fname_arg("i", "input", "Input file name", true, "string", cmd);
@@ -34,6 +35,7 @@ int main(int argc, char** argv)
 
 		hrs_per_ts = hrs_arg.getValue();
 		search_rad = sr_arg.getValue() * 1000.0;	// convert to metres
+		overlap = ov_arg.getValue();
 		output_fname = output_fname_arg.getValue();
 		input_fname = input_fname_arg.getValue();
 		text_out = text_out_arg.getValue();
@@ -56,7 +58,7 @@ int main(int argc, char** argv)
 
 	try
 	{
-		tracker TR(input_fname, search_rad, hrs_per_ts);
+		tracker TR(input_fname, search_rad, overlap, hrs_per_ts);
 		TR.find_tracks();
 		TR.save(output_fname);
 		std::cout << "# Saved to file: " << output_fname << std::endl;		

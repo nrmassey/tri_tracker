@@ -99,7 +99,6 @@ int main(int argc, char** argv)
 		method_string = method_arg.getValue();
 		steering_string = steering_arg.getValue();
 		text_out = text_out_arg.getValue();
-
 	}
 	catch (TCLAP::ArgException &e)  // catch exceptions
 	{
@@ -134,7 +133,6 @@ int main(int argc, char** argv)
 		el->locate();
 		// save to the output file
 		el->save(output_fname, text_out);
-		std::cout << "# Saved to file: " << output_fname << std::endl;
 		delete el;
 	}
 	catch(std::string &s)

@@ -102,6 +102,8 @@ FP_TYPE data_store::get_data(int t_step, int idx)
 void data_store::set_missing_value(FP_TYPE mv)
 {
 	missing_value = mv;
+	// set all the data store to mv
+	memset(data, static_cast<int>(mv), n_t_steps * n_idxs * sizeof(FP_TYPE));	
 }
 
 /*****************************************************************************/

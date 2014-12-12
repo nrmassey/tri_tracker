@@ -39,8 +39,7 @@ void track::consolidate_candidate_point(void)
 	// assign the current candidate point to the track
 	if (cand_pt.timestep != -1)
 		tr.push_back(cand_pt);
-	// reset candidate cost for next point in track
-	cand_pt.timestep = -1;
+	cand_pt.timestep = -1;	// clear the candidate point
 }
 
 /*****************************************************************************/
@@ -71,8 +70,8 @@ FP_TYPE track::get_length(void)
 	FP_TYPE length=0.0;
 	for (unsigned int i=1; i<tr.size(); i++)
 	{
-		steering_extremum* tp1 = tr[i].pt;
-		steering_extremum* tp0 = tr[i-1].pt;
+		steering_extremum* tp1 = &(tr[i].pt);
+		steering_extremum* tp0 = &(tr[i-1].pt);
 		length += haversine(tp0->lon, tp0->lat, tp1->lon, tp1->lat, EARTH_R);
 	}
 	return length;
@@ -82,8 +81,8 @@ FP_TYPE track::get_length(void)
 
 FP_TYPE track::get_deviation(void)
 {
-	steering_extremum* tp0 = tr.front().pt;
-	steering_extremum* tp1 = tr.back().pt;
+	steering_extremum* tp0 = &(tr.front().pt);
+	steering_extremum* tp1 = &(tr.back().pt);
 	FP_TYPE d = haversine(tp0->lon, tp0->lat, tp1->lon, tp1->lat, EARTH_R);
 	return d;
 }
@@ -178,7 +177,7 @@ void track_list::save(std::string output_fname)
 			// write the frame number first
 			write_int(out, trk_pt->timestep);
 			// write the extremum point
-			trk_pt->pt->save(out);
+			trk_pt->pt.save(out);
 			// write the bitfield for the rules
 			write_int(out, trk_pt->rules_bf);
 		}
@@ -212,10 +211,10 @@ void track_list::save_text(std::string output_fname)
 			track_point* trk_pt = &((*trk)[tp]);
 			// write the frame number first
 			out << trk_pt->timestep << " ";
-			// write the extremum point
-			trk_pt->pt->save_text(out);
 			// write the bitfield
-			out << " " << trk_pt->rules_bf;
+			out << trk_pt->rules_bf << " ";
+			// write the extremum point
+			trk_pt->pt.save_text(out);
 			out << std::endl;			// component costs			
 		}
 	}
@@ -252,8 +251,7 @@ void track_list::load(std::string input_fname)
 			// read the frame number
 			trk_pt.timestep = read_float(in_file);
 			// read the extremum point
-			trk_pt.pt = new steering_extremum;	// how to clear this up?
-			trk_pt.pt->load(in_file);
+			trk_pt.pt.load(in_file);
 			// add the point to the track
 			trk.set_candidate_point(trk_pt);
 			trk.consolidate_candidate_point();

@@ -16,9 +16,11 @@
 
 struct track_point
 {
-	steering_extremum* pt;	// point
-	int timestep;
-	int rules_bf;
+	public:
+		track_point(void) : timestep(0), rules_bf(0) {}
+		steering_extremum pt;	// point
+		int timestep;
+		int rules_bf;
 };
 
 /*****************************************************************************/
