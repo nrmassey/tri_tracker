@@ -109,8 +109,8 @@ def plot_data(sp0, sp1, tg, ds, time_step, level, colmap=cm.RdYlBu_r, dzt=1, kee
 	min_V = float(int(min_V / 100))
 	print "Plotting data range: ", min_V, max_V
 
-#	max_V = 1050
-#	min_V = 950
+	max_V = 1050
+	min_V = 950
 #	max_V = 50
 #	min_V = -50
 	
@@ -125,7 +125,7 @@ def plot_data(sp0, sp1, tg, ds, time_step, level, colmap=cm.RdYlBu_r, dzt=1, kee
 		# get each corner of the triangle and convert to model coordinates (lat/lon)
 		TRI = t.get_data()
 		P = [cart_to_model(TRI[0]), cart_to_model(TRI[1]), cart_to_model(TRI[2])]
-		# don't draw if it goes around the date line
+		# don't draw if it goes around the date line		
 		if abs(P[0][0] - P[1][0]) > 180 or abs(P[1][0] - P[2][0]) > 180 or abs(P[2][0] - P[1][0]) > 180:
 			continue
 		if pole_latitude != 90.0:
@@ -227,7 +227,7 @@ def plot_extrema(sp, tg, ex, time_step, ex_num=-1, pole_longitude=0.0, pole_lati
 		E = glob2rot(lon, lat, pole_longitude, pole_latitude)
 		sp.plot(E[0], E[1],'ro', ms=2.5, mec='r', zorder=3)
 		plot_object_triangles(sp, tg, ex_t.object_list, pole_longitude, pole_latitude)
-		plot_geostrophic_wind(sp, ex.steer_x, ex.steer_y, lon, lat, pole_longitude, pole_latitude)
+#		plot_geostrophic_wind(sp, ex_t.steer_x, ex_t.steer_y, lon, lat, pole_longitude, pole_latitude)
 
 		cur+=1
 		
@@ -488,7 +488,7 @@ if __name__ == "__main__":
 	orig_mesh_file = ""
 	orig_mesh_var = ""	
 	wnd_file    = ""
-	n_steps     = 0
+	n_steps     = 1
 	pole_latitude = 90.0
 	pole_longitude = 0.0
 	
@@ -556,7 +556,10 @@ if __name__ == "__main__":
 	# decide what to do with the data
 	gs = gridspec.GridSpec(7,8)
 	
-	projection = ccrs.RotatedPole(pole_latitude=pole_latitude, pole_longitude=pole_longitude)
+	if pole_longitude != 0.0 and pole_latitude != 90.0:
+		projection = ccrs.RotatedPole(pole_latitude=pole_latitude, pole_longitude=pole_longitude)
+	else:
+		projection = ccrs.PlateCarree()
 	colmap=cm.RdYlBu_r
 	for t_step in range(time_step, time_step+n_steps):
 		sp0 = plt.subplot(gs[0:6,:], projection=projection)
@@ -582,7 +585,7 @@ if __name__ == "__main__":
 	    
 		if orig_mesh_file != "" and orig_mesh_var != "":
 			plot_original_grid(sp0, o_lon, o_lat)
-	
+
 		sp0.coastlines()
 		sp0.gridlines()
 		sp0.get_axes().set_extent([lon_limits[0], lon_limits[1], lat_limits[0], lat_limits[1]])

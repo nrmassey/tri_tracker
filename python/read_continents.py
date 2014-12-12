@@ -1,7 +1,7 @@
 
 def read_continents():
 	# check first whether the continents have already been pickled
-	path = "/Users/massey/Coding/cpdn_analysis/map_plot/data/"
+	path = "../"
 	# read in the continents file
 	fh = open(path + "map_continents_lowres.txt")
 	lines = fh.readlines()			
