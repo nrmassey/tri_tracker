@@ -21,7 +21,7 @@
 int main(int argc, char** argv)
 {
 	// set up the command line arguments
-	int max_I, init_S, max_pts, max_levs, perim;
+	int max_I, init_S, max_levs, perim;
 	std::string out_name = "";
 	std::string in_name = "";
 	std::string var_name = "";
@@ -40,7 +40,6 @@ int main(int argc, char** argv)
 		TCLAP::ValueArg<int> perim_arg("p", "perimeter", "Number of grid boxes to trim from the perimeter when generating mesh", false, 0, "int", cmd);
 		TCLAP::ValueArg<int> init_shp_arg("i", "init_shape", "Initialisation shape: 0 = ICOSAHEDRON, 1 = OCTAHEDRON, 2 = DYMAXION(tm)", false, 0, "int", cmd);
 		TCLAP::ValueArg<int> max_its_arg("I", "max_its", "Maximum number of iterations in equalisation phase", false, 1e3, "int", cmd);
-		TCLAP::ValueArg<int> max_pts_arg("n", "max_pts", "Maximum number of points from the original grid allowed per triangle", false, 0, "int", cmd);
 		TCLAP::ValueArg<int> max_levs_arg("l", "max_level", "Maximum number of levels allowed in the grid", false, -1, "int", cmd);
 		TCLAP::ValueArg<std::string> out_name_arg("o", "output", "Grid output file name", true, "", "string", cmd);
 		TCLAP::ValueArg<std::string> var_name_arg("v", "var_name", "Variable name in source grid file", true, "", "string", cmd);
@@ -59,7 +58,6 @@ int main(int argc, char** argv)
 		in_name = in_name_arg.getValue();
 		max_I = max_its_arg.getValue();
 		init_S = init_shp_arg.getValue();
-		max_pts = max_pts_arg.getValue();
 		max_levs = max_levs_arg.getValue();		
 	}
 	catch (TCLAP::ArgException &e)  // catch exceptions
@@ -81,7 +79,7 @@ int main(int argc, char** argv)
 	{
 		ncdata nc_data(in_name, var_name);
 		tri_grid tg;
-		tg.initialize(SHAPE(init_S), &nc_data, max_pts, max_levs, max_I, perim);
+		tg.initialize(SHAPE(init_S), &nc_data, max_levs, max_I, perim);
 		tg.save(out_name);
 		std::cout << "# Saved mesh to file: " << out_name.c_str() << std::endl;
 		if (save_text)

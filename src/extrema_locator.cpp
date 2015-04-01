@@ -129,7 +129,6 @@ void extrema_locator::find_extrema(void)
 		for (std::list<QT_TRI_NODE*>::iterator it = tris.begin();
 			 it != tris.end(); it++)
 		{
-
 			indexed_force_tri_3D* c_tri = (*it)->get_data();
 			if (is_extrema(c_tri, t))
 			{

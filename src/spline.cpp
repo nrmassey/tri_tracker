@@ -100,7 +100,11 @@ void spline::calc_coefficients(std::vector<FP_TYPE> v)
 	// calculate the interval values
 	std::vector<FP_TYPE> h(n, 0.0);
 	for (int i=0; i<n-1; i++)
+	{
 		h[i] = x[i+1] - x[i];
+		if (h[i] == 0)
+		    h[i] = 1;
+	}
 
 	// assign the starting offset
 	for (int i=0; i<n; i++)
@@ -120,6 +124,8 @@ void spline::calc_coefficients(std::vector<FP_TYPE> v)
 	for (int i=1; i<n-1; i++)
 	{
 		l[i]  = 2.0*(x[i+1] - x[i-1]) - h[i-1]*mu[i-1];
+		if (l[i] == 0.0)
+		    l[i] = 1.0;
 		mu[i] = h[i]/l[i];
 		z[i]  = (alpha[i] - h[i-1] * z[i-1])/l[i];
 	}

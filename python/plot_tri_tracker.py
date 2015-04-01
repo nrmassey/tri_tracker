@@ -109,10 +109,10 @@ def plot_data(sp0, sp1, tg, ds, time_step, level, colmap=cm.RdYlBu_r, dzt=1, kee
 	min_V = float(int(min_V / 100))
 	print "Plotting data range: ", min_V, max_V
 
-	max_V = 1050
-	min_V = 950
-#	max_V = 50
-#	min_V = -50
+#	max_V = 1050
+#	min_V = 950
+	max_V = 50
+	min_V = -50
 	
 	if (symmetric_cb):
 		if (abs(min_V) > abs(max_V)):

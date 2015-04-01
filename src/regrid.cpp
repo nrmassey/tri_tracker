@@ -68,7 +68,7 @@ int main(int argc, char** argv)
 	// create the regridder
 	try
 	{
-		regridder rg(mesh_fname, nc_fname, nc_vname, z_level, smooth_weight, p);
+		regridder rg(mesh_fname, nc_fname, nc_vname, z_level, p);
 		rg.regrid();
 		rg.save(out_fname);
 		std::cout << "# Saved to file: " << out_fname << std::endl;

@@ -178,7 +178,7 @@ spline form_lat_spline(ncdata* nc_data, int lon_idx, int lat_idx, int z, int t)
 /*****************************************************************************/
 
 void calc_geo_wind(ncdata* gph_data, int t, int gph_z, int lon_idx, int lat_idx,
-                   FP_TYPE& u, FP_TYPE& v)
+                   FP_TYPE mv, FP_TYPE& u, FP_TYPE& v)
 {
     // calculate the geostrophic wind - spherical coordinates
 	// determine the scale factor - do we need to convert geopotential height
@@ -213,11 +213,6 @@ void calc_geo_wind(ncdata* gph_data, int t, int gph_z, int lon_idx, int lat_idx,
     // u and v are now in spherical coordinates
     u = -g_sc / (f*R) * lat_spline.evaluate_dx(lat_r); 
     v = g_sc / (f*R*cos(lat_r)) * lon_spline.evaluate_dx(lon);
-    // NaN check
-    if (isnan(u)) 
-    	u = 0.0;
-    if (isnan(v))
-    	v = 0.0;
 }
 
 /*****************************************************************************/
@@ -245,8 +240,8 @@ void geo_wind_vector::calculate_steering_vector(tri_grid* tg,
 		{
 			// use the x and y index into the original grid from the triangle to
 			// get the data from the original grid and calculate the geostrophic wind
-			calc_geo_wind(geopot_ht, t, z_level, it_g_idx->i, it_g_idx->j, sv_u, sv_v);
-		    if (sv_u != mv && sv_v != mv)
+			calc_geo_wind(geopot_ht, t, z_level, it_g_idx->i, it_g_idx->j, mv, sv_u, sv_v);
+		    if (sv_u != mv && sv_v != mv && isfinite(sv_u) && isfinite(sv_v))
 		    {
 		    	sum_sv_u += sv_u;
 		    	sum_sv_v += sv_v;
@@ -259,5 +254,4 @@ void geo_wind_vector::calculate_steering_vector(tri_grid* tg,
 		svex->sv_u = sum_sv_u / n_sv_pts;
 		svex->sv_v = sum_sv_v / n_sv_pts;
 	}
-	
 }
