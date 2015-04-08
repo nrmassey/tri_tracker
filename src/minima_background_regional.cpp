@@ -44,7 +44,10 @@ void minima_background::locate(void)
 {
     process_data();
     find_extrema();
+    merge_objects();
+    refine_objects();
     find_objects();
+    trim_objects();
     merge_objects();
     ex_points_from_objects();
 }
@@ -56,8 +59,9 @@ void minima_background::parse_arg_string(std::string method_string)
     // arguments are:
     // arg[0] = file to read background
     // arg[1] = averaging period to take background field over
-    // arg[2] = contour level
-    // arg[3] = minimum delta
+    // arg[2] = mesh level to detect large scale minima at
+    // arg[3] = contour level
+    // arg[4] = minimum delta
     // parameters for minima location with background removal
     // get the first bracket
     int c_pos = method_string.find_first_of("(")+1;
@@ -70,6 +74,7 @@ void minima_background::parse_arg_string(std::string method_string)
     bck_field_file = method_string.substr(c_pos, b_pos-c_pos);
     std::stringstream stream(method_string.substr(b_pos+1, e_pos-b_pos));
     stream >> bck_avg_period >> dummy
+           >> min_mesh_lvl >> dummy
            >> contour_value >> dummy
            >> min_delta;
            
@@ -79,6 +84,8 @@ void minima_background::parse_arg_string(std::string method_string)
     meta_data["background_file"] = bck_field_file;
     ss.str(""); ss << bck_avg_period;
     meta_data["background_averaging_period"] = ss.str();
+    ss.str(""); ss << min_mesh_lvl;
+    meta_data["minima_mesh_level"] = ss.str();
     ss.str(""); ss << contour_value;
     meta_data["contour_value"] = ss.str();
     ss.str(""); ss << min_delta;
@@ -87,18 +94,71 @@ void minima_background::parse_arg_string(std::string method_string)
 
 /******************************************************************************/
 
+void add_child_labels_to_object(steering_extremum* svex, QT_TRI_NODE* c_qt_tri,
+                                int max_lvl)
+{
+    if (c_qt_tri->get_level() == max_lvl)
+        svex->object_labels.push_back(c_qt_tri->get_data()->get_label());
+    else if (!c_qt_tri->is_leaf())
+    {
+        for (int i=0; i<4; i++)
+            add_child_labels_to_object(svex, c_qt_tri->get_child(i), max_lvl);
+    }
+}
+
+/******************************************************************************/
+
+void minima_background::find_extrema(void)
+{
+    // overloaded this function as it does something quite different to the
+    // standard function:
+    // 1. minima are located at a level lower than that of the maximum grid level
+    // 2. this extremum's children are also marked as minima
+    // resize the extrema list to be the correct size for the number of timesteps
+    std::cout << "# Locating extrema, timestep: ";
+    ex_list.set_size(data_minus_bck->get_number_of_time_steps());
+    // get a list of all the triangles at the required level
+    std::list<QT_TRI_NODE*> tris = tg.get_triangles_at_level(min_mesh_lvl);
+    // get the missing value
+    FP_TYPE mv = data_minus_bck->get_missing_value();
+    // repeat over all timesteps
+    FP_TYPE sum_ex = 0.0;
+    for (int t=0; t<data_minus_bck->get_number_of_time_steps(); t++)
+    {
+        tstep_out_begin(t); 
+        // repeat over all the nodes in this level
+        for (std::list<QT_TRI_NODE*>::iterator it = tris.begin();
+             it != tris.end(); it++)
+        {
+            indexed_force_tri_3D* c_tri = (*it)->get_data();
+            if (is_extrema(c_tri, t))
+            {
+                // add to the extrema list, via the object list - the location and
+                // value of the svex is currently just filled with the missing value
+                steering_extremum svex(mv, mv, mv, mv, mv, mv);
+                add_child_labels_to_object(&svex, (*it), grid_level);
+                // now add to the extrema list
+                ex_list.add(t, svex);
+                sum_ex += 1.0;
+            }
+        }
+        tstep_out_end(t);
+    }
+    std::cout << " Number of extrema: " << sum_ex << " ";
+    std::cout << std::endl;
+}
+
+/******************************************************************************/
+
 bool minima_background::is_extrema(indexed_force_tri_3D* tri, int t_step)
 {
     // get the data for the triangle for this time step and contour it
-    FP_TYPE tri_val = data_minus_bck->get_data(t_step, tri->get_ds_index());
-
+    FP_TYPE tri_val = contour_data(data_minus_bck->get_data(t_step, tri->get_ds_index()),
+                                   contour_value);
     // if it's the missing value then return false
-    FP_TYPE mv = data_minus_bck->get_missing_value();
+    FP_TYPE mv = contour_data(data_minus_bck->get_missing_value(), contour_value);
     if (fabs(tri_val) >= fabs(0.99*mv))
         return false;
-
-    // contour the data minus the background
-    FP_TYPE tri_val_C = contour_data(tri_val, contour_value);
 
     int n_st = 0;
     // loop through all the adjacent triangles
@@ -110,16 +170,16 @@ bool minima_background::is_extrema(indexed_force_tri_3D* tri, int t_step)
         // get the triangle from the label
         indexed_force_tri_3D* tri_adj = tg.get_triangle(*tri_adj_it);
         // get the value of the adjacent triangle       
-        FP_TYPE tri_adj_val = data_minus_bck->get_data(t_step, tri_adj->get_ds_index());
+        FP_TYPE tri_adj_val = contour_data(data_minus_bck->get_data(t_step, tri_adj->get_ds_index()),
+                                           contour_value);
         // if it's the missing value then continue onto next one - but count it as greater than current
         if (fabs(tri_adj_val) >= fabs(0.99*mv))
         {
             n_st += 1;
             continue;
         }
-        FP_TYPE tri_adj_val_C = contour_data(tri_adj_val, contour_value);
         // if the middle triangle is less than or equal to this surrounding triangle
-        if (tri_val_C <= min_delta && tri_val_C <= tri_adj_val_C)
+        if (tri_val <= min_delta && tri_val <= tri_adj_val)
             n_st += 1;
     }
     int min_sur = tri_adj_labels->size();
@@ -136,18 +196,15 @@ bool minima_background::is_in_object(indexed_force_tri_3D* O_TRI,
     bool is_in = false;
 
     // get the candidate triangle value
-    FP_TYPE cl_v = data_minus_bck->get_data(t_step, C_TRI->get_ds_index());
-    FP_TYPE ol_v = data_minus_bck->get_data(t_step, O_TRI->get_ds_index());
-    
-    FP_TYPE cl_v_C = contour_data(cl_v, contour_value);
-    FP_TYPE ol_v_C = contour_data(ol_v, contour_value);
+    FP_TYPE cl_v = contour_data(data_minus_bck->get_data(t_step, C_TRI->get_ds_index()), contour_value);
+    FP_TYPE ol_v = contour_data(data_minus_bck->get_data(t_step, O_TRI->get_ds_index()), contour_value);
 
     // quick check  
-    is_in = cl_v_C <= (ol_v_C);  // within 1 contour
+    is_in = cl_v < (ol_v + contour_value);  // within 1 contour
     // not the mv
     is_in = is_in && fabs(cl_v) <= fabs(0.99 * data_minus_bck->get_missing_value());
     // less than the minimum delta
-    is_in = is_in && (cl_v_C <= min_delta);
+    is_in = is_in && (ol_v <= min_delta);
     // less than 1000km radius
     is_in = is_in && tg.distance_between_triangles(O_TRI->get_label(), C_TRI->get_label())/1000.0 < 1000.0;
     return is_in;
@@ -254,6 +311,69 @@ bool minima_background::process_data(void)
 //    std::string out_fname = ds_fname.substr(0, ds_fname.size()-4)+"_bck.rgd";   
 //    data_minus_bck->save(out_fname);
     return true;
+}
+
+/******************************************************************************/
+
+void minima_background::trim_objects(void)
+{
+    std::cout << "# Trimming objects, timestep: ";
+    FP_TYPE sum_o = 0.0;
+    for (int t=0; t<ex_list.size(); t++)
+    {
+        tstep_out_begin(t);
+        int o_s = ex_list.number_of_extrema(t);
+        sum_o += o_s;
+        for (int o1=0; o1<o_s; o1++)
+        {
+            // remove those greater than minimum delta
+            FP_TYPE min_vd, max_vd;
+            get_min_max_values_delta(min_vd, max_vd, o1, t);
+            if (min_vd > min_delta)
+            {
+                ex_list.get(t, o1)->object_labels.clear();// delete!
+                sum_o -= 1;
+            }
+        }
+        tstep_out_end(t);   
+    }
+    std::cout << " Number of objects: " << sum_o << " ";
+    std::cout << std::endl;
+}
+
+/******************************************************************************/
+
+void minima_background::refine_objects(void)
+{
+    // refine the object (after the initial merge) so that any triangle which is not
+    // the minimum value is removed from this initial object
+    std::cout << "# Refining extrema, timestep: ";
+    FP_TYPE mv = contour_data(data_minus_bck->get_missing_value(), contour_value);
+    for (int t=0; t<ex_list.size(); t++)
+    {
+        tstep_out_begin(t);
+        int o_s = ex_list.number_of_extrema(t);
+        for (int o1=0; o1<o_s; o1++)
+        {
+            FP_TYPE min_v, max_v;
+            get_min_max_values_delta(min_v, max_v, o1, t);
+            min_v = contour_data(min_v, contour_value);
+            LABEL_STORE* object_labels = &(ex_list.get(t, o1)->object_labels);
+            LABEL_STORE new_labels;
+            for (LABEL_STORE::iterator it_ll = object_labels->begin(); 
+                 it_ll != object_labels->end(); it_ll++)    // tri indices
+            {
+                indexed_force_tri_3D* c_tri = tg.get_triangle(*it_ll);
+                FP_TYPE val = data_minus_bck->get_data(t, c_tri->get_ds_index());
+                val = contour_data(val, contour_value);
+                if (val < min_v + contour_value && val <= min_delta && !is_mv(val, mv))
+                    new_labels.push_back(*it_ll);
+            }
+            ex_list.get(t, o1)->object_labels = new_labels;
+        }
+        tstep_out_end(t);       
+    }
+    std::cout << std::endl;
 }
 
 /******************************************************************************/

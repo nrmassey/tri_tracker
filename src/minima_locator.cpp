@@ -53,9 +53,10 @@ FP_TYPE minima_locator::trans_val(FP_TYPE val, vector_3D centroid)
 void minima_locator::parse_arg_string(std::string method_string)
 {
     // args for minima locator are:
-    // 1 = min mesh level
-    // 2 = contour level
-    // 3 = min delta
+    // arg[0] = pole background value
+    // arg[1] = equator background value
+    // arg[2] = contour level
+    // arg[3] = min delta
     
     // get the first bracket
     int c_pos = method_string.find_first_of("(")+1;
@@ -90,16 +91,7 @@ bool minima_locator::is_extrema(indexed_force_tri_3D* tri, int t_step)
     // get the value of the triangle
     
     // build a list of surrounding triangles first
-    const LABEL_STORE* adj_tri_labels = tri->get_adjacent_labels(adj_type);
-    // create the tri list and add to it
-    std::list<indexed_force_tri_3D*> adj_tris;
-    for (LABEL_STORE::const_iterator adj_it = adj_tri_labels->begin();
-         adj_it != adj_tri_labels->end(); adj_it++)
-    {
-        indexed_force_tri_3D* a_tri = tg.get_triangle(*adj_it);
-        adj_tris.push_back(a_tri);
-    }
-
+    const LABEL_STORE* tri_adj_labels = tri->get_adjacent_labels(adj_type);
     FP_TYPE mv = ds.get_missing_value();
     // get the value and transform the data to the contoured version minus the background field
     FP_TYPE tri_val = ds.get_data(t_step, tri->get_ds_index());
@@ -110,11 +102,13 @@ bool minima_locator::is_extrema(indexed_force_tri_3D* tri, int t_step)
     // number of surrounding triangles that are greater than current triangle
     int n_st = 0;
     // loop through all the adjacent triangles
-    for (std::list<indexed_force_tri_3D*>::iterator it = adj_tris.begin();
-         it != adj_tris.end(); it++)
+    for (LABEL_STORE::const_iterator tri_adj_it = tri_adj_labels->begin();
+         tri_adj_it != tri_adj_labels->end(); tri_adj_it++)
     {
+        // get the triangle from the label
+        indexed_force_tri_3D* tri_adj = tg.get_triangle(*tri_adj_it);
         // get the value of the adjacent triangle
-        FP_TYPE adj_val = ds.get_data(t_step, (*it)->get_ds_index());
+        FP_TYPE adj_val = ds.get_data(t_step, tri_adj->get_ds_index());
         // if it's the missing value then continue onto next one
         if (is_mv(adj_val, mv))
         {
@@ -128,7 +122,7 @@ bool minima_locator::is_extrema(indexed_force_tri_3D* tri, int t_step)
         if (tri_val_C <= min_delta && tri_val_C <= adj_val_C)
             n_st += 1;
     }
-    return (n_st >= adj_tris.size());
+    return (n_st >= tri_adj_labels->size());
 }
 
 /*****************************************************************************/
@@ -153,7 +147,7 @@ bool minima_locator::is_in_object(indexed_force_tri_3D* O_TRI,
     // not the mv
     is_in = is_in && fabs(cl_v) <= fabs(0.99 * ds.get_missing_value());
     // less than the minimum delta
-    is_in = is_in && (ol_v_C <= min_delta);
+    is_in = is_in && (cl_v_C <= min_delta);
     // less than 1000km radius
     is_in = is_in && tg.distance_between_triangles(O_TRI->get_label(), C_TRI->get_label())/1000.0 < 1000.0;
     return is_in;

@@ -23,61 +23,61 @@
 /*****************************************************************************/
 
 FP_TYPE calculate_triangle_distance(indexed_force_tri_3D* O_TRI, 
-				  					indexed_force_tri_3D* C_TRI);
+                                    indexed_force_tri_3D* C_TRI);
 
 /*****************************************************************************/
 
 class extrema_locator
 {
-	public:
-		extrema_locator(void);
-		virtual ~extrema_locator(void);
-		void save(std::string output_fname, bool save_text=false);
-		void set_steering_vector(steering_vector* sv);
-		void set_inputs(std::string input_fname, std::string mesh_fname,
-					    int grid_level, ADJACENCY adj_type);
-		void calculate_steering_vector(int o, int t);
-		virtual void parse_arg_string(std::string method_string) = 0;
-		virtual void locate(void);
-		
-	protected:	
-		/*********************************************************************/
-		// control variables
-		int grid_level;
-		ADJACENCY adj_type;
-		
-		/*********************************************************************/
-		// mesh and data storage
-		tri_grid tg;
-		std::string ds_fname;
-		data_store ds;
-		extrema_list ex_list;
-		steering_vector* sv;		// steering vector class
-		META_DATA_TYPE meta_data;	// add the meta data as we parse the methods and steering vector
-		
-		/*********************************************************************/
+    public:
+        extrema_locator(void);
+        virtual ~extrema_locator(void);
+        void save(std::string output_fname, bool save_text=false);
+        void set_steering_vector(steering_vector* sv);
+        void set_inputs(std::string input_fname, std::string mesh_fname,
+                        int grid_level, ADJACENCY adj_type);
+        void calculate_steering_vector(int o, int t);
+        virtual void parse_arg_string(std::string method_string) = 0;
+        virtual void locate(void);
+        
+    protected:  
+        /*********************************************************************/
+        // control variables
+        int grid_level;
+        ADJACENCY adj_type;
+        
+        /*********************************************************************/
+        // mesh and data storage
+        tri_grid tg;
+        std::string ds_fname;
+        data_store ds;
+        extrema_list ex_list;
+        steering_vector* sv;        // steering vector class
+        META_DATA_TYPE meta_data;   // add the meta data as we parse the methods and steering vector
+        
+        /*********************************************************************/
 
-		// Virtual functions that require overloading
-		virtual bool is_extrema(indexed_force_tri_3D* tri, int t_step) = 0;
-		virtual bool is_in_object(indexed_force_tri_3D* O_TRI, 
-						  		  indexed_force_tri_3D* C_TRI, int t) = 0;
-		
-		virtual void calculate_object_position(int o, int t) = 0;
-		virtual void calculate_object_intensity(int o, int t) = 0;
-		virtual void calculate_object_delta(int o, int t) = 0;
+        // Virtual functions that require overloading
+        virtual bool is_extrema(indexed_force_tri_3D* tri, int t_step) = 0;
+        virtual bool is_in_object(indexed_force_tri_3D* O_TRI, 
+                                  indexed_force_tri_3D* C_TRI, int t) = 0;
+        
+        virtual void calculate_object_position(int o, int t) = 0;
+        virtual void calculate_object_intensity(int o, int t) = 0;
+        virtual void calculate_object_delta(int o, int t) = 0;
 
-		// Virtual functions that may be overloaded
-		virtual void find_extrema(void);
-		virtual void find_objects(void);
-		
-		// Functions that are applicable to all 
-		void merge_objects(void);
-		void ex_points_from_objects(void);
-		void get_min_max_values(FP_TYPE& min, FP_TYPE& max, int o, int t);		
-		bool objects_share_nodes(const LABEL_STORE* o1,
-								 const LABEL_STORE* o2);
-		void tstep_out_begin(int t);
-		void tstep_out_end(int t);
+        // Virtual functions that may be overloaded
+        virtual void find_extrema(void);
+        virtual void find_objects(void);
+        
+        // Functions that are applicable to all 
+        void merge_objects(void);
+        void ex_points_from_objects(void);
+        void get_min_max_values(FP_TYPE& min, FP_TYPE& max, int o, int t);      
+        bool objects_share_nodes(const LABEL_STORE* o1,
+                                 const LABEL_STORE* o2);
+        void tstep_out_begin(int t);
+        void tstep_out_end(int t);
 };
 
 #endif

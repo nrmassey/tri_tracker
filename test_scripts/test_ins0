@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+
+DATA_PATH=/Users/massey/Data/wah_data/OSTIA_ins0/1986/hadam3p_eu_ins1_1986_1_008476006_0
+EU_FILE=$DATA_PATH/ins1ga.pdi6dec.nc
+BCK_PATH=/Users/massey/Data/analyse_wah_tracks/back_ens
+BCK_FILE=$BCK_PATH/ens_2011_dec.rgd
+N_PTS=0
+LEV=7
+EX_LEV=7
+PERIM=0
+GRID_FILE=../grids/eu_mesh_N$N_PTS"_"L$LEV"_P"$PERIM".msh"
+EXE_PATH=../exe
+NC_VAR=field8
+RGD_FILE=${EU_FILE%.nc}_L$LEV"_P"$PERIM".rgd"
+EX_FILE=${EU_FILE%.nc}_l$EX_LEV"".ex
+TRK_FILE=${EU_FILE%.nc}_l$LEV"".trk
+EX_ARGS='minima_back_wind('$BCK_FILE',5,1,5,200.0,1000.0,'$EU_FILE',field50,5.495520385,9.508252308)'
+GP_ARGS='geostrophic('$EU_FILE',field1,0)'
+TRK_WTS=" -0 1.0 -1 49.36 -2 5.54 -3 35.0 "
+TRK_ARGS="-r 1000 -p 1 -d 0 -l 0 -t 1 -k 1 -s 0 "
+
+# generate a grid
+#cmd="$EXE_PATH/gen_grid -f $EU_FILE -v $NC_VAR -o $GRID_FILE -n $N_PTS -I 0 -l $LEV -p $PERIM"
+#echo $cmd
+#$cmd
+
+# regrid the netCDF file
+#cmd="$EXE_PATH/regrid -i $EU_FILE -v $NC_VAR -m $GRID_FILE -o $RGD_FILE -S 0.07"
+#echo $cmd
+#$cmd
+
+# locate the extrema
+cmd="$EXE_PATH/extrema -i $RGD_FILE -o $EX_FILE -m $GRID_FILE -l $EX_LEV --method $EX_ARGS"
+echo $cmd
+$cmd
+
+# track the extrema
+#cmd="$EXE_PATH/track -i $EX_FILE -o $TRK_FILE $TRK_WTS $TRK_ARGS"
+#echo $cmd
+#$cmd
