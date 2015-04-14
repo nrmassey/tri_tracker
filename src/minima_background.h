@@ -9,42 +9,30 @@
 #ifndef MINIMA_BACKGROUND_H
 #define MINIMA_BACKGROUND_H
 
-#include "extrema_locator.h"
+#include "minima_processed.h"
 
 /*****************************************************************************/
 
-class minima_background : public extrema_locator
+class minima_background : public minima_processed
 {
     public:
         minima_background(void);
         ~minima_background(void);   
         // Virtual functions that require overloading
         virtual void parse_arg_string(std::string method_string);       
-        virtual void locate(void);
         
     protected:
-    
-        // Virtual functions that require overloading
-        virtual void calculate_object_position(int o, int t);
-        virtual void calculate_object_intensity(int o, int t);
-        virtual void calculate_object_delta(int o, int t);
-        virtual bool is_extrema(indexed_force_tri_3D* tri, int t_step);
-        virtual bool is_in_object(indexed_force_tri_3D* O_TRI, 
-                                  indexed_force_tri_3D* C_TRI, int t_step);
-                                  
+                                      
         /*********************************************************************/
 
         void calculate_background_field(void);
-        bool process_data(void);
-        void get_min_max_values_delta(FP_TYPE& min, FP_TYPE& max, int o, int t);        
+        virtual bool process_data(void);
 
         /*********************************************************************/
         
         std::string bck_field_file;
         int bck_avg_period;
-        FP_TYPE contour_value, min_delta;
         data_store* bck_field_ds;
-        data_store* data_minus_bck;
 };
 
 #endif

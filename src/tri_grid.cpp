@@ -786,7 +786,7 @@ void tri_grid::save_text(std::string filename)
 
 /*****************************************************************************/
 
-LABEL tri_grid::get_triangle_for_point(vector_3D* P)
+LABEL tri_grid::get_triangle_for_point(vector_3D* P, int level)
 {
     // determine which of the 20 base triangles the point is in
     int base_tri = -1;
@@ -819,9 +819,10 @@ LABEL tri_grid::get_triangle_for_point(vector_3D* P)
     // get the base node
     QT_TRI_NODE* current_node = get_base_tri(base_tri);
     bool found = false;
+    int current_level = 0;
     while (not found)
     {
-        if (current_node->is_leaf())
+        if (current_node->is_leaf() or current_level == level)
         {
             found = true;
             break;
@@ -829,6 +830,7 @@ LABEL tri_grid::get_triangle_for_point(vector_3D* P)
         else
         {
             bool found_in_child = false;
+            current_level += 1;
             for (int i=0; i<4; i++)
             {
                 QT_TRI_NODE* current_child = current_node->get_child(i);
@@ -886,7 +888,7 @@ FP_TYPE tri_grid::distance_between_triangles(LABEL SL, LABEL EL)
 
 /*****************************************************************************/
 
-LABEL_STORE tri_grid::get_path(LABEL SL, LABEL EL, int resolution)
+LABEL_STORE tri_grid::get_path(LABEL SL, LABEL EL, int level, int resolution)
 {
     // create a path of labels between the starting label (SL) and the 
     // ending label (EL)
@@ -899,8 +901,11 @@ LABEL_STORE tri_grid::get_path(LABEL SL, LABEL EL, int resolution)
     // its neighbours.  The point inclusion test is then used to determine which
     // triangle each point is in
     
-    // This algorithm has the benefit of terminating always - other path finding methods
-    // I have tried, based on the adjacency list, have not!
+    // This algorithm has the benefit of terminating always - other path finding
+    // methods I have tried, based on the adjacency list, have not!
+
+    // if the level is -1 then set it to be the maximum level
+    if (level == -1) level = get_max_level();
 
     // what is the minimum distance between SL and it's adjacent labels?
     indexed_force_tri_3D* s_tri = get_triangle(SL);
@@ -929,7 +934,7 @@ LABEL_STORE tri_grid::get_path(LABEL SL, LABEL EL, int resolution)
         // normalise
         c_vec = c_vec / c_vec.mag();
         // point inclusion
-        LABEL tri_label = get_triangle_for_point(&c_vec);
+        LABEL tri_label = get_triangle_for_point(&c_vec, level);
         // only add if not already added
         if (std::find(path.begin(), path.end(), tri_label) == path.end())
             path.push_back(tri_label);

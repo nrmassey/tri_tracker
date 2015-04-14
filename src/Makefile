@@ -54,7 +54,7 @@ EXTREMA_CPP = extrema.cpp extrema_locator.cpp data_store.cpp \
               maxima_locator.cpp minima_locator.cpp extrema_list.cpp \
               minima_background.cpp geo_wind_vector.cpp \
               concentric_shell.cpp spline.cpp \
-              minima_largescale.cpp
+              minima_largescale.cpp minima_processed.cpp
 EXTREMA_OBJ = $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(EXTREMA_CPP))
 
 TRACK_CPP = track.cpp track_list.cpp tracker.cpp extrema_list.cpp \

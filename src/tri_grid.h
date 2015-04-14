@@ -37,9 +37,9 @@ class tri_grid
 		// get all triangles at a particular level
 		std::list<QT_TRI_NODE*> get_triangles_at_level(int level);
 		// get a path between two triangles as a vector of labels
-		LABEL_STORE get_path(LABEL SL, LABEL EL, int resolution=1);
+		LABEL_STORE get_path(LABEL SL, LABEL EL, int level=-1, int resolution=1);
 		// get the label of the triangle which the point lies in
-		LABEL get_triangle_for_point(vector_3D* P);
+		LABEL get_triangle_for_point(vector_3D* P, int level);
 		// get the distance between two triangles in the tri-grid
 		FP_TYPE distance_between_triangles(LABEL SL, LABEL EL);
 		// get the metadata
