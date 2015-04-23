@@ -37,8 +37,10 @@ void minima_processed::locate(void)
 {
     process_data();
     find_extrema();
+    refine_extrema();
     find_objects();
     merge_objects();
+    trim_objects();
     ex_points_from_objects();
 }
 
@@ -104,6 +106,46 @@ bool minima_processed::is_extrema(indexed_force_tri_3D* tri, int t_step)
 
 /******************************************************************************/
 
+void minima_processed::refine_extrema(void)
+{
+    // refine the extrema to the lowest grid level first
+    extrema_locator::refine_extrema();
+    // now construct a new set of labels where the values are within one
+    // contour of the minimum value
+    for (int t=0; t<ds.get_number_of_time_steps(); t++)
+    {
+        tstep_out_begin(t);
+        for (int e=0; e<ex_list.number_of_extrema(t); e++)
+        {
+            steering_extremum* svex = ex_list.get(t, e);
+            // get the min max value
+            FP_TYPE min_v, max_v;
+            get_min_max_values_processed(min_v, max_v, e, t);
+            min_v = contour_data(min_v, contour_value);
+            // get the labels
+            LABEL_STORE* object_labels = &(ex_list.get(t, e)->object_labels);
+            // construct a new label list
+            LABEL_STORE new_label_list;
+            // loop over all labels
+            for (LABEL_STORE::iterator it_ll = object_labels->begin(); 
+                 it_ll != object_labels->end(); it_ll++)
+            {
+                // get the value of the triangle
+                indexed_force_tri_3D* c_tri = tg.get_triangle(*it_ll);
+                FP_TYPE val = contour_data(data_processed->get_data(t, c_tri->get_ds_index()), contour_value);
+                // add to new labels only if val is <= min_v
+                if (val <= min_v)
+                    new_label_list.push_back(*it_ll);
+            }
+            svex->object_labels.clear();
+            svex->object_labels = new_label_list;
+        }
+        tstep_out_end(t);
+    }
+}
+
+/******************************************************************************/
+
 bool minima_processed::is_in_object(indexed_force_tri_3D* O_TRI, 
                                     indexed_force_tri_3D* C_TRI, int t_step)
 {
@@ -120,16 +162,18 @@ bool minima_processed::is_in_object(indexed_force_tri_3D* O_TRI,
 
     // not the mv
     FP_TYPE mv = data_processed->get_missing_value();
-    is_in = is_in && !is_mv(cl_v, mv);
+    is_in &= !is_mv(cl_v, mv);
     // less than the minimum delta
-    is_in = is_in && (cl_v_C <= min_delta);
+    is_in &= (cl_v_C <= min_delta);
     // less than 1000km radius
-    is_in = is_in && tg.distance_between_triangles(O_TRI->get_label(), C_TRI->get_label())/1000.0 < 1000.0;
+    is_in &= tg.distance_between_triangles(O_TRI->get_label(), C_TRI->get_label())/1000.0 < 1000.0;
+    is_in &= cl_v_C <= ol_v_C;
 
-    if (is_in)
+/*    if (is_in)
     {
+        int max_lev = tg.get_max_level();
         // saddle point check
-        LABEL_STORE path = tg.get_path(O_TRI->get_label(), C_TRI->get_label(), grid_level);
+        LABEL_STORE path = tg.get_path(O_TRI->get_label(), C_TRI->get_label(), max_lev);
         // create storage for spline
         std::vector<FP_TYPE> y_vals(path.size(), 0.0);
         std::vector<FP_TYPE> x_vals(path.size(), 0.0);
@@ -142,16 +186,14 @@ bool minima_processed::is_in_object(indexed_force_tri_3D* O_TRI,
             indexed_force_tri_3D* I_TRI = tg.get_triangle(*it_ll);
             // get the value
             FP_TYPE il_v = data_processed->get_data(t_step, I_TRI->get_ds_index());
-            x_vals[i] = (float)(i);
-            y_vals[i] = il_v;
-            i += 1;
+            y_vals[i] = il_v; //contour_data(il_v, contour_value);
+            x_vals[i] = i;
         }
-        // form the spline
-        spline path_spline = spline(y_vals, x_vals, mv);
-        // evaluate the 2nd differential
-        FP_TYPE path_d2x = path_spline.evaluate_d2x(path.size()-1);
-        is_in &= path_d2x > 0;
-    }
+        // expand to saddle point
+        spline path_spline(y_vals, x_vals, mv);
+        FP_TYPE d2x = path_spline.evaluate_d2x(path.size()-1);
+        is_in &= d2x > 0;
+    }*/
     
     return is_in;
 }
@@ -256,9 +298,46 @@ void minima_processed::calculate_object_delta(int o, int t)
     // calculate the delta as the absolute difference between the minimum
     // and the background field
     // find min / max of values in the object
-    FP_TYPE min_v = 2e20f;  // minimum value in object
+    FP_TYPE min_v = 2e20f;      // minimum value in object
     FP_TYPE max_v = -2e20f;     // maximum value in object
     get_min_max_values_processed(min_v, max_v, o, t);   
     steering_extremum* svex = ex_list.get(t, o);
     svex->delta = min_v;
+}
+
+/*****************************************************************************/
+
+void minima_processed::trim_objects(void)
+{
+    std::cout << "# Trimming objects, timestep: ";
+    FP_TYPE sum_o = 0.0;
+    // get the surface area of a triangle
+    steering_extremum* svex = ex_list.get(0, 0);
+    indexed_force_tri_3D* c_tri = tg.get_triangle(svex->object_labels[0]);
+    FP_TYPE surf_A = c_tri->surface_area();
+    
+    for (int t=0; t<ex_list.size(); t++)
+    {
+        tstep_out_begin(t);
+        int o_s = ex_list.number_of_extrema(t);
+        sum_o += o_s;
+        for (int o1=0; o1<o_s; o1++)
+        {
+            // remove those greater than minimum delta
+            FP_TYPE min_vd, max_vd;
+            get_min_max_values_processed(min_vd, max_vd, o1, t);
+            if (min_vd > min_delta)
+            {
+                ex_list.get(t, o1)->object_labels.clear();// delete!
+                sum_o -= 1;
+            }
+            // remove those with a surface area > 5,000km^2
+            if (ex_list.get(t, o1)->object_labels.size()*surf_A > (5000)*(5000))
+                ex_list.get(t, o1)->object_labels.clear();// delete!
+
+        }
+        tstep_out_end(t);   
+    }
+    std::cout << " Number of objects: " << sum_o << " ";
+    std::cout << std::endl;
 }

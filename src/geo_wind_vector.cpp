@@ -14,6 +14,7 @@
 #include <sstream>
 #include <math.h>
 #include "haversine.h"
+#include "geo_convert.h"
 #include "spline.h"
 
 /*****************************************************************************/
@@ -24,50 +25,51 @@ const FP_TYPE f_deg_to_rad = M_PI/180.0;
 
 geo_wind_vector::geo_wind_vector(void) : geopot_ht(NULL)
 {
+    max_tri_level = -1;
 }
 
 /*****************************************************************************/
 
 geo_wind_vector::~geo_wind_vector(void)
 {
-	delete geopot_ht;
+    delete geopot_ht;
 }
 
 /*****************************************************************************/
 
 void geo_wind_vector::parse_arg_string(std::string arg_string)
 {
-	// parse the argument string.  Format is:
-	// geostropic(file_name, var_name, z_level)
-	std::string file_name, var_name;
-	int z_level;
-	
-	// get the filename
-	int c_pos = arg_string.find_first_of("(")+1;
-	int e_pos = arg_string.find(",", c_pos);
-	file_name = arg_string.substr(c_pos, e_pos-c_pos);
-	
-	// get the varname
-	c_pos = e_pos+1;
-	e_pos = arg_string.find(",", c_pos);
-	var_name = arg_string.substr(c_pos, e_pos-c_pos);
+    // parse the argument string.  Format is:
+    // geostropic(file_name, var_name, z_level)
+    std::string file_name, var_name;
+    int z_level;
+    
+    // get the filename
+    int c_pos = arg_string.find_first_of("(")+1;
+    int e_pos = arg_string.find(",", c_pos);
+    file_name = arg_string.substr(c_pos, e_pos-c_pos);
+    
+    // get the varname
+    c_pos = e_pos+1;
+    e_pos = arg_string.find(",", c_pos);
+    var_name = arg_string.substr(c_pos, e_pos-c_pos);
 
-	// get the level
-	c_pos = e_pos+1;
-	e_pos = arg_string.find(")", c_pos);
-	std::stringstream stream(arg_string.substr(c_pos, e_pos-c_pos));
-	stream >> z_level;
-		
-	// have the file name, var name and level so create the nc data
-	geopot_ht = new ncdata(file_name, var_name);
-	
-	// add the meta_data
-	meta_data["steering_wind_method"] = "geostrophic wind";
-	meta_data["steering_wind_file_name"] = file_name;
-	meta_data["steering_wind_var_name"] = var_name;
-	std::stringstream ss;
-	ss << z_level;
-	meta_data["steering_wind_z_level"] = ss.str();
+    // get the level
+    c_pos = e_pos+1;
+    e_pos = arg_string.find(")", c_pos);
+    std::stringstream stream(arg_string.substr(c_pos, e_pos-c_pos));
+    stream >> z_level;
+        
+    // have the file name, var name and level so create the nc data
+    geopot_ht = new ncdata(file_name, var_name);
+    
+    // add the meta_data
+    meta_data["steering_wind_method"] = "geostrophic wind";
+    meta_data["steering_wind_file_name"] = file_name;
+    meta_data["steering_wind_var_name"] = var_name;
+    std::stringstream ss;
+    ss << z_level;
+    meta_data["steering_wind_z_level"] = ss.str();
 }
 
 /*****************************************************************************/
@@ -83,68 +85,68 @@ void get_lon_lat_idx(ncdata* nc_data, int lon_idx, int lat_idx,
     // wrap around the North Pole if necessary and not a rotated grid!
     if (n_lat_idx < 0)
     {
-    	if (nc_data->has_rotated_grid())
-    	{
-    		n_lat_idx = 0;
-    	}
-    	else
-    	{
-	        n_lat_idx = -n_lat_idx - 1;
-    	    n_lon_idx += n_lon_idx / 2;
-    	}
+        if (nc_data->has_rotated_grid())
+        {
+            n_lat_idx = 0;
+        }
+        else
+        {
+            n_lat_idx = -n_lat_idx - 1;
+            n_lon_idx += n_lon_idx / 2;
+        }
     }
 
     // wrap around the South Pole if necessary
     int lat_len = nc_data->get_lat_len();
     if (n_lat_idx >= lat_len)
     {
-    	if (nc_data->has_rotated_grid())
-    	{
-    		n_lat_idx = lat_len-1;
-    	}
-    	else
-    	{
-	        n_lat_idx = 2 * lat_len - n_lat_idx - 1;
-    	    n_lon_idx += n_lon_idx / 2;
-    	}
+        if (nc_data->has_rotated_grid())
+        {
+            n_lat_idx = lat_len-1;
+        }
+        else
+        {
+            n_lat_idx = 2 * lat_len - n_lat_idx - 1;
+            n_lon_idx += n_lon_idx / 2;
+        }
     }
 
     // wrap around the date line
     int lon_len = nc_data->get_lon_len();
     if (n_lon_idx < 0)
     {
-    	if (nc_data->has_rotated_grid())
-    		n_lon_idx = 0;
-    	else
-	        n_lon_idx = lon_len + n_lon_idx;
+        if (nc_data->has_rotated_grid())
+            n_lon_idx = 0;
+        else
+            n_lon_idx = lon_len + n_lon_idx;
     }
     if (n_lon_idx >= lon_len)
     {
-    	if (nc_data->has_rotated_grid())
-    		n_lon_idx = lon_len - 1;
-	    else
-	        n_lon_idx = n_lon_idx - lon_len;
-	}
+        if (nc_data->has_rotated_grid())
+            n_lon_idx = lon_len - 1;
+        else
+            n_lon_idx = n_lon_idx - lon_len;
+    }
 }
 
 /*****************************************************************************/
 
 spline form_lon_spline(ncdata* nc_data, int lon_idx, int lat_idx, int z, int t)
 {
-	const int spl_size = 10;
-	int spl2 = spl_size / 2;
+    const int spl_size = 10;
+    int spl2 = spl_size / 2;
     // construct a 5 pt spline from the data in the lon direction
     std::vector<FP_TYPE> lon_vals(spl_size, 0.0);
-	std::vector<FP_TYPE> x_vals(spl_size);
+    std::vector<FP_TYPE> x_vals(spl_size);
     for (int i=-spl2; i<spl2+1; i++)
     {
         int lat_i, lon_i;
         get_lon_lat_idx(nc_data, lon_idx, lat_idx, i, 0, lon_i, lat_i);
         lon_vals[i+spl2] = nc_data->get_data(lon_i, lat_i, z, t);
         if (nc_data->has_rotated_grid())
-	        x_vals[i+spl2] = nc_data->get_rotated_grid()->get_global_longitude_value(lon_i, lat_i) * f_deg_to_rad;
+            x_vals[i+spl2] = nc_data->get_rotated_grid()->get_global_longitude_value(lon_i, lat_i) * f_deg_to_rad;
         else
-	        x_vals[i+spl2] = nc_data->get_lon_from_idx(lon_i)* f_deg_to_rad;
+            x_vals[i+spl2] = nc_data->get_lon_from_idx(lon_i)* f_deg_to_rad;
     }
     spline lon_spline(lon_vals, x_vals, nc_data->get_missing_value());
     return lon_spline;
@@ -154,12 +156,12 @@ spline form_lon_spline(ncdata* nc_data, int lon_idx, int lat_idx, int z, int t)
 
 spline form_lat_spline(ncdata* nc_data, int lon_idx, int lat_idx, int z, int t)
 {
-	const int spl_size = 5;
-	int spl2 = spl_size / 2;
+    const int spl_size = 5;
+    int spl2 = spl_size / 2;
     // construct a 5 pt spline from the data in the lat direction
     std::vector<FP_TYPE> lat_vals(spl_size, 0.0);
-	std::vector<FP_TYPE> y_vals(spl_size);
-	
+    std::vector<FP_TYPE> y_vals(spl_size);
+    
     for (int j=-spl2; j<spl2+1; j++)
     {
         int lat_i, lon_i;
@@ -167,9 +169,9 @@ spline form_lat_spline(ncdata* nc_data, int lon_idx, int lat_idx, int z, int t)
         // put the data values in backwards
         lat_vals[spl2-j] = nc_data->get_data(lon_i, lat_i, z, t);
         if (nc_data->has_rotated_grid())
-	        y_vals[spl2-j] = nc_data->get_rotated_grid()->get_global_latitude_value(lon_i, lat_i) * f_deg_to_rad;
+            y_vals[spl2-j] = nc_data->get_rotated_grid()->get_global_latitude_value(lon_i, lat_i) * f_deg_to_rad;
         else
-	        y_vals[spl2-j] = nc_data->get_lat_from_idx(lat_i) * f_deg_to_rad;
+            y_vals[spl2-j] = nc_data->get_lat_from_idx(lat_i) * f_deg_to_rad;
     }
     spline lat_spline(lat_vals, y_vals, nc_data->get_missing_value());
     return lat_spline;
@@ -181,12 +183,12 @@ void calc_geo_wind(ncdata* gph_data, int t, int gph_z, int lon_idx, int lat_idx,
                    FP_TYPE mv, FP_TYPE& u, FP_TYPE& v)
 {
     // calculate the geostrophic wind - spherical coordinates
-	// determine the scale factor - do we need to convert geopotential height
-	// to the geopotential?
-	FP_TYPE g_sc = 1.0;
-	if (gph_data->get_units() == "m")
-		g_sc = 9.81;
-	
+    // determine the scale factor - do we need to convert geopotential height
+    // to the geopotential?
+    FP_TYPE g_sc = 1.0;
+    if (gph_data->get_units() == "m")
+        g_sc = 9.81;
+    
     spline lon_spline = form_lon_spline(gph_data, lon_idx, lat_idx, gph_z, t);
     spline lat_spline = form_lat_spline(gph_data, lon_idx, lat_idx, gph_z, t);
 
@@ -195,14 +197,14 @@ void calc_geo_wind(ncdata* gph_data, int t, int gph_z, int lon_idx, int lat_idx,
     
     if (gph_data->has_rotated_grid())
     {
-    	lat_r = gph_data->get_rotated_grid()->get_global_latitude_value (lon_idx, lat_idx) * f_deg_to_rad;
-    	lon   = gph_data->get_rotated_grid()->get_global_longitude_value(lon_idx, lat_idx) * f_deg_to_rad;
+        lat_r = gph_data->get_rotated_grid()->get_global_latitude_value (lon_idx, lat_idx) * f_deg_to_rad;
+        lon   = gph_data->get_rotated_grid()->get_global_longitude_value(lon_idx, lat_idx) * f_deg_to_rad;
     }
     else
     {
-	    lat_r = gph_data->get_lat_from_idx(lat_idx) * f_deg_to_rad;
-	    lon   = gph_data->get_lon_from_idx(lon_idx) * f_deg_to_rad;
-	}
+        lat_r = gph_data->get_lat_from_idx(lat_idx) * f_deg_to_rad;
+        lon   = gph_data->get_lon_from_idx(lon_idx) * f_deg_to_rad;
+    }
 
     // calculate the Coriolis parameter
     const FP_TYPE O = 7.292e-5;
@@ -218,40 +220,66 @@ void calc_geo_wind(ncdata* gph_data, int t, int gph_z, int lon_idx, int lat_idx,
 /*****************************************************************************/
 
 void geo_wind_vector::calculate_steering_vector(tri_grid* tg, 
-		 										steering_extremum* svex, int t, 
-												FP_TYPE mv)
+                                                steering_extremum* svex, int t, 
+                                                FP_TYPE mv)
 {
-	LABEL_STORE* object_labels = &(svex->object_labels);	
-	// geostrophic wind is calculated as an average of the geostrophic wind
-	// for each triangle in the object
-	FP_TYPE sv_u = 0.0, sv_v = 0.0;
-	FP_TYPE sum_sv_u = 0.0, sum_sv_v = 0.0;
-	int n_sv_pts = 0;
-	// loop through the triangle objects
-	for (LABEL_STORE::iterator it_ll = object_labels->begin(); 
-		 it_ll != object_labels->end(); it_ll++)
-	{
-		// get the triangle
-		indexed_force_tri_3D* c_tri = tg->get_triangle(*it_ll);
-		// get the indices
-		const std::list<grid_index>* g_idx = c_tri->get_grid_indices();
-		for (std::list<grid_index>::const_iterator it_g_idx = g_idx->begin();
-			 it_g_idx != g_idx->end(); it_g_idx++)
-		{
-			// use the x and y index into the original grid from the triangle to
-			// get the data from the original grid and calculate the geostrophic wind
-			calc_geo_wind(geopot_ht, t, z_level, it_g_idx->i, it_g_idx->j, mv, sv_u, sv_v);
-		    if (sv_u != mv && sv_v != mv && isfinite(sv_u) && isfinite(sv_v))
-		    {
-		    	sum_sv_u += sv_u;
-		    	sum_sv_v += sv_v;
-		    	n_sv_pts++;
-		    }
+    // find where the svex occurs
+    vector_3D C = model_to_cart(svex->lon, svex->lat);
+    if (max_tri_level == -1)
+        max_tri_level = tg->get_max_level();
+    LABEL mid_L = tg->get_triangle_for_point(&C, max_tri_level);
+    
+    // now get the triangle and the adjacent labels
+    indexed_force_tri_3D* c_tri = tg->get_triangle(mid_L);
+    const LABEL_STORE* object_labels = c_tri->get_adjacent_labels(POINT);
+    // geostrophic wind is calculated as an average of the geostrophic wind
+    // for each triangle in the adjacent triangle list
+    FP_TYPE sv_u = 0.0, sv_v = 0.0;
+    FP_TYPE sum_sv_u = 0.0, sum_sv_v = 0.0;
+    int n_sv_pts = 0;
+    // calculate the geo wind for the first triangle
+    // get the triangle
+    // get the indices
+    const std::list<grid_index>* g_idx = c_tri->get_grid_indices();
+    for (std::list<grid_index>::const_iterator it_g_idx = g_idx->begin();
+         it_g_idx != g_idx->end(); it_g_idx++)
+    {
+        // use the x and y index into the original grid from the triangle to
+        // get the data from the original grid and calculate the geostrophic wind
+        calc_geo_wind(geopot_ht, t, z_level, it_g_idx->i, it_g_idx->j, mv, sv_u, sv_v);
+        if (sv_u != mv && sv_v != mv && isfinite(sv_u) && isfinite(sv_v))
+        {
+            sum_sv_u += sv_u;
+            sum_sv_v += sv_v;
+            n_sv_pts++;
         }
-	}
-	if (n_sv_pts != 0)
-	{
-		svex->sv_u = sum_sv_u / n_sv_pts;
-		svex->sv_v = sum_sv_v / n_sv_pts;
-	}
+    }
+    
+    // loop through the adjacent triangle
+    for (LABEL_STORE::const_iterator it_ll = object_labels->begin(); 
+         it_ll != object_labels->end(); it_ll++)
+    {
+        // get the triangle
+        indexed_force_tri_3D* c_tri = tg->get_triangle(*it_ll);
+        // get the indices
+        const std::list<grid_index>* g_idx = c_tri->get_grid_indices();
+        for (std::list<grid_index>::const_iterator it_g_idx = g_idx->begin();
+             it_g_idx != g_idx->end(); it_g_idx++)
+        {
+            // use the x and y index into the original grid from the triangle to
+            // get the data from the original grid and calculate the geostrophic wind
+            calc_geo_wind(geopot_ht, t, z_level, it_g_idx->i, it_g_idx->j, mv, sv_u, sv_v);
+            if (sv_u != mv && sv_v != mv && isfinite(sv_u) && isfinite(sv_v))
+            {
+                sum_sv_u += sv_u;
+                sum_sv_v += sv_v;
+                n_sv_pts++;
+            }
+        }
+    }
+    if (n_sv_pts != 0)
+    {
+        svex->sv_u = sum_sv_u / n_sv_pts;
+        svex->sv_v = sum_sv_v / n_sv_pts;
+    }
 }

@@ -72,34 +72,38 @@ bool minima_locator::process_data(void)
     
     std::cout << "# Processing data" << std::endl;
     
-     // get the triangles at the extrema detection level
+    // get the triangles at the extrema detection level
     // we only have to process this level
-    std::list<QT_TRI_NODE*> tris_qn = tg.get_triangles_at_level(grid_level);
-    for (std::list<QT_TRI_NODE*>::iterator it_qt = tris_qn.begin();
-         it_qt != tris_qn.end(); it_qt++)
+    // we want to process every level, not just the grid level
+    for (int l=0; l<tg.get_max_level(); l++)
     {
-        // get the index into the tri-grid
-        indexed_force_tri_3D* TRI = (*it_qt)->get_data();
-        int ds_idx = TRI->get_ds_index();
-
-        // get the latitude / longitude of this triangle's centroid
-        FP_TYPE tri_lat, tri_lon;
-        cart_to_model(TRI->centroid(), tri_lon, tri_lat);
-
-        // calculate the background value for this triangle
-        FP_TYPE bV = ((equ_bck - pole_bck) * cos(tri_lat*deg_to_rad) + pole_bck);
-
-        // use this index over every timestep to subtract the background field
-        for (int t=0; t<n_ts; t++)
+        std::list<QT_TRI_NODE*> tris_qn = tg.get_triangles_at_level(l);
+        for (std::list<QT_TRI_NODE*>::iterator it_qt = tris_qn.begin();
+             it_qt != tris_qn.end(); it_qt++)
         {
-            // get the data value
-            FP_TYPE dV = ds.get_data(t, ds_idx);
-            // default to missing
-            FP_TYPE V = mv;
-            // if not missing the value is the data value minus the background
-            if (!(is_mv(dV, mv)))
-                V =  dV - bV;
-            data_processed->set_data(t, ds_idx, V);
+            // get the index into the tri-grid
+            indexed_force_tri_3D* TRI = (*it_qt)->get_data();
+            int ds_idx = TRI->get_ds_index();
+
+            // get the latitude / longitude of this triangle's centroid
+            FP_TYPE tri_lat, tri_lon;
+            cart_to_model(TRI->centroid(), tri_lon, tri_lat);
+
+            // calculate the background value for this triangle
+            FP_TYPE bV = ((equ_bck - pole_bck) * cos(tri_lat*deg_to_rad) + pole_bck);
+
+            // use this index over every timestep to subtract the background field
+            for (int t=0; t<n_ts; t++)
+            {
+                // get the data value
+                FP_TYPE dV = ds.get_data(t, ds_idx);
+                // default to missing
+                FP_TYPE V = mv;
+                // if not missing the value is the data value minus the background
+                if (!(is_mv(dV, mv)))
+                    V =  dV - bV;
+                data_processed->set_data(t, ds_idx, V);
+            }
         }
     }
     // option to save the output - build the filename first

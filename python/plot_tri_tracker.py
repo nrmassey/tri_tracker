@@ -87,7 +87,8 @@ def plot_mesh(sp, tg, l, tl=-1, pole_longitude=0.0, pole_latitude=90.0):
             ec = [0,0,0,0.5]
             sp.fill([P[0][0], P[1][0], P[2][0], P[0][0]], \
                     [P[0][1], P[1][1], P[2][1], P[0][1]], \
-                    facecolor=fc, edgecolor=ec, lw=0.25)
+                    facecolor=fc, edgecolor=ec, lw=0.25,
+                    transform=ccrs.PlateCarree())
 
 ###############################################################################
 
@@ -137,12 +138,12 @@ def plot_data(sp0, sp1, tg, ds, time_step, level, colmap=cm.RdYlBu_r, dzt=1, kee
         ds_idx = TRI.get_ds_index()
         V = ds[time_step, TRI.get_ds_index()]+0.5
         if numpy.isnan(V):
-            continue
+            V = ds.get_missing_value()
         else:
             V = int(V)
         
         if abs(V) >= abs(ds.get_missing_value())*0.99:
-            col = "#FFFFFF"
+            col = "#FF0000"
         else:
             V = float(int(V/100))
             # transform between 0 and 1
@@ -155,7 +156,8 @@ def plot_data(sp0, sp1, tg, ds, time_step, level, colmap=cm.RdYlBu_r, dzt=1, kee
             
         sp0.fill([P[0][0], P[1][0], P[2][0], P[0][0]], \
                  [P[0][1], P[1][1], P[2][1], P[0][1]], \
-                 facecolor=col, edgecolor=col, lw=0.25, zorder=0)
+                 facecolor=col, edgecolor=col, lw=0.25, zorder=0,
+                 transform=ccrs.PlateCarree())
                 
     # draw a colorbar
     draw_colorbar(sp1, (min_V), (max_V), int(max_V-min_V), colmap, format="%i", label_every=12)#title="MSLP hPa")
@@ -178,7 +180,8 @@ def plot_geostrophic_wind(sp, steer_x, steer_y, lon, lat, pole_longitude=0.0, po
         E = glob2rot(lon, lat, pole_longitude, pole_latitude)
         # plot arrow between the two points
         sp.arrow(E[0], E[1], PG[0]-E[0], PG[1]-E[1], head_width=0.3, 
-                 fc='r', ec='r', zorder=1)
+                 fc='r', ec='r', zorder=1,
+                 transform=ccrs.PlateCarree())
 
 ###############################################################################
 
@@ -201,7 +204,8 @@ def plot_object_triangles(sp, tg, object_list, pole_longitude=0.0, pole_latitude
         ec = [0,0,0,1]
         sp.fill([P[0][0], P[1][0], P[2][0], P[0][0]], \
                 [P[0][1], P[1][1], P[2][1], P[0][1]], \
-                facecolor=fc, edgecolor=ec, lw=0.5, zorder=2)
+                facecolor=fc, edgecolor=ec, lw=0.5, zorder=2, 
+                transform=ccrs.PlateCarree())
 
 ###############################################################################
 
@@ -226,7 +230,7 @@ def plot_extrema(sp, tg, ex, time_step, ex_num=-1, pole_longitude=0.0, pole_lati
             lon = C[0]
             lat = C[1]
         E = glob2rot(lon, lat, pole_longitude, pole_latitude)
-        sp.plot(E[0], E[1],'ro', ms=2.5, mec='r', zorder=3)
+        sp.plot(E[0], E[1],'ro', ms=2.5, mec='r', zorder=3, transform=ccrs.PlateCarree())
         plot_object_triangles(sp, tg, ex_t.object_list, pole_longitude, pole_latitude)
 #       plot_geostrophic_wind(sp, ex_t.steer_x, ex_t.steer_y, lon, lat, pole_longitude, pole_latitude)
 
@@ -256,7 +260,7 @@ def plot_objects(sp, tg, ds, ex, time_step, level, ex_num=-1, pole_longitude=0.0
         lon = ex_t.lon
         if lon > 180.0:     # wrap around date line
             lon = lon-360.0
-        sp.plot(lon, ex_t.lat, 'r+', ms=5.0)
+        sp.plot(lon, ex_t.lat, 'r+', ms=5.0,transform=ccrs.PlateCarree())
         # plot the triangles in the object from their labels
         for tl in ex_t.object_list:
             # get the triangle from the grid via its label
@@ -289,7 +293,8 @@ def plot_objects(sp, tg, ds, ex, time_step, level, ex_num=-1, pole_longitude=0.0
             ec=[0,0,0,1]
             sp.fill([P[0][0], P[1][0], P[2][0], P[0][0]], \
                     [P[0][1], P[1][1], P[2][1], P[0][1]], \
-                    facecolor=col, edgecolor=ec, lw=0.25, zorder=2)
+                    facecolor=col, edgecolor=ec, lw=0.25, zorder=2,
+                    transform=ccrs.PlateCarree())
 
 ###############################################################################
 
@@ -370,7 +375,7 @@ def plot_original_grid(sp, lat_vals, lon_vals):
             # wrap lo val
             if lo > 180.0:  # wrap around date line
                 lo = lo-360.0
-            sp.plot(lo, la, 'ko', ms=1)
+            sp.plot(lo, la, 'ko', ms=1, transform=ccrs.PlateCarree())
 
 ###############################################################################
 
@@ -386,7 +391,8 @@ def plot_wind_speed(sp, lat, lon, wnd_speed, max_wnd):
             if lo > 180.0:
                 lo -= 360.0
             a = wnd_speed[0,th,lm] / max_wnd
-            sp.plot(lo, la, 'k.', markersize = wnd_speed[0,th,lm] * sc, zorder=1, alpha=a, mec='k')
+            sp.plot(lo, la, 'k.', markersize = wnd_speed[0,th,lm] * sc, zorder=1, alpha=a, mec='k',
+                    transform=ccrs.PlateCarree())
 
 ###############################################################################
 
@@ -414,7 +420,8 @@ def create_wind_color_map(levels):
 def plot_wind_field(sp, wnd_lat, wnd_lon, wnd, wnd_max):
     cbar_vals = [x for x in range(0,40,5)]
     cmap, norm = create_wind_color_map(cbar_vals)
-    pmesh = sp.pcolormesh(wnd_lon, wnd_lat, wnd, cmap=cmap, vmax=cbar_vals[-1], vmin=cbar_vals[0], norm=norm)
+    pmesh = sp.pcolormesh(wnd_lon, wnd_lat, wnd, cmap=cmap, vmax=cbar_vals[-1], vmin=cbar_vals[0], norm=norm,
+                          transform=ccrs.PlateCarree())
     draw_colorbar(cbar_vals[0], cbar_vals[-1]-5, len(cbar_vals)-2, cmap, format="%i", title="Max wind speed m/s")
 
 ###############################################################################
@@ -432,45 +439,45 @@ def plot_track(sp, trk, t_step, pole_longitude, pole_latitude):
             # plot the track - first point first
             c_tp = c_trk.get_track_point(0)
             P_0 = glob2rot(c_tp.ex.lon, c_tp.ex.lat, pole_longitude, pole_latitude)
-            sp.plot(P_0[0], P_0[1], 'ko', ms=2.5)
+            sp.plot(P_0[0], P_0[1], 'ko', ms=2.5, transform=ccrs.PlateCarree())
             earth_r = 6371 * 1000
             circ = 2*math.pi * math.cos(math.radians(c_tp.ex.lat)) * earth_r
 
             if c_tp.frame_number == t_step:
-                V = math.sqrt(c_tp.ex.steer_x**2 + c_tp.ex.steer_y**2)
-                if V * six_hrs / 1000.0 < 500:
-                    R = 500 * 1000
-                else:
-                    R = V * 1.5 * six_hrs
-                P3_lon = c_tp.ex.lon + V * 1.5 * six_hrs * 360.0/circ
-                if abs(P3_lon) < 1e3:
-                    P3 = glob2rot(P3_lon, c_tp.ex.lat, pole_longitude, pole_latitude)
-                    sr = plt.Circle((P_0[0],P_0[1]),P3[0]-P_0[0],color='r', fill=False)
-                    sp.add_artist(sr)
+#                V = math.sqrt(c_tp.ex.steer_x**2 + c_tp.ex.steer_y**2)
+#                if V * six_hrs / 1000.0 < 500:
+#                    R = 500 * 1000
+#                else:
+#                    R = V * 1.5 * six_hrs
+#                P3_lon = c_tp.ex.lon + V * 1.5 * six_hrs * 360.0/circ
+#                if abs(P3_lon) < 1e3:
+#                    P3 = glob2rot(P3_lon, c_tp.ex.lat, pole_longitude, pole_latitude)
+#                    sr = plt.Circle((P_0[0],P_0[1]),P3[0]-P_0[0],color='r', fill=False)
+#                    sp.add_artist(sr)
                 plot_geostrophic_wind(sp, c_tp.ex.steer_x, c_tp.ex.steer_y, c_tp.ex.lon, c_tp.ex.lat, pole_longitude, pole_latitude)
-                plot_object_triangles(sp, tg, c_tp.ex.object_list, pole_longitude, pole_latitude)
+#                plot_object_triangles(sp, tg, c_tp.ex.object_list, pole_longitude, pole_latitude)
                 
             for tp in range(1, np):
                 # convert the 2nd point
                 c_tp = c_trk.get_track_point(tp)
                 P_1 = glob2rot(c_tp.ex.lon, c_tp.ex.lat, pole_longitude, pole_latitude)
-                sp.plot(P_1[0], P_1[1], 'ko', ms=2.5)
+                sp.plot(P_1[0], P_1[1], 'ko', ms=2.5, transform=ccrs.PlateCarree())
                 
                 if c_tp.frame_number == t_step:
-                    V = math.sqrt(c_tp.ex.steer_x**2 + c_tp.ex.steer_y**2)
-                    if V * six_hrs / 1000.0 < 500:
-                        R = 500 * 1000
-                    else:
-                        R = V * 1.5 * six_hrs
-                    P3_lon = c_tp.ex.lon + R * 360.0/circ
-                    if abs(P3_lon) < 1e3:
-                        P3 = glob2rot(P3_lon, c_tp.ex.lat, pole_longitude, pole_latitude)
-                        sr = plt.Circle((P_1[0],P_1[1]),P3[0]-P_1[0],color='r', fill=False)
-                        sp.add_artist(sr)                   
-                    plot_geostrophic_wind(sp, c_tp.ex.steer_x, c_tp.ex.steer_y, c_tp.ex.lon, c_tp.ex.lat, pole_longitude, pole_latitude)
-                    plot_object_triangles(sp, tg, c_tp.ex.object_list, pole_longitude, pole_latitude)
+#                     V = math.sqrt(c_tp.ex.steer_x**2 + c_tp.ex.steer_y**2)
+#                     if V * six_hrs / 1000.0 < 500:
+#                         R = 500 * 1000
+#                     else:
+#                         R = V * 1.5 * six_hrs
+#                     P3_lon = c_tp.ex.lon + R * 360.0/circ
+#                     if abs(P3_lon) < 1e3:
+#                         P3 = glob2rot(P3_lon, c_tp.ex.lat, pole_longitude, pole_latitude)
+#                         sr = plt.Circle((P_1[0],P_1[1]),P3[0]-P_1[0],color='r', fill=False)
+#                         sp.add_artist(sr)                   
+                     plot_geostrophic_wind(sp, c_tp.ex.steer_x, c_tp.ex.steer_y, c_tp.ex.lon, c_tp.ex.lat, pole_longitude, pole_latitude)
+#                     plot_object_triangles(sp, tg, c_tp.ex.object_list, pole_longitude, pole_latitude)
 
-                sp.plot([P_0[0], P_1[0]], [P_0[1], P_1[1]], 'k')
+                sp.plot([P_0[0], P_1[0]], [P_0[1], P_1[1]], 'k', transform=ccrs.PlateCarree())
                 
                 P_0 = P_1
                 
@@ -562,7 +569,8 @@ if __name__ == "__main__":
     if pole_longitude != 0.0 and pole_latitude != 90.0:
         projection = ccrs.RotatedPole(pole_latitude=pole_latitude, pole_longitude=pole_longitude)
     else:
-        projection = ccrs.PlateCarree()
+        projection = ccrs.NorthPolarStereo()
+#        projection = ccrs.PlateCarree()
     colmap=cm.RdYlBu_r
     for t_step in range(time_step, time_step+n_steps):
         sp0 = plt.subplot(gs[0:6,:], projection=projection)
@@ -591,7 +599,8 @@ if __name__ == "__main__":
 
         sp0.coastlines()
         sp0.gridlines()
-        sp0.get_axes().set_extent([lon_limits[0], lon_limits[1], lat_limits[0], lat_limits[1]])
+        sp0.get_axes().set_extent([lon_limits[0], lon_limits[1], lat_limits[0], lat_limits[1]],
+                                   crs=ccrs.PlateCarree())
         sp0.set_aspect(1.0)
         if n_steps > 0:
             this_out_name = out_name[:-4] + "_%03i" % t_step + ".png"

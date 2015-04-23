@@ -70,75 +70,84 @@ bool minima_largescale::process_data(void)
     
     // calculate number of levels to go up the mesh to find the large scale flow
     int n_up = grid_level - ls_msh_lvl;
-     // get the triangles at the extrema detection level
+    // get the triangles at the extrema detection level
     // we only have to process this level
-    std::list<QT_TRI_NODE*> tris_qn = tg.get_triangles_at_level(grid_level);
-    for (std::list<QT_TRI_NODE*>::iterator it_qt = tris_qn.begin();
-         it_qt != tris_qn.end(); it_qt++)
+    // we want to process every level, not just the grid level
+    for (int l=ls_msh_lvl; l<tg.get_max_level(); l++)
     {
-        // get the index into the tri-grid
-        indexed_force_tri_3D* TRI = (*it_qt)->get_data();
-        int ds_idx = TRI->get_ds_index();
-        // get the n parent triangle by manipulating the label of the current triangle
-        long int ls_label_int = (TRI->get_label().label) % (long int)(pow(10, n_up+2));
-        // calculate division needed to go up to the level
-        LABEL ls_label = LABEL(ls_label_int, ls_msh_lvl);
-        // get the parent triangle
-        indexed_force_tri_3D* P_TRI = tg.get_triangle(ls_label);
-
-        // we want to do a distance weighted mean for the background value so get
-        // the list of adjacent triangles for the parent triangle
-        const LABEL_STORE* p_tri_adj_labels = P_TRI->get_adjacent_labels(adj_type);
-        
-        // two lists, one of indices and one of weights
-        std::vector<int> p_ds_indices;
-        std::vector<FP_TYPE> p_ds_weights;
-        
-        // add the first - weight is 1000/distance
-        FP_TYPE distance = tg.distance_between_triangles(TRI->get_label(), ls_label);
-        p_ds_indices.push_back(P_TRI->get_ds_index());
-        p_ds_weights.push_back(1000.0/distance);
-
-        // now do this for each triangle in the tri list
-        for (LABEL_STORE::const_iterator p_tri_adj_it = p_tri_adj_labels->begin();
-             p_tri_adj_it != p_tri_adj_labels->end(); p_tri_adj_it++)
+        std::list<QT_TRI_NODE*> tris_qn = tg.get_triangles_at_level(l);
+        for (std::list<QT_TRI_NODE*>::iterator it_qt = tris_qn.begin();
+             it_qt != tris_qn.end(); it_qt++)
         {
-            // get the distance
-            distance = tg.distance_between_triangles(TRI->get_label(), *p_tri_adj_it);
-            // get the triangle's ds index
-            int p_adj_ds_index = tg.get_triangle(*p_tri_adj_it)->get_ds_index();
-            p_ds_indices.push_back(p_adj_ds_index);
+            // get the index into the tri-grid
+            indexed_force_tri_3D* TRI = (*it_qt)->get_data();
+            int ds_idx = TRI->get_ds_index();
+            // get the n parent triangle by manipulating the label of the current triangle
+            long int ls_label_int = (TRI->get_label().label) % (long int)(pow(10, n_up+2));
+            // calculate division needed to go up to the level
+            LABEL ls_label = LABEL(ls_label_int, ls_msh_lvl);
+            // get the parent triangle
+            indexed_force_tri_3D* P_TRI = tg.get_triangle(ls_label);
+
+            // we want to do a distance weighted mean for the background value so get
+            // the list of adjacent triangles for the parent triangle
+            const LABEL_STORE* p_tri_adj_labels = P_TRI->get_adjacent_labels(adj_type);
+
+            // two lists, one of indices and one of weights
+            std::vector<int> p_ds_indices;
+            std::vector<FP_TYPE> p_ds_weights;
+
+            // add the first - weight is 1000/distance
+            FP_TYPE distance = tg.distance_between_triangles(TRI->get_label(), ls_label);
+            if (distance == 0.0)    // prevent a div by zero
+                distance = 1.0;
+            p_ds_indices.push_back(P_TRI->get_ds_index());
             p_ds_weights.push_back(1000.0/distance);
-        }
-        // use this index over every timestep to subtract the background field
-        for (int t=0; t<n_ts; t++)
-        {
-            // get the extrema level value
-            FP_TYPE dV = ds.get_data(t, ds_idx);
-            // default to missing
-            FP_TYPE V = mv;
-            // if not missing
-            if (is_mv(dV, mv))
-                continue;
-            // otherwise do the weighted sum of the parent triangle values
-            // get the parent value
-            FP_TYPE sum_pV = 0.0;
-            FP_TYPE sum_w = 0.0;
-            for (int c=0; c<p_ds_indices.size(); c++)
+
+            // now do this for each triangle in the tri list
+            for (LABEL_STORE::const_iterator p_tri_adj_it = p_tri_adj_labels->begin();
+                 p_tri_adj_it != p_tri_adj_labels->end(); p_tri_adj_it++)
             {
-                FP_TYPE pV = ds.get_data(t, p_ds_indices[c]);
-                FP_TYPE W = p_ds_weights[c];
-                if (!is_mv(pV, mv))
-                {
-                    sum_pV += pV * W;
-                    sum_w += W;
-                }
+                // get the distance
+                distance = tg.distance_between_triangles(TRI->get_label(), *p_tri_adj_it);
+                if (distance == 0.0)    // prevent a div by zero
+                    distance = 1.0;
+                
+                // get the triangle's ds index
+                int p_adj_ds_index = tg.get_triangle(*p_tri_adj_it)->get_ds_index();
+                p_ds_indices.push_back(p_adj_ds_index);
+                p_ds_weights.push_back(1000.0/distance);
             }
-            if (sum_w > 0)
-                V =  dV - sum_pV / sum_w;
-            else
-                V = mv;
-            data_processed->set_data(t, ds_idx, V);
+            // use this index over every timestep to subtract the background field
+            for (int t=0; t<n_ts; t++)
+            {
+                // get the extrema level value
+                FP_TYPE dV = ds.get_data(t, ds_idx);
+                // default to missing
+                FP_TYPE V = mv;
+                // if not missing
+                if (is_mv(dV, mv))
+                    continue;
+                // otherwise do the weighted sum of the parent triangle values
+                // get the parent value
+                FP_TYPE sum_pV = 0.0;
+                FP_TYPE sum_w = 0.0;
+                for (int c=0; c<p_ds_indices.size(); c++)
+                {
+                    FP_TYPE pV = ds.get_data(t, p_ds_indices[c]);
+                    FP_TYPE W = p_ds_weights[c];
+                    if (!is_mv(pV, mv))
+                    {
+                        sum_pV += pV * W;
+                        sum_w += W;
+                    }
+                }
+                if (sum_w > 0)
+                    V =  dV - sum_pV / sum_w;
+                else
+                    V = mv;
+                data_processed->set_data(t, ds_idx, V);
+            }
         }
     }
     // option to save the output - build the filename first

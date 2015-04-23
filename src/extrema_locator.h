@@ -68,6 +68,7 @@ class extrema_locator
 
         // Virtual functions that may be overloaded
         virtual void find_extrema(void);
+        virtual void refine_extrema(void);
         virtual void find_objects(void);
         
         // Functions that are applicable to all 

@@ -115,8 +115,9 @@ QT_TRI_NODE* tri_grid::get_triangle_node(LABEL label)
     for (unsigned int i=0; i<label.max_level; i++)
     {
         long int child_number = (label.label % mp1)/mp2;
+        if (current == NULL)
+            return NULL;
         current = current->get_child(child_number-1);
-        assert(current != NULL);
         mp1 *= 10;
         mp2 *= 10;
     }

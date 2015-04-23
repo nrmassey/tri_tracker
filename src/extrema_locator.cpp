@@ -56,6 +56,7 @@ extrema_locator::~extrema_locator(void)
 void extrema_locator::locate(void)
 {
     find_extrema();
+    refine_extrema();
     find_objects();
     merge_objects();
     ex_points_from_objects();
@@ -137,8 +138,66 @@ void extrema_locator::find_extrema(void)
                 steering_extremum svex(mv, mv, mv, mv, mv, mv);
                 svex.object_labels.push_back(c_tri->get_label());
                 // now add to the extrema list
-                ex_list.add(t, svex);               
+                ex_list.add(t, svex);
             }
+        }
+        tstep_out_end(t);
+    }
+    std::cout << std::endl;
+}
+
+/*****************************************************************************/
+
+void get_leaf_node_labels(QT_TRI_NODE* c_tri_node, LABEL_STORE& label_list, int max_level)
+{
+    // we know how to form the labels at the child node - add 1 to 4 to the
+    // end of the label and repeat this n times, where n is the number of
+    // levels between the extrema detection level and the max level
+    // doing this recursively makes for a very elegant program
+    
+    LABEL c_label = c_tri_node->get_data()->get_label();
+    if (c_label.max_level < max_level)   // not at max level yet
+    {
+        // go to the child level
+        for (int i=0; i<4; i++)
+            if (c_tri_node->get_child(i) != NULL)
+                get_leaf_node_labels(c_tri_node->get_child(i), label_list, max_level);
+    }
+    else
+        label_list.push_back(c_label);
+}
+
+/*****************************************************************************/
+
+
+void extrema_locator::refine_extrema(void)
+{
+    // refine the extrema to the maximum grid level by replacing the labels
+    // of the extrema with the leaf node labels
+    // we just have to check that the triangle of the leaf node actually
+    // exists by checking for a NULL pointer returned from tg.get_triangle()
+    
+    // first check that the extrema level is not the maximum grid level
+    int max_lev = tg.get_max_level() - 1;
+    if (grid_level == max_lev)
+        return;
+    
+    std::cout << "# Refining extrema, timestep: ";
+    // repeat for all detected extrema
+    for (int t=0; t<ds.get_number_of_time_steps(); t++)
+    {
+        tstep_out_begin(t);
+        for (int e=0; e<ex_list.number_of_extrema(t); e++)
+        {
+            steering_extremum* svex = ex_list.get(t, e);
+            // get the labels at the leaf node descended from this label
+            // should only be one object label at this stage
+            LABEL_STORE label_list;
+            QT_TRI_NODE* tri_node = tg.get_triangle_node(svex->object_labels[0]);
+            get_leaf_node_labels(tri_node, label_list, max_lev);
+            // clear the current object labels
+            svex->object_labels.clear();
+            svex->object_labels = label_list;
         }
         tstep_out_end(t);
     }
@@ -260,9 +319,11 @@ void extrema_locator::merge_objects(void)
                     continue;
                 // get the labels for both objects
                 LABEL_STORE* o2_labs = &(ex_list.get(t, o2)->object_labels);
+                
                 // is a label in the shell found in the object?
                 // test at different levels - 1st shells overlap?
-                bool test = objects_share_nodes(o1_shell_labs, o2_shell_labs);
+                bool test = false;
+                if (!test) test = objects_share_nodes(o1_shell_labs, o2_shell_labs);
                 // 2nd - 1st object shell overlaps with 2nd object
                 if (!test) test = objects_share_nodes(o1_shell_labs, o2_labs);
                 // 3rd - 2nd object shell overlaps with 1st object

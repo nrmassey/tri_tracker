@@ -279,6 +279,9 @@ int tracker::apply_rules(track* TR, steering_extremum* EX_svex, FP_TYPE& cost)
 	// calculate and return the components of the cost function
 	FP_TYPE distance_val = distance(TR, EX_svex, sr);
 	FP_TYPE steering_dist = calculate_steering_distance(EX_svex, hrs_per_t_step);
+	// check for rogue steering distances
+	if (steering_dist > sr * 2)
+	    steering_dist = sr * 2;
 	// apply distance rule - either less than sr (minimum search radius) or less
 	// than 150% of the steering distance
 	if (distance_val <= sr or distance_val <= 1.5 * steering_dist)
