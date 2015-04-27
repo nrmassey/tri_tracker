@@ -178,10 +178,11 @@ def plot_geostrophic_wind(sp, steer_x, steer_y, lon, lat, pole_longitude=0.0, po
         P_lat = lat + steer_y * n_secs_per_tstep * 180.0 / lat_c
         PG = glob2rot(P_lon, P_lat, pole_longitude, pole_latitude)
         E = glob2rot(lon, lat, pole_longitude, pole_latitude)
-        # plot arrow between the two points
-        sp.arrow(E[0], E[1], PG[0]-E[0], PG[1]-E[1], head_width=0.3, 
-                 fc='r', ec='r', zorder=1,
-                 transform=ccrs.PlateCarree())
+        if abs(PG[0]-E[0]) < 180.0:
+            # plot arrow between the two points
+            sp.arrow(E[0], E[1], PG[0]-E[0], PG[1]-E[1], head_width=0.3, 
+                     fc='r', ec='r', zorder=1,
+                     transform=ccrs.PlateCarree())
 
 ###############################################################################
 
@@ -426,10 +427,28 @@ def plot_wind_field(sp, wnd_lat, wnd_lon, wnd, wnd_max):
 
 ###############################################################################
 
+def plot_steering_search(sp, c_tp, pole_longitude, pole_latitude):
+    six_hrs = 6 * 60 * 60
+    earth_r = 6371 * 1000
+    circ = 2*math.pi * math.cos(math.radians(c_tp.ex.lat)) * earth_r
+    P_0 = glob2rot(c_tp.ex.lon, c_tp.ex.lat, pole_longitude, pole_latitude)
+
+    V = math.sqrt(c_tp.ex.steer_x**2 + c_tp.ex.steer_y**2)
+    if V * six_hrs / 1000.0 < 500:
+        R = 500 * 1000
+    else:
+        R = V * six_hrs
+    P3_lon = c_tp.ex.lon + V * six_hrs * 360.0/circ
+    P3 = glob2rot(P3_lon, c_tp.ex.lat, pole_longitude, pole_latitude)
+    sr = plt.Circle((P_0[0],P_0[1]),P3[0]-P_0[0],color='r', fill=False,
+                    transform=ccrs.PlateCarree())
+    sp.add_artist(sr)
+
+###############################################################################
+
 def plot_track(sp, trk, t_step, pole_longitude, pole_latitude):
     print "Plotting tracks"
     # plot the tracks which encompass the current time step
-    six_hrs = 6 * 60 * 60
     for ct in range(0, trk.get_n_tracks()):
         c_trk = trk.get_track(ct)
         # check whether the current timestep is in the range of the track
@@ -440,21 +459,10 @@ def plot_track(sp, trk, t_step, pole_longitude, pole_latitude):
             c_tp = c_trk.get_track_point(0)
             P_0 = glob2rot(c_tp.ex.lon, c_tp.ex.lat, pole_longitude, pole_latitude)
             sp.plot(P_0[0], P_0[1], 'ko', ms=2.5, transform=ccrs.PlateCarree())
-            earth_r = 6371 * 1000
-            circ = 2*math.pi * math.cos(math.radians(c_tp.ex.lat)) * earth_r
 
             if c_tp.frame_number == t_step:
-#                V = math.sqrt(c_tp.ex.steer_x**2 + c_tp.ex.steer_y**2)
-#                if V * six_hrs / 1000.0 < 500:
-#                    R = 500 * 1000
-#                else:
-#                    R = V * 1.5 * six_hrs
-#                P3_lon = c_tp.ex.lon + V * 1.5 * six_hrs * 360.0/circ
-#                if abs(P3_lon) < 1e3:
-#                    P3 = glob2rot(P3_lon, c_tp.ex.lat, pole_longitude, pole_latitude)
-#                    sr = plt.Circle((P_0[0],P_0[1]),P3[0]-P_0[0],color='r', fill=False)
-#                    sp.add_artist(sr)
                 plot_geostrophic_wind(sp, c_tp.ex.steer_x, c_tp.ex.steer_y, c_tp.ex.lon, c_tp.ex.lat, pole_longitude, pole_latitude)
+#                plot_steering_search(sp, c_tp, pole_longitude, pole_latitude)
 #                plot_object_triangles(sp, tg, c_tp.ex.object_list, pole_longitude, pole_latitude)
                 
             for tp in range(1, np):
@@ -464,20 +472,11 @@ def plot_track(sp, trk, t_step, pole_longitude, pole_latitude):
                 sp.plot(P_1[0], P_1[1], 'ko', ms=2.5, transform=ccrs.PlateCarree())
                 
                 if c_tp.frame_number == t_step:
-#                     V = math.sqrt(c_tp.ex.steer_x**2 + c_tp.ex.steer_y**2)
-#                     if V * six_hrs / 1000.0 < 500:
-#                         R = 500 * 1000
-#                     else:
-#                         R = V * 1.5 * six_hrs
-#                     P3_lon = c_tp.ex.lon + R * 360.0/circ
-#                     if abs(P3_lon) < 1e3:
-#                         P3 = glob2rot(P3_lon, c_tp.ex.lat, pole_longitude, pole_latitude)
-#                         sr = plt.Circle((P_1[0],P_1[1]),P3[0]-P_1[0],color='r', fill=False)
-#                         sp.add_artist(sr)                   
-                     plot_geostrophic_wind(sp, c_tp.ex.steer_x, c_tp.ex.steer_y, c_tp.ex.lon, c_tp.ex.lat, pole_longitude, pole_latitude)
-#                     plot_object_triangles(sp, tg, c_tp.ex.object_list, pole_longitude, pole_latitude)
-
-                sp.plot([P_0[0], P_1[0]], [P_0[1], P_1[1]], 'k', transform=ccrs.PlateCarree())
+#                    plot_geostrophic_wind(sp, c_tp.ex.steer_x, c_tp.ex.steer_y, c_tp.ex.lon, c_tp.ex.lat, pole_longitude, pole_latitude)
+                    plot_steering_search(sp, c_tp, pole_longitude, pole_latitude)
+#                    plot_object_triangles(sp, tg, c_tp.ex.object_list, pole_longitude, pole_latitude)
+                if (abs(P_0[0] - P_1[0]) < 180):
+                    sp.plot([P_0[0], P_1[0]], [P_0[1], P_1[1]], 'k', transform=ccrs.PlateCarree())
                 
                 P_0 = P_1
                 

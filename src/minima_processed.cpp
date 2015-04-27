@@ -167,33 +167,8 @@ bool minima_processed::is_in_object(indexed_force_tri_3D* O_TRI,
     is_in &= (cl_v_C <= min_delta);
     // less than 1000km radius
     is_in &= tg.distance_between_triangles(O_TRI->get_label(), C_TRI->get_label())/1000.0 < 1000.0;
-    is_in &= cl_v_C <= ol_v_C;
-
-/*    if (is_in)
-    {
-        int max_lev = tg.get_max_level();
-        // saddle point check
-        LABEL_STORE path = tg.get_path(O_TRI->get_label(), C_TRI->get_label(), max_lev);
-        // create storage for spline
-        std::vector<FP_TYPE> y_vals(path.size(), 0.0);
-        std::vector<FP_TYPE> x_vals(path.size(), 0.0);
-        // loop through and recover the values, adding to the arrays
-        int i = 0;
-        for (LABEL_STORE::iterator it_ll = path.begin(); 
-             it_ll != path.end(); it_ll++) 
-        {
-            // get the triangle from the label
-            indexed_force_tri_3D* I_TRI = tg.get_triangle(*it_ll);
-            // get the value
-            FP_TYPE il_v = data_processed->get_data(t_step, I_TRI->get_ds_index());
-            y_vals[i] = il_v; //contour_data(il_v, contour_value);
-            x_vals[i] = i;
-        }
-        // expand to saddle point
-        spline path_spline(y_vals, x_vals, mv);
-        FP_TYPE d2x = path_spline.evaluate_d2x(path.size()-1);
-        is_in &= d2x > 0;
-    }*/
+    // within one contour
+    is_in &= cl_v < ol_v_C + contour_value;
     
     return is_in;
 }
