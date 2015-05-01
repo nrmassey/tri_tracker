@@ -84,7 +84,6 @@ bool minima_largescale::process_data(void)
             int ds_idx = TRI->get_ds_index();
             // get the n parent triangle by manipulating the label of the current triangle
             long int ls_label_int = (TRI->get_label().label) % (long int)(pow(10, n_up+2));
-            // calculate division needed to go up to the level
             LABEL ls_label = LABEL(ls_label_int, ls_msh_lvl);
             // get the parent triangle
             indexed_force_tri_3D* P_TRI = tg.get_triangle(ls_label);
@@ -101,23 +100,31 @@ bool minima_largescale::process_data(void)
             FP_TYPE distance = tg.distance_between_triangles(TRI->get_label(), ls_label);
             if (distance == 0.0)    // prevent a div by zero
                 distance = 1.0;
-            p_ds_indices.push_back(P_TRI->get_ds_index());
-            p_ds_weights.push_back(1000.0/distance);
-
+            FP_TYPE W0 = 1000.0/distance;
+            int I0 = P_TRI->get_ds_index();
+            FP_TYPE max_w = -1.0;    
             // now do this for each triangle in the tri list
             for (LABEL_STORE::const_iterator p_tri_adj_it = p_tri_adj_labels->begin();
                  p_tri_adj_it != p_tri_adj_labels->end(); p_tri_adj_it++)
             {
                 // get the distance
                 distance = tg.distance_between_triangles(TRI->get_label(), *p_tri_adj_it);
-                if (distance == 0.0)    // prevent a div by zero
-                    distance = 1.0;
-                
                 // get the triangle's ds index
                 int p_adj_ds_index = tg.get_triangle(*p_tri_adj_it)->get_ds_index();
+                FP_TYPE W1 = 1000.0/distance;
                 p_ds_indices.push_back(p_adj_ds_index);
-                p_ds_weights.push_back(1000.0/distance);
+                p_ds_weights.push_back(W1);
+                if (W1 > max_w)
+                    max_w = W1;
             }
+            // restrict W0 to 10*the maximum weight to prevent parent triangles that
+            // are very close to the centroid of the triangle from dominating in the
+            // removal of the field
+            if (W0 > 10*max_w)
+                W0 = 10*max_w;
+            p_ds_indices.push_back(I0);
+            p_ds_weights.push_back(W0);
+            
             // use this index over every timestep to subtract the background field
             for (int t=0; t<n_ts; t++)
             {

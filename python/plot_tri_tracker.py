@@ -77,8 +77,7 @@ def plot_mesh(sp, tg, l, tl=-1, pole_longitude=0.0, pole_latitude=90.0):
             TRI = t.get_data()
             P = [cart_to_model(TRI[0]), cart_to_model(TRI[1]), cart_to_model(TRI[2])]
             # don't draw if it goes around the date line
-            if abs(P[0][0] - P[1][0]) > 180 or abs(P[1][0] - P[2][0]) > 180 or abs(P[2][0] - P[1][0]) > 180:
-                continue
+            P = fix_tri(P)
             if pole_latitude != 90.0:
                 P = [glob2rot(P[0][0], P[0][1], pole_longitude, pole_latitude),
                      glob2rot(P[1][0], P[1][1], pole_longitude, pole_latitude),
@@ -89,6 +88,26 @@ def plot_mesh(sp, tg, l, tl=-1, pole_longitude=0.0, pole_latitude=90.0):
                     [P[0][1], P[1][1], P[2][1], P[0][1]], \
                     facecolor=fc, edgecolor=ec, lw=0.25,
                     transform=ccrs.PlateCarree())
+
+###############################################################################
+
+def fix_tri(P):
+    if abs(P[0][0] - P[1][0]) > 180.0:
+        if P[0][0] < 0.0:
+            P[0][0] += 360.0
+        else:
+            P[1][0] += 360.0
+    if abs(P[1][0] - P[2][0]) > 180:
+        if P[1][0] < 0.0:
+            P[0][0] += 360.0
+        else:
+            P[2][0] += 360.0
+    if abs(P[2][0] - P[0][0]) > 180:
+        if P[0][0] < 0.0:
+            P[0][0] += 360.0
+        else:
+            P[2][0] += 360.0
+    return P
 
 ###############################################################################
 
@@ -111,6 +130,8 @@ def plot_data(sp0, sp1, tg, ds, time_step, level, colmap=cm.RdYlBu_r, dzt=1, kee
 #   max_V = 50
 #   min_V = -50
     
+#    print min_V, max_V
+    
     if (symmetric_cb):
         if (abs(min_V) > abs(max_V)):
             max_V = abs(min_V)
@@ -127,9 +148,9 @@ def plot_data(sp0, sp1, tg, ds, time_step, level, colmap=cm.RdYlBu_r, dzt=1, kee
         # get each corner of the triangle and convert to model coordinates (lat/lon)
         TRI = t.get_data()
         P = [cart_to_model(TRI[0]), cart_to_model(TRI[1]), cart_to_model(TRI[2])]
-        # don't draw if it goes around the date line
-        if abs(P[0][0] - P[1][0]) > 180 or abs(P[1][0] - P[2][0]) > 180 or abs(P[2][0] - P[1][0]) > 180:
-            continue
+        # check and modify the triangle if it goes around the date line
+        P = fix_tri(P)
+
         if pole_latitude != 90.0:
             P = [glob2rot(P[0][0], P[0][1], pole_longitude, pole_latitude),
                  glob2rot(P[1][0], P[1][1], pole_longitude, pole_latitude),
@@ -140,7 +161,7 @@ def plot_data(sp0, sp1, tg, ds, time_step, level, colmap=cm.RdYlBu_r, dzt=1, kee
         if numpy.isnan(V):
             V = ds.get_missing_value()
         else:
-            V = int(V)
+            V = int(V)        
         
         if abs(V) >= abs(ds.get_missing_value())*0.99:
             col = "#FF0000"
@@ -471,9 +492,9 @@ def plot_track(sp, trk, t_step, pole_longitude, pole_latitude):
                 P_1 = glob2rot(c_tp.ex.lon, c_tp.ex.lat, pole_longitude, pole_latitude)
                 sp.plot(P_1[0], P_1[1], 'ko', ms=2.5, transform=ccrs.PlateCarree())
                 
-                if c_tp.frame_number == t_step:
+#                if c_tp.frame_number == t_step:
 #                    plot_geostrophic_wind(sp, c_tp.ex.steer_x, c_tp.ex.steer_y, c_tp.ex.lon, c_tp.ex.lat, pole_longitude, pole_latitude)
-                    plot_steering_search(sp, c_tp, pole_longitude, pole_latitude)
+#                    plot_steering_search(sp, c_tp, pole_longitude, pole_latitude)
 #                    plot_object_triangles(sp, tg, c_tp.ex.object_list, pole_longitude, pole_latitude)
                 if (abs(P_0[0] - P_1[0]) < 180):
                     sp.plot([P_0[0], P_1[0]], [P_0[1], P_1[1]], 'k', transform=ccrs.PlateCarree())
@@ -492,8 +513,8 @@ if __name__ == "__main__":
     time_step   = 0
     grid_level  = 0
     draw_mesh   = False
-    lat_limits  = [-90, 90]
-    lon_limits  = [-180, 180]
+    lat_limits  = [30, 90]
+    lon_limits  = [-179.5, 179.5]
     orig_mesh_file = ""
     orig_mesh_var = ""  
     wnd_file    = ""
@@ -571,6 +592,7 @@ if __name__ == "__main__":
         projection = ccrs.NorthPolarStereo()
 #        projection = ccrs.PlateCarree()
     colmap=cm.RdYlBu_r
+    mesh_grid_level = 2
     for t_step in range(time_step, time_step+n_steps):
         sp0 = plt.subplot(gs[0:6,:], projection=projection)
         if regrid_file != "":
@@ -579,7 +601,7 @@ if __name__ == "__main__":
                       symmetric_cb=True, pole_longitude=pole_longitude, pole_latitude=pole_latitude)
 
         if mesh_file != "" and draw_mesh:
-            plot_mesh(sp0, tg, grid_level, pole_longitude=pole_longitude, pole_latitude=pole_latitude)
+            plot_mesh(sp0, tg, mesh_grid_level, pole_longitude=pole_longitude, pole_latitude=pole_latitude)
 
         if wind_file != "":
             if regrid_file != "":

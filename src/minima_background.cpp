@@ -72,7 +72,6 @@ void minima_background::calculate_background_field(void)
     // get the size of the current datastore
     int n_ts = bck_field_ds->get_number_of_time_steps();
     int n_idx = bck_field_ds->get_number_of_indices();
-    
     // do we need to take a mean?
     if (bck_avg_period > 1 && n_ts >= bck_avg_period)
     {
