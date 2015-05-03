@@ -117,7 +117,7 @@ bool minima_largescale::process_data(void)
                 if (W1 > max_w)
                     max_w = W1;
             }
-            // restrict W0 to 10*the maximum weight to prevent parent triangles that
+            // restrict W0 to the maximum weight to prevent parent triangles that
             // are very close to the centroid of the triangle from dominating in the
             // removal of the field
             if (W0 > 10*max_w)
