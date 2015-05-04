@@ -68,13 +68,13 @@ bool minima_largescale::process_data(void)
     
     std::cout << "# Processing data" << std::endl;
     
-    // calculate number of levels to go up the mesh to find the large scale flow
-    int n_up = grid_level - ls_msh_lvl;
     // get the triangles at the extrema detection level
     // we only have to process this level
-    // we want to process every level, not just the grid level
-    for (int l=ls_msh_lvl; l<tg.get_max_level(); l++)
+    // we want to process every level, below the grid level
+    for (int l=grid_level; l<=tg.get_max_level(); l++)
     {
+        // calculate number of levels to go up the mesh to find the large scale flow
+        int n_up = l - ls_msh_lvl;
         std::list<QT_TRI_NODE*> tris_qn = tg.get_triangles_at_level(l);
         for (std::list<QT_TRI_NODE*>::iterator it_qt = tris_qn.begin();
              it_qt != tris_qn.end(); it_qt++)
@@ -82,12 +82,13 @@ bool minima_largescale::process_data(void)
             // get the index into the tri-grid
             indexed_force_tri_3D* TRI = (*it_qt)->get_data();
             int ds_idx = TRI->get_ds_index();
-            // get the n parent triangle by manipulating the label of the current triangle
-            long int ls_label_int = (TRI->get_label().label) % (long int)(pow(10, n_up+2));
-            LABEL ls_label = LABEL(ls_label_int, ls_msh_lvl);
+            
             // get the parent triangle
-            indexed_force_tri_3D* P_TRI = tg.get_triangle(ls_label);
-
+            QT_TRI_NODE* qt_p_node = (*it_qt);
+            for (int f=0; f<=n_up; f++)
+                qt_p_node = qt_p_node->get_parent();
+            indexed_force_tri_3D* P_TRI = qt_p_node->get_data();
+            
             // we want to do a distance weighted mean for the background value so get
             // the list of adjacent triangles for the parent triangle
             const LABEL_STORE* p_tri_adj_labels = P_TRI->get_adjacent_labels(adj_type);
@@ -97,12 +98,13 @@ bool minima_largescale::process_data(void)
             std::vector<FP_TYPE> p_ds_weights;
 
             // add the first - weight is 1000/distance
-            FP_TYPE distance = tg.distance_between_triangles(TRI->get_label(), ls_label);
+            FP_TYPE distance = tg.distance_between_triangles(TRI->get_label(), P_TRI->get_label());
             if (distance == 0.0)    // prevent a div by zero
                 distance = 1.0;
             FP_TYPE W0 = 1000.0/distance;
             int I0 = P_TRI->get_ds_index();
-            FP_TYPE max_w = -1.0;    
+            FP_TYPE max_w = -1.0; 
+            FP_TYPE min_w = 2e20; 
             // now do this for each triangle in the tri list
             for (LABEL_STORE::const_iterator p_tri_adj_it = p_tri_adj_labels->begin();
                  p_tri_adj_it != p_tri_adj_labels->end(); p_tri_adj_it++)
@@ -116,12 +118,14 @@ bool minima_largescale::process_data(void)
                 p_ds_weights.push_back(W1);
                 if (W1 > max_w)
                     max_w = W1;
+                if (W1 < min_w)
+                    min_w = W1;
             }
             // restrict W0 to the maximum weight to prevent parent triangles that
             // are very close to the centroid of the triangle from dominating in the
             // removal of the field
-            if (W0 > 10*max_w)
-                W0 = 10*max_w;
+            if (W0 > max_w)
+                W0 = max_w;
             p_ds_indices.push_back(I0);
             p_ds_weights.push_back(W0);
             
