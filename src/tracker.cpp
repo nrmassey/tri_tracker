@@ -120,7 +120,7 @@ FP_TYPE distance(track* TR, steering_extremum* EX_svex, FP_TYPE sr)
     // calculate the distance from the track to the candidate point
     steering_extremum* TR_svex = &(TR->get_last_track_point()->pt);
     FP_TYPE d = haversine(TR_svex->lon, TR_svex->lat, EX_svex->lon, EX_svex->lat, EARTH_R);
-    // check distance - normalise by search radius
+    // check distance
     return d;
 }
 
@@ -198,6 +198,12 @@ FP_TYPE overlap(track* TR, steering_extremum* EX_svex)
     // calculate the percentage (0 to 1) of the amount the object overlaps
     // in the last track point with the object of the candidate point
     steering_extremum* trk_pt = &(TR->get_last_track_point()->pt);
+    // calculate the ratio between the two overlapping objects
+    int orig_size = trk_pt->object_labels.size();
+    int cand_size = EX_svex->object_labels.size();
+    FP_TYPE ratio = FP_TYPE(orig_size) / cand_size;
+    if (ratio < 0.5 || ratio > 2.0)
+        return 0.0;
     int n_overlapping_labels = 0;
     // loop over these labels and see how many occur in the 
     for (LABEL_STORE::iterator trk_label = trk_pt->object_labels.begin();
@@ -205,11 +211,9 @@ FP_TYPE overlap(track* TR, steering_extremum* EX_svex)
     {
         if (std::find(EX_svex->object_labels.begin(), EX_svex->object_labels.end(), 
                 *trk_label) != EX_svex->object_labels.end())
-        {
             n_overlapping_labels++;
-        }
     }
-    FP_TYPE overlap = 100.0 - 100.0 * FP_TYPE(n_overlapping_labels) / trk_pt->object_labels.size();
+    FP_TYPE overlap = 100.0 - 100.0 * FP_TYPE(n_overlapping_labels) / orig_size;
     return overlap;
 }
 
@@ -278,31 +282,16 @@ int tracker::apply_rules(track* TR, steering_extremum* EX_svex, FP_TYPE& cost)
     int rules_bf = 0;
     // calculate and return the components of the cost function
     FP_TYPE distance_val = distance(TR, EX_svex, sr);
-    // apply one of three distance rules. These are adaptive constraints.
-    // 1. If the track has lasted more than 24 hours then calculate the mean displacement.
-    //    has to be within 2* mean displacement
-    // 2. Less than the steering distance (projected distance from geostrophic wind)
-    // 3. Less than the search radius
+    // apply one of two distance rules. These are adaptive constraints.
+    // 1. Less than the steering distance (projected distance from geostrophic wind)
+    // 2. Less than the search radius
     
-    // rule 1
-    if (TR->get_persistence() * hrs_per_t_step > 24)
-    {
-        FP_TYPE mean_track_length = TR->get_length() / TR->get_persistence();
-        if (mean_track_length > sr * 0.5)
-            mean_track_length = sr * 0.5;
-        if (distance_val <= mean_track_length * 2.0)
-            rules_bf |= DISTANCE;
-    }
-    // rule 2 and 3
-    else
-    {
-        FP_TYPE steering_dist = calculate_steering_distance(EX_svex, hrs_per_t_step);
-        // check for rogue steering distances
-        if (steering_dist > sr * 2)
-            steering_dist = sr * 2;
-        if (distance_val <= sr or distance_val <= steering_dist)
-            rules_bf |= DISTANCE;
-    }
+    FP_TYPE steering_dist = calculate_steering_distance(EX_svex, hrs_per_t_step);
+    // check for rogue steering distances
+    if (steering_dist > sr * 2)
+        steering_dist = sr * 2;
+    if (distance_val <= sr or distance_val <= steering_dist)
+        rules_bf |= DISTANCE;
         
     // don't do any other processing if rules_bf = 0 (i.e. out of range)
     if (rules_bf > 0)
@@ -311,10 +300,10 @@ int tracker::apply_rules(track* TR, steering_extremum* EX_svex, FP_TYPE& cost)
         {
             FP_TYPE overlap_val = overlap(TR, EX_svex);
             // more than overlap_val% overlap (note - the cost is 100 - the overlap)
-            if (overlap_val <= (100 - ov))
+            if (overlap_val >= ov)
             {
                 rules_bf |= OVERLAP;
-                cost = overlap_val;
+                cost = 100 - overlap_val;
             }
         }
         //
@@ -322,17 +311,18 @@ int tracker::apply_rules(track* TR, steering_extremum* EX_svex, FP_TYPE& cost)
         {
             // don't allow steering_val to be more than 90 degrees
             FP_TYPE steering_val = steering(TR, EX_svex, hrs_per_t_step);
-            if (steering_val < 45.0)
+            if (fabs(steering_val) < 90.0)
             {
                 rules_bf |= STEERING;
                 cost = steering_val;
             }
+                
         }
         if (TR->get_persistence() >= 2)
         {
             // don't allow tracks to move more than 90 degrees over a timestep
             FP_TYPE curvature_val = curvature(TR, EX_svex);
-            if (curvature_val < 45.0)
+            if (fabs(curvature_val) < 90.0)
             {
                 rules_bf |= CURVATURE;
                 cost = curvature_val;
@@ -367,7 +357,7 @@ int tracker::determine_track_for_candidate(steering_extremum* svex, int t)
             int add_track = apply_rules(TR, svex, cost);
             // we don't want the track to just be based on distance - although
             // it has to pass this rule first
-            if (add_track > DISTANCE)
+            if (add_track > 0)
             {
                 // is there already a candidate?
                 track_point* c_cand = c_trk->get_candidate_point();
@@ -598,16 +588,14 @@ void tracker::merge_tracks(track* forw_track, track* back_track, int c_step)
     // create the interpolated point - in the extrema list to prevent a
     // memory leak (as previous)
     steering_extremum interp_pt_pt;
-    
-    // check for wrapping around the meridian
-    FP_TYPE forw_lon = forw_pt->pt.lon;
-    FP_TYPE back_lon = back_pt->pt.lon;
-    if (forw_lon > 360.0)
-        forw_lon -= 360.0;
-    if (back_lon > 360.0)
-        back_lon -= 360.0;
-    interp_pt_pt.lon = (forw_lon + back_lon) * 0.5;
-    interp_pt_pt.lat = (forw_pt->pt.lat + back_pt->pt.lat) * 0.5;
+
+    // interpolate lat and lon by converting to Cartesian, interpolating and
+    // converting back
+    vector_3D forw_cart = model_to_cart(forw_pt->pt.lon, forw_pt->pt.lat);
+    vector_3D back_cart = model_to_cart(back_pt->pt.lon, back_pt->pt.lat);
+    vector_3D interp_cart = (forw_cart + back_cart) * 0.5;
+    cart_to_model(interp_cart, interp_pt_pt.lon, interp_pt_pt.lat);
+    // just find the averages of all the other values
     interp_pt_pt.intensity = (forw_pt->pt.intensity + back_pt->pt.intensity) * 0.5;
     interp_pt_pt.delta = (forw_pt->pt.delta + back_pt->pt.delta) * 0.5;
     interp_pt_pt.sv_u = (forw_pt->pt.sv_u + back_pt->pt.sv_u) * 0.5;
@@ -669,7 +657,7 @@ void tracker::apply_merge_tracks(void)
             FP_TYPE dist = haversine(forw_proj_pt.pt.lon, forw_proj_pt.pt.lat,
                                      back_proj_pt.pt.lon, back_proj_pt.pt.lat, EARTH_R);
             // check distance against search radius
-            if (dist < sr and back_proj_pt.timestep == forw_proj_pt.timestep)
+            if (dist < sr && back_proj_pt.timestep == forw_proj_pt.timestep)
             {
                 // check against minimum distance and use this track for merging
                 if (dist < min_dist)
@@ -679,7 +667,7 @@ void tracker::apply_merge_tracks(void)
                 }
             }
         }
-        // merge if a track was found
+         // merge if a track was found
         if (min_tr != -1)
         {
             track* back_track = tr_list.get_track(min_tr);

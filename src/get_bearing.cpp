@@ -15,44 +15,13 @@ FP_TYPE get_bearing(FP_TYPE lon1, FP_TYPE lat1, FP_TYPE lon2, FP_TYPE lat2)
     const FP_TYPE deg_to_rad = M_PI / 180.0;
     const FP_TYPE rad_to_deg = 180.0 / M_PI;
    
-	FP_TYPE nlat1 = lat1 * deg_to_rad;
-	FP_TYPE nlat2 = lat2 * deg_to_rad;
-	FP_TYPE dlon  = (lon2 - lon1) * deg_to_rad;
-	
-	FP_TYPE a = sin(dlon) * cos(nlat2);
-	FP_TYPE b = cos(nlat1) * sin(nlat2) - sin(nlat1) * cos(nlat2) * cos(dlon);
-	FP_TYPE ang = atan2(a,b);
-	ang = ang * rad_to_deg;
-	return ang;  // returned in degrees;
-}
-
-/*****************************************************************************/
-
-FP_TYPE ang_between(const vector_3D& V1, const vector_3D& V2)
-{
-	FP_TYPE mag1 = V1.mag();
-	FP_TYPE mag2 = V2.mag();
-	FP_TYPE a = 0.0;
-	if (!(mag1 == 0.0 || mag2 == 0.0))
-//		a = acos(V2.dp(V1) / (mag1 * mag2));
-	// switch to using atan2 as it has a sign associated with it
-		a = atan2(V2[1],V2[0]) - atan2(V1[1],V1[0]);
-	return a;
-}
-
-/*****************************************************************************/
-
-FP_TYPE ang_between(const vector_3D& V1, const vector_3D& V2, const vector_3D& V3)
-{
-	// measure angle between two vectors V1->V2 & V2->V3
-	vector_3D vd1 = V2 - V1;
-	vector_3D vd2 = V3 - V2;
-	FP_TYPE a = 0.0;
-	FP_TYPE mag1 = vd1.mag();
-	FP_TYPE mag2 = vd2.mag();
-	if (!(mag1 == 0.0 || mag2 == 0.0))
-//		a = acos(vd2.dp(vd1) / (mag1 * mag2));
-	// switch to using atan2 as it has a sign associated with it
-		a = atan2(vd2[1], vd2[0]) - atan2(vd1[1], vd1[0]);
-	return a;
+    FP_TYPE nlat1 = lat1 * deg_to_rad;
+    FP_TYPE nlat2 = lat2 * deg_to_rad;
+    FP_TYPE dlon  = (lon2 - lon1) * deg_to_rad;
+    
+    FP_TYPE a = sin(nlat1) * sin(nlat2) + cos(nlat1) * cos(nlat2) * cos(dlon);
+    // get the arccos and return
+    FP_TYPE ang = acos(a);
+    ang = ang * rad_to_deg;
+    return ang;  // returned in degrees;
 }

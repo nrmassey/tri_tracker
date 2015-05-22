@@ -61,6 +61,7 @@ class tri_grid
 		void build_ds_indices(void);
 		bool point_in_tri(const vector_3D* P, const force_tri_3D* T);
 		void distribute_grid_indices_to_children(QT_TRI_NODE* triangle, ncdata* nc_input_data);
+		void fill_index_holes(void);
 		
 		/***********************************************************************/
 		std::vector<QT_TRI* > triangles;

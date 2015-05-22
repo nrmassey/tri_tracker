@@ -8,7 +8,7 @@ FP_TYPE haversine(FP_TYPE lon1, FP_TYPE lat1, FP_TYPE lon2, FP_TYPE lat2, FP_TYP
 	if (lat1 == 90.0)
 		lat1 = 90.5;
 	if (lat1 == -90.0)
-		lat1 = -90.0;
+		lat1 = -90.5;
 	if (lat2 == 90.0)
 		lat2 = 90.5;
 	if (lat2 == -90.0)

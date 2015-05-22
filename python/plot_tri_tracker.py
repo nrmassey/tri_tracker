@@ -23,12 +23,6 @@ from track_list import *
 from geo_convert import *
 from conv_rot_grid import *
 
-#pole_latitude=39.25
-#pole_longitude=198.0
-
-#pole_latitude=38.0
-#pole_longitude=190.0
-
 ###############################################################################
 
 def draw_colorbar(sp1, min_V, max_V, n_ticks, colmap, format="%i", title="none", label_every=1):
@@ -78,15 +72,11 @@ def plot_mesh(sp, tg, l, tl=-1, pole_longitude=0.0, pole_latitude=90.0):
             P = [cart_to_model(TRI[0]), cart_to_model(TRI[1]), cart_to_model(TRI[2])]
             # don't draw if it goes around the date line
             P = fix_tri(P)
-            if pole_latitude != 90.0:
-                P = [glob2rot(P[0][0], P[0][1], pole_longitude, pole_latitude),
-                     glob2rot(P[1][0], P[1][1], pole_longitude, pole_latitude),
-                     glob2rot(P[2][0], P[2][1], pole_longitude, pole_latitude)]             
             fc = [1,1,1,0]
             ec = [0,0,0,0.5]
             sp.fill([P[0][0], P[1][0], P[2][0], P[0][0]], \
                     [P[0][1], P[1][1], P[2][1], P[0][1]], \
-                    facecolor=fc, edgecolor=ec, lw=0.25,
+                    facecolor=fc, edgecolor=ec, lw=0.5,
                     transform=ccrs.PlateCarree())
 
 ###############################################################################
@@ -151,10 +141,6 @@ def plot_data(sp0, sp1, tg, ds, time_step, level, colmap=cm.RdYlBu_r, dzt=1, kee
         # check and modify the triangle if it goes around the date line
         P = fix_tri(P)
 
-        if pole_latitude != 90.0:
-            P = [glob2rot(P[0][0], P[0][1], pole_longitude, pole_latitude),
-                 glob2rot(P[1][0], P[1][1], pole_longitude, pole_latitude),
-                 glob2rot(P[2][0], P[2][1], pole_longitude, pole_latitude)]
         # get the value from the datastore
         ds_idx = TRI.get_ds_index()
         V = ds[time_step, TRI.get_ds_index()]+0.5
@@ -197,12 +183,12 @@ def plot_geostrophic_wind(sp, steer_x, steer_y, lon, lat, pole_longitude=0.0, po
         circ = 2*math.pi * math.cos(math.radians(lat)) * earth_r
         P_lon = lon + steer_x * n_secs_per_tstep * 360.0 / circ
         P_lat = lat + steer_y * n_secs_per_tstep * 180.0 / lat_c
-        PG = glob2rot(P_lon, P_lat, pole_longitude, pole_latitude)
-        E = glob2rot(lon, lat, pole_longitude, pole_latitude)
+        PG = (P_lon, P_lat)
+        E = (lon, lat)
         if abs(PG[0]-E[0]) < 180.0:
             # plot arrow between the two points
             sp.arrow(E[0], E[1], PG[0]-E[0], PG[1]-E[1], head_width=0.3, 
-                     fc='r', ec='r', zorder=1,
+                     fc='r', ec='r', zorder=2,
                      transform=ccrs.PlateCarree())
 
 ###############################################################################
@@ -217,16 +203,12 @@ def plot_object_triangles(sp, tg, object_list, pole_longitude=0.0, pole_latitude
         # don't draw if it goes around the date line
         if abs(P[0][0] - P[1][0]) > 180 or abs(P[1][0] - P[2][0]) > 180 or abs(P[2][0] - P[1][0]) > 180:
             continue
-        if (pole_latitude != 90.0):
-            P = [glob2rot(P[0][0], P[0][1], pole_longitude, pole_latitude),
-                 glob2rot(P[1][0], P[1][1], pole_longitude, pole_latitude),
-                 glob2rot(P[2][0], P[2][1], pole_longitude, pole_latitude)]             
         # draw see-through triangle with black border
         fc = [1,1,1,0]
         ec = [0,0,0,1]
         sp.fill([P[0][0], P[1][0], P[2][0], P[0][0]], \
                 [P[0][1], P[1][1], P[2][1], P[0][1]], \
-                facecolor=fc, edgecolor=ec, lw=0.5, zorder=2, 
+                facecolor=fc, edgecolor=ec, lw=0.5, zorder=1, 
                 transform=ccrs.PlateCarree())
 
 ###############################################################################
@@ -251,7 +233,7 @@ def plot_extrema(sp, tg, ex, time_step, ex_num=-1, pole_longitude=0.0, pole_lati
             C = cart_to_model(TRI.centroid)
             lon = C[0]
             lat = C[1]
-        E = glob2rot(lon, lat, pole_longitude, pole_latitude)
+        E = (lon, lat)
         sp.plot(E[0], E[1],'ro', ms=2.5, mec='r', zorder=3, transform=ccrs.PlateCarree())
         plot_object_triangles(sp, tg, ex_t.object_list, pole_longitude, pole_latitude)
 #       plot_geostrophic_wind(sp, ex_t.steer_x, ex_t.steer_y, lon, lat, pole_longitude, pole_latitude)
@@ -292,10 +274,6 @@ def plot_objects(sp, tg, ds, ex, time_step, level, ex_num=-1, pole_longitude=0.0
             # don't draw if it goes around the date line
             if abs(P[0][0] - P[1][0]) > 180 or abs(P[1][0] - P[2][0]) > 180 or abs(P[2][0] - P[1][0]) > 180:
                 continue
-            if pole_latitude != 90.0:
-                P = [glob2rot(P[0][0], P[0][1], pole_longitude, pole_latitude),
-                     glob2rot(P[1][0], P[1][1], pole_longitude, pole_latitude),
-                     glob2rot(P[2][0], P[2][1], pole_longitude, pole_latitude)]             
             # fill with the color
             # get the value from the datastore
             ds_idx = TRI.get_ds_index()
@@ -452,15 +430,15 @@ def plot_steering_search(sp, c_tp, pole_longitude, pole_latitude):
     six_hrs = 6 * 60 * 60
     earth_r = 6371 * 1000
     circ = 2*math.pi * math.cos(math.radians(c_tp.ex.lat)) * earth_r
-    P_0 = glob2rot(c_tp.ex.lon, c_tp.ex.lat, pole_longitude, pole_latitude)
-
+    P_0 = (c_tp.ex.lon, c_tp.ex.lat)
+    min_d = (1000 / six_hrs)
     V = math.sqrt(c_tp.ex.steer_x**2 + c_tp.ex.steer_y**2)
-    if V * six_hrs / 1000.0 < 500:
-        R = 500 * 1000
+    if V * six_hrs / 1000.0 < min_d:
+        R = min_d * 1000
     else:
         R = V * six_hrs
-    P3_lon = c_tp.ex.lon + V * six_hrs * 360.0/circ
-    P3 = glob2rot(P3_lon, c_tp.ex.lat, pole_longitude, pole_latitude)
+    P3_lon = c_tp.ex.lon + R * 360.0/circ
+    P3 = (P3_lon, c_tp.ex.lat)
     sr = plt.Circle((P_0[0],P_0[1]),P3[0]-P_0[0],color='r', fill=False,
                     transform=ccrs.PlateCarree())
     sp.add_artist(sr)
@@ -478,26 +456,31 @@ def plot_track(sp, trk, t_step, pole_longitude, pole_latitude):
         if t_step >= fn and t_step < fn + np:
             # plot the track - first point first
             c_tp = c_trk.get_track_point(0)
-            P_0 = glob2rot(c_tp.ex.lon, c_tp.ex.lat, pole_longitude, pole_latitude)
+            P_0 = [c_tp.ex.lon, c_tp.ex.lat]
             sp.plot(P_0[0], P_0[1], 'ko', ms=2.5, transform=ccrs.PlateCarree())
 
             if c_tp.frame_number == t_step:
                 plot_geostrophic_wind(sp, c_tp.ex.steer_x, c_tp.ex.steer_y, c_tp.ex.lon, c_tp.ex.lat, pole_longitude, pole_latitude)
-#                plot_steering_search(sp, c_tp, pole_longitude, pole_latitude)
-#                plot_object_triangles(sp, tg, c_tp.ex.object_list, pole_longitude, pole_latitude)
+                plot_steering_search(sp, c_tp, pole_longitude, pole_latitude)
+                plot_object_triangles(sp, tg, c_tp.ex.object_list, pole_longitude, pole_latitude)
                 
             for tp in range(1, np):
                 # convert the 2nd point
                 c_tp = c_trk.get_track_point(tp)
-                P_1 = glob2rot(c_tp.ex.lon, c_tp.ex.lat, pole_longitude, pole_latitude)
+                P_1 = [c_tp.ex.lon, c_tp.ex.lat]
                 sp.plot(P_1[0], P_1[1], 'ko', ms=2.5, transform=ccrs.PlateCarree())
                 
-#                if c_tp.frame_number == t_step:
-#                    plot_geostrophic_wind(sp, c_tp.ex.steer_x, c_tp.ex.steer_y, c_tp.ex.lon, c_tp.ex.lat, pole_longitude, pole_latitude)
-#                    plot_steering_search(sp, c_tp, pole_longitude, pole_latitude)
-#                    plot_object_triangles(sp, tg, c_tp.ex.object_list, pole_longitude, pole_latitude)
-                if (abs(P_0[0] - P_1[0]) < 180):
-                    sp.plot([P_0[0], P_1[0]], [P_0[1], P_1[1]], 'k', transform=ccrs.PlateCarree())
+                if c_tp.frame_number == t_step:
+                    plot_geostrophic_wind(sp, c_tp.ex.steer_x, c_tp.ex.steer_y, c_tp.ex.lon, c_tp.ex.lat, pole_longitude, pole_latitude)
+                    plot_steering_search(sp, c_tp, pole_longitude, pole_latitude)
+                    plot_object_triangles(sp, tg, c_tp.ex.object_list, pole_longitude, pole_latitude)
+                if (abs(P_0[0] - P_1[0]) > 180):
+                    if P_0[0] < P_1[0]:
+                        P_1[0] += 360.0
+                    else:
+                        P_0[0] += 360.0
+
+                sp.plot([P_0[0], P_1[0]], [P_0[1], P_1[1]], 'k', transform=ccrs.PlateCarree())
                 
                 P_0 = P_1
                 
@@ -513,7 +496,7 @@ if __name__ == "__main__":
     time_step   = 0
     grid_level  = 0
     draw_mesh   = False
-    lat_limits  = [30, 90]
+    lat_limits  = [0, 90]
     lon_limits  = [-179.5, 179.5]
     orig_mesh_file = ""
     orig_mesh_var = ""  
@@ -592,13 +575,13 @@ if __name__ == "__main__":
         projection = ccrs.NorthPolarStereo()
 #        projection = ccrs.PlateCarree()
     colmap=cm.RdYlBu_r
-    mesh_grid_level = 2
+    mesh_grid_level = grid_level
     for t_step in range(time_step, time_step+n_steps):
         sp0 = plt.subplot(gs[0:6,:], projection=projection)
         if regrid_file != "":
             sp1 = plt.subplot(gs[6,1:-1])
             plot_data(sp0, sp1, tg, ds, t_step, grid_level, colmap=colmap, dzt=10, keep_scale=True,\
-                      symmetric_cb=True, pole_longitude=pole_longitude, pole_latitude=pole_latitude)
+                      symmetric_cb=False, pole_longitude=pole_longitude, pole_latitude=pole_latitude)
 
         if mesh_file != "" and draw_mesh:
             plot_mesh(sp0, tg, mesh_grid_level, pole_longitude=pole_longitude, pole_latitude=pole_latitude)

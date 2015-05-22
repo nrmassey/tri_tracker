@@ -54,6 +54,7 @@ void tri_grid::initialize(SHAPE initial_shape, ncdata* nc_input_data,
     if (max_its != 0)
         PC.equalise(max_its, get_max_level());
     build_adjacency_maps();
+    fill_index_holes();
     build_ds_indices();
     // build the metadata
     std::stringstream ss;
@@ -942,3 +943,58 @@ LABEL_STORE tri_grid::get_path(LABEL SL, LABEL EL, int level, int resolution)
     }
     return path;
 }
+
+/*****************************************************************************/
+
+void tri_grid::fill_index_holes(void)
+{
+    std::cout << "# Filling indexing holes" << std::endl;
+    // try to fill holes in the mapping of the regular grid to the triangular
+    // mesh for all the levels except level zero
+    int tgt_tris = 3;
+    for (int l=1; l<get_max_level(); l++)
+    {
+        std::list<QT_TRI_NODE*> tri_list = get_triangles_at_level(l);
+        // go through the tri list and find those triangles with no indices
+        for (std::list<QT_TRI_NODE*>::iterator it = tri_list.begin();
+             it != tri_list.end(); it++)
+        {
+            indexed_force_tri_3D* c_tri = (*it)->get_data();
+            // get length of index list and if zero do something
+            int n_sur_tris = 0;
+            if (c_tri->get_grid_indices()->size() == 0)
+            {
+                // use the edge adjacencies to fill in the missing indices
+                const LABEL_STORE* adj_map = c_tri->get_adjacent_labels(EDGE);
+                for (LABEL_STORE::const_iterator jt = adj_map->begin();
+                     jt != adj_map->end(); jt++)
+                {
+                    indexed_force_tri_3D* s_tri = get_triangle(*jt);
+                    // check that this has indices!
+                    if (s_tri->get_grid_indices()->size() != 0)
+                        n_sur_tris++;
+                }
+                if (n_sur_tris >= tgt_tris)
+                {
+                    // if the 3 surrounding triangles have indices then add the indices to
+                    // this triangle - this will produce a mean average in the regridding
+                    
+                    FP_TYPE S = 1.0/n_sur_tris;
+                    for (LABEL_STORE::const_iterator jt = adj_map->begin();
+                         jt != adj_map->end(); jt++)
+                    {
+                        indexed_force_tri_3D* s_tri = get_triangle(*jt);
+                        const std::list<grid_index>* new_grid_indices = s_tri->get_grid_indices();
+                        for (std::list<grid_index>::const_iterator kt = new_grid_indices->begin();
+                             kt != new_grid_indices->end(); kt++)
+                        {
+                            c_tri->add_index(kt->i, kt->j, kt->cart_coord, kt->W*S);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/*****************************************************************************/
