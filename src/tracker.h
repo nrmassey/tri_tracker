@@ -57,7 +57,7 @@ class tracker
 
         // the all important search function - returns a bitfield based on whether
         // the rules have been met (in a specific order)
-        int apply_rules(track* TR, steering_extremum* EX_svex, FP_TYPE& cost);
+        int apply_rules(track* TR, steering_extremum* EX_svex, FP_TYPE& cost, int& rules_bf);
         // check whether a current candidate event should be overwritten with a new one
         bool should_replace_candidate_point(track* TR, track_point* cur_cand,
                                              track_point* new_cand, FP_TYPE& cost);

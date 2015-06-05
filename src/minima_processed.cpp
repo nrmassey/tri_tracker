@@ -78,7 +78,8 @@ bool minima_processed::is_extrema(indexed_force_tri_3D* tri, int t_step)
     if (tri_val_C > min_delta)
         return false;
 
-    int n_st = 0;
+    int n_less = 0;
+    int n_equal = 0;
     // loop through all the adjacent triangles
     const LABEL_STORE* tri_adj_labels = tri->get_adjacent_labels(adj_type);
     // nearest neighbour search of all adjacent triangles for a minimum
@@ -92,16 +93,19 @@ bool minima_processed::is_extrema(indexed_force_tri_3D* tri, int t_step)
         // if it's the missing value then continue onto next one - but count it as greater than current
         if (is_mv(tri_adj_val, mv))
         {
-            n_st += 1;
+            n_equal += 1;
             continue;
         }
         FP_TYPE tri_adj_val_C = contour_data(tri_adj_val, contour_value);
         // if the middle triangle is less than or equal to this surrounding triangle
+        if (tri_val_C < tri_adj_val_C)
+            n_less += 1;
         if (tri_val_C <= tri_adj_val_C)
-            n_st += 1;
+            n_equal += 1;
     }
     int min_sur = tri_adj_labels->size();
-    return (n_st >= min_sur);
+    bool is_min = (n_less >= min_sur*0.5 && n_equal >= min_sur);
+    return is_min;
 }
 
 /******************************************************************************/

@@ -42,10 +42,13 @@ class track
         track_point* get_track_point(int idx);
         std::vector<track_point>* get_track(void);
         
-        // get length / persistence / deviation
-        FP_TYPE get_length(void);
+        // get length / persistence / deviation / sum of curvature
+        FP_TYPE get_length(int n_tsteps=-1);
         int get_persistence(void);
         FP_TYPE get_deviation(void);
+        FP_TYPE get_curvature_sum(int n_steps=-1);
+        FP_TYPE get_curvature_mean(int n_steps=-1);
+        FP_TYPE get_curvature_stddev(int n_steps=-1, FP_TYPE mean=2e20);
 
     private:
         track_point cand_pt;

@@ -69,9 +69,8 @@ bool minima_largescale::process_data(void)
     std::cout << "# Processing data" << std::endl;
     
     // get the triangles at the extrema detection level
-    // we only have to process this level
-    // we want to process every level, below the grid level
-    for (int l=grid_level; l<=tg.get_max_level(); l++)
+    // we only have to process this level and below
+    for (int l=grid_level; l<tg.get_max_level(); l++)
     {
         // calculate number of levels to go up the mesh to find the large scale flow
         int n_up = l - ls_msh_lvl;
@@ -101,7 +100,9 @@ bool minima_largescale::process_data(void)
             FP_TYPE distance = tg.distance_between_triangles(TRI->get_label(), P_TRI->get_label());
             if (distance == 0.0)    // prevent a div by zero
                 distance = 1.0;
+
             FP_TYPE W0 = 1000.0/distance;
+//            FP_TYPE W0 = 1.0;
             int I0 = P_TRI->get_ds_index();
             FP_TYPE max_w = -1.0; 
             FP_TYPE min_w = 2e20; 
@@ -114,6 +115,7 @@ bool minima_largescale::process_data(void)
                 // get the triangle's ds index
                 int p_adj_ds_index = tg.get_triangle(*p_tri_adj_it)->get_ds_index();
                 FP_TYPE W1 = 1000.0/distance;
+//                FP_TYPE W1 = 1.0;
                 p_ds_indices.push_back(p_adj_ds_index);
                 p_ds_weights.push_back(W1);
                 if (W1 > max_w)
@@ -126,6 +128,7 @@ bool minima_largescale::process_data(void)
             // removal of the field
             if (W0 > max_w)
                 W0 = max_w;
+
             p_ds_indices.push_back(I0);
             p_ds_weights.push_back(W0);
             
@@ -161,9 +164,81 @@ bool minima_largescale::process_data(void)
             }
         }
     }
+    // smooth the data
+    smooth_processed_data();
     // option to save the output - build the filename first
-    std::string out_fname = ds_fname.substr(0, ds_fname.size()-4)+"_ls.rgd";   
+    std::string out_fname = ds_fname.substr(0, ds_fname.size()-4);
+    std::stringstream ss;
+    ss << "_L" << tg.get_max_level()-1 << "_E" << grid_level << "_S" << ls_msh_lvl << "_ls.rgd";
+    out_fname += ss.str();
     data_processed->save(out_fname);
-
     return true;
+}
+
+/*****************************************************************************/
+
+void minima_largescale::smooth_processed_data(void)
+{
+    std::cout << "# Smoothing processed data.";
+    // create new smoothed data output
+    data_store* data_smooth = new data_store();
+    int n_ts = ds.get_number_of_time_steps();
+    FP_TYPE mv = ds.get_missing_value();
+    // create a new datastore
+    data_smooth->set_size(n_ts, ds.get_number_of_indices());
+    data_smooth->set_missing_value(mv);
+    // smooth all the data below the extrema detection level
+    for (int l=grid_level; l<tg.get_max_level(); l++)
+    {
+        // get all the triangles at the current level
+        std::list<QT_TRI_NODE*> tris_qn = tg.get_triangles_at_level(l);
+        for (std::list<QT_TRI_NODE*>::iterator it_qt = tris_qn.begin();
+             it_qt != tris_qn.end(); it_qt++)
+        {
+            // get the index into the datastore for this triangle
+            indexed_force_tri_3D* TRI = (*it_qt)->get_data();
+            int ds_idx = TRI->get_ds_index();
+            // get the adjacent triangles
+            const LABEL_STORE* tri_adj_labels = TRI->get_adjacent_labels(adj_type);
+            // loop over every timestep
+            for (int t=0; t<n_ts; t++)
+            {
+                // start the sum and sum of weights
+                FP_TYPE sum_V = data_processed->get_data(t, ds_idx);
+                FP_TYPE sum_W = 1.0;
+                // check for missing value
+                if (sum_V == mv)
+                {
+                    sum_V = 0.0;
+                    sum_W = 0.0;
+                }
+                // scaling for surrounding triangles
+                FP_TYPE S = 1.0/12;
+                // loop over every adjacent triangle
+                for (LABEL_STORE::const_iterator tri_adj_it = tri_adj_labels->begin();
+                     tri_adj_it != tri_adj_labels->end(); tri_adj_it++)
+                {
+                    // get the adjacent triangle, the index and the value from the processed data
+                    indexed_force_tri_3D* A_TRI = tg.get_triangle(*tri_adj_it);
+                    int ds_a_idx = A_TRI->get_ds_index();
+                    FP_TYPE V = data_processed->get_data(t, ds_a_idx);
+                    if (V != mv)
+                    {
+                        sum_V += S*V;
+                        sum_W += S;
+                    }
+                }
+                // assign the value
+                if (sum_W == 0.0)
+                    data_smooth->set_data(t, ds_idx, mv);
+                else
+                    data_smooth->set_data(t, ds_idx, sum_V/sum_W);
+            }
+        }
+    }
+    // assign the smoothed data to the processed data
+    delete data_processed;
+    data_processed = data_smooth;
+
+    std::cout << std::endl;
 }

@@ -11,7 +11,7 @@
 #include "vector_3D.h"
 
 FP_TYPE get_bearing(FP_TYPE lon1, FP_TYPE lat1, FP_TYPE lon2, FP_TYPE lat2);
-FP_TYPE ang_between(const vector_3D& V1, const vector_3D& V2);
-FP_TYPE ang_between(const vector_3D& V1, const vector_3D& V2, const vector_3D& V3);
+int get_sector(FP_TYPE b);
+FP_TYPE get_curvature(FP_TYPE lon0, FP_TYPE lat0, FP_TYPE lon1, FP_TYPE lat1, FP_TYPE lon2, FP_TYPE lat2);
 
 #endif
