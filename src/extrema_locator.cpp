@@ -392,7 +392,8 @@ void extrema_locator::calculate_steering_vector(int o, int t)
     // get the extremum first and the list of labels in the object
     steering_extremum* svex = ex_list.get(t, o);
     FP_TYPE mv = ds.get_missing_value();
-    sv->calculate_steering_vector(&tg, svex, t, mv);
+    if (svex != NULL)
+        sv->calculate_steering_vector(&tg, svex, t, mv);
 }
 
 /*****************************************************************************/

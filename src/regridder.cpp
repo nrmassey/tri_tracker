@@ -67,6 +67,7 @@ void regrid_node(QT_TRI_NODE* current_node, ncdata* nc_data, int z_level, int t,
     FP_TYPE max = -2e20;
     int n = 0;
     FP_TYPE sum_W = 0.0;
+    FP_TYPE mv = ds->get_missing_value();
     
     // loop through and recover the values from the nc_data
     for (std::list<grid_index>::const_iterator it = grid_indices->begin();
@@ -77,13 +78,16 @@ void regrid_node(QT_TRI_NODE* current_node, ncdata* nc_data, int z_level, int t,
             throw "Index out of range - incorrect grid used?";
 #endif
         FP_TYPE d = nc_data->get_data(it->i, it->j, z_level, t);
-        sum += d * it->W;
-        sum_W += it->W;
-        if (d < min)
-            min = d;
-        if (d > max)
-            max = d;
-        n ++;
+        if (d != mv)
+        {
+            sum += d * it->W;
+            sum_W += it->W;
+            if (d < min)
+                min = d;
+            if (d > max)
+                max = d;
+            n ++;
+        }
     }
         
     // complete the average - check for no data and assign mv if non

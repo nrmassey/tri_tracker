@@ -115,10 +115,10 @@ def plot_data(sp0, sp1, tg, ds, time_step, level, colmap=cm.RdYlBu_r, dzt=1, kee
         max_V = ds.max(-1, ds_list)
         min_V = ds.min(-1, ds_list)
     
-#   max_V = 1050
-#   min_V = 950
-#   max_V = 50
-#   min_V = -50
+    max_V = 1050 * 100
+    min_V = 930 * 100
+#    max_V = 50 * 100
+#    min_V = -50 * 100
     
 #    print min_V, max_V
     
@@ -130,6 +130,8 @@ def plot_data(sp0, sp1, tg, ds, time_step, level, colmap=cm.RdYlBu_r, dzt=1, kee
             
     max_V = float(int(max_V / 100))
     min_V = float(int(min_V / 100))
+    max_V = float(int(max_V))
+    min_V = float(int(min_V))
     print "Plotting data range: ", min_V, max_V
 
     # calculate the denominator in the normalising equation
@@ -150,7 +152,7 @@ def plot_data(sp0, sp1, tg, ds, time_step, level, colmap=cm.RdYlBu_r, dzt=1, kee
             V = int(V)        
         
         if abs(V) >= abs(ds.get_missing_value())*0.99:
-            col = "#FF0000"
+            col = "#FFFFFF"
         else:
             V = float(int(V/100))
             # transform between 0 and 1
@@ -572,8 +574,8 @@ if __name__ == "__main__":
     if pole_longitude != 0.0 and pole_latitude != 90.0:
         projection = ccrs.RotatedPole(pole_latitude=pole_latitude, pole_longitude=pole_longitude)
     else:
-        projection = ccrs.NorthPolarStereo()
-#        projection = ccrs.PlateCarree()
+#        projection = ccrs.NorthPolarStereo()
+        projection = ccrs.PlateCarree()
     colmap=cm.RdYlBu_r
     mesh_grid_level = grid_level
     for t_step in range(time_step, time_step+n_steps):

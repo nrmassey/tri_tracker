@@ -338,9 +338,12 @@ void tri_grid::create_shape(SHAPE initial_shape, FP_TYPE R)
 void tri_grid::assign_points_from_grid(ncdata* nc_input_data, int perim)
 {
     // relative coordinates for the 5 points of a grid box
-    const int n_gp = 5;
-    const FP_TYPE x_pts[5] = {0,-1,1,1,-1};
-    const FP_TYPE y_pts[5] = {0,-1,-1,1,1};
+/*    const int n_gp = 5;
+    const FP_TYPE x_pts[n_gp] = {0,-1,1,1,-1};
+    const FP_TYPE y_pts[n_gp] = {0,-1,-1,1,1};*/
+    const int n_gp = 1;
+    const FP_TYPE x_pts[n_gp] = {0};
+    const FP_TYPE y_pts[n_gp] = {0};
     FP_TYPE lon_d = nc_input_data->get_lon_d();
     FP_TYPE lat_d = nc_input_data->get_lat_d();
     FP_TYPE lon_s = nc_input_data->get_lon_s();
@@ -942,6 +945,76 @@ LABEL_STORE tri_grid::get_path(LABEL SL, LABEL EL, int level, int resolution)
             path.push_back(tri_label);
     }
     return path;
+}
+
+/*****************************************************************************/
+
+LABEL tri_grid::get_centroid_child_triangle(LABEL SL, int n_levels)
+{
+    // index 2 (label 3) is the central triangle always
+    // get the SL triangle
+    QT_TRI_NODE* S_TRI_N = get_triangle_node(SL);
+    QT_TRI_NODE* C_TRI_N = S_TRI_N;
+    // now get the 3rd child triangle
+    for (int l=0; l<n_levels; l++)
+    {
+        C_TRI_N = C_TRI_N->get_child(3);
+        if (C_TRI_N == NULL)
+        {
+            LABEL dummy_label;
+            return dummy_label;     // will have -1 as label
+        }
+    }
+    // return the label
+    return C_TRI_N->get_data()->get_label();
+}
+
+/*****************************************************************************/
+
+LABEL_STORE tri_grid::get_corner_child_triangles(LABEL SL, int n_levels)
+{
+    // get the child triangles that are in the corners of the larger starting
+    // triangle at n_levels below the starting triangle
+    
+    // output label store
+    LABEL_STORE out_labels;
+    
+    // get the starting triangle node
+    QT_TRI_NODE* S_TRI_N = get_triangle_node(SL);
+    
+    // repeat the algorithm for each vertex of the triangle
+    for (int v=0; v<3; v++)
+    {
+        // get the vertex
+        vector_3D C_V = S_TRI_N->get_data()->get_vertex(v);
+        // now find the child triangles with the same vertex n_levels times
+        QT_TRI_NODE* C_TRI_N = S_TRI_N;
+        for (int l=0; l<n_levels; l++)
+        {
+            // get and test the children
+            QT_TRI_NODE* Q_TRI_N;
+            int found_child = -1;
+            for (int c=0; c<4; c++)
+            {
+                Q_TRI_N = C_TRI_N->get_child(c);
+                if (Q_TRI_N == NULL)
+                    continue;
+                // get and check the vertices of the child triangle
+                for (int vc=0; vc<3; vc++)
+                {
+                    vector_3D Q_V = Q_TRI_N->get_data()->get_vertex(vc);
+                    if (Q_V == C_V)         // triangles will always share one vertex
+                        found_child = c;    // could terminate at this point
+                }
+            }
+            // go to the next child
+            if (found_child != -1)
+                C_TRI_N = C_TRI_N->get_child(found_child);
+        }
+        // add the termininating found child to the label store
+        out_labels.push_back(C_TRI_N->get_data()->get_label());
+    }
+    return out_labels;
 }
 
 /*****************************************************************************/

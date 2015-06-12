@@ -39,7 +39,7 @@ extrema_locator* create_extrema_locator(std::string method_string)
         el = new minima_locator();
     else if (method=="maxima")
         el = new maxima_locator();
-    else if (method=="minima_back")     // minima with background removal
+    else if (method=="minima_background")     // minima with background removal
         el = new minima_background();
 /*  else if (method=="minima_back_wind")
         el = new minima_back_wind();*/

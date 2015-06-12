@@ -92,6 +92,9 @@ $(TRACK_NAME): $(TRACK_OBJ) $(COMMON_OBJ) $(NETCDF_OBJ)
 #$(EVENT_SET_NAME): $(EVENT_SET_OBJ) $(COMMON_OBJ) $(NETCDF_OBJ)
 #	$(LD) $^ $(COMMON_LIBS) -o $(OUT_DIR)$@ $(LDFLAGS)
 
+test: ../obj/test.o $(COMMON_OBJ) $(NETCDF_OBJ)
+	$(LD) $^ $(COMMON_LIBS) -o $(OUT_DIR)$@ $(LD_FLAGS)
+
 clean:
 	rm -f $(OBJ_DIR)/*.o $(OUT_DIR)$(GEN_GRID_NAME) $(OUT_DIR)$(REGRID_NAME) \
           $(OUT_DIR)$(EXTREMA_NAME)  $(OUT_DIR)$(TRACK_NAME)

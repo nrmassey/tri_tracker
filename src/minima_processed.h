@@ -40,6 +40,7 @@ class minima_processed : public extrema_locator
         
         void get_min_max_values_processed(FP_TYPE& min, FP_TYPE& max, int o, int t);
         virtual bool process_data(void)=0; // pure virtual so have to inherit from the class.
+        void smooth_processed_data(int start_level=0);  // apply a smoother to the processed data
         virtual void refine_extrema(void);
         void trim_objects(void);
 

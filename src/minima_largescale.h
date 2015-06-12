@@ -28,7 +28,7 @@ class minima_largescale : public minima_processed
         /*********************************************************************/
         
         bool process_data(void);
-        void smooth_processed_data(void);
+        void create_smoothed_largescale(void);
 
         /*********************************************************************/
         

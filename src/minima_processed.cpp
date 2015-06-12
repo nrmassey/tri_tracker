@@ -79,7 +79,6 @@ bool minima_processed::is_extrema(indexed_force_tri_3D* tri, int t_step)
         return false;
 
     int n_less = 0;
-    int n_equal = 0;
     // loop through all the adjacent triangles
     const LABEL_STORE* tri_adj_labels = tri->get_adjacent_labels(adj_type);
     // nearest neighbour search of all adjacent triangles for a minimum
@@ -93,18 +92,16 @@ bool minima_processed::is_extrema(indexed_force_tri_3D* tri, int t_step)
         // if it's the missing value then continue onto next one - but count it as greater than current
         if (is_mv(tri_adj_val, mv))
         {
-            n_equal += 1;
+            n_less += 1;
             continue;
         }
         FP_TYPE tri_adj_val_C = contour_data(tri_adj_val, contour_value);
         // if the middle triangle is less than or equal to this surrounding triangle
-        if (tri_val_C < tri_adj_val_C)
-            n_less += 1;
         if (tri_val_C <= tri_adj_val_C)
-            n_equal += 1;
+            n_less += 1;
     }
     int min_sur = tri_adj_labels->size();
-    bool is_min = (n_less >= min_sur*0.5 && n_equal >= min_sur);
+    bool is_min = (n_less >= min_sur);
     return is_min;
 }
 
@@ -292,6 +289,11 @@ void minima_processed::trim_objects(void)
     FP_TYPE sum_o = 0.0;
     // get the surface area of a triangle
     steering_extremum* svex = ex_list.get(0, 0);
+    if (svex == NULL)
+    {
+        std::cout << std::endl;
+        return;
+    }
     indexed_force_tri_3D* c_tri = tg.get_triangle(svex->object_labels[0]);
     FP_TYPE surf_A = c_tri->surface_area();
     
@@ -319,4 +321,70 @@ void minima_processed::trim_objects(void)
     }
     std::cout << " Number of objects: " << sum_o << " ";
     std::cout << std::endl;
+}
+
+/*****************************************************************************/
+
+void minima_processed::smooth_processed_data(int start_level)
+{
+    std::cout << "# Smoothing processed data." << std::endl;
+    // create new smoothed data output
+    data_store* data_smooth = new data_store();
+    int n_ts = ds.get_number_of_time_steps();
+    FP_TYPE mv = ds.get_missing_value();
+    // create a new datastore
+    data_smooth->set_size(n_ts, ds.get_number_of_indices());
+    data_smooth->set_missing_value(mv);
+    // smooth all the data below the extrema detection level
+    for (int l=start_level; l<tg.get_max_level(); l++)
+    {
+        // get all the triangles at the current level
+        std::list<QT_TRI_NODE*> tris_qn = tg.get_triangles_at_level(l);
+        for (std::list<QT_TRI_NODE*>::iterator it_qt = tris_qn.begin();
+             it_qt != tris_qn.end(); it_qt++)
+        {
+            // get the index into the datastore for this triangle
+            indexed_force_tri_3D* TRI = (*it_qt)->get_data();
+            int ds_idx = TRI->get_ds_index();
+            // get the adjacent triangles
+            const LABEL_STORE* tri_adj_labels = TRI->get_adjacent_labels(adj_type);
+            // loop over every timestep
+            for (int t=0; t<n_ts; t++)
+            {
+                // start the sum and sum of weights
+                FP_TYPE sum_V = data_processed->get_data(t, ds_idx);
+                FP_TYPE sum_W = 1.0;
+                // check for missing value
+                if (sum_V == mv)
+                {
+                    sum_V = 0.0;
+                    sum_W = 0.0;
+                }
+                // scaling for surrounding triangles
+                FP_TYPE S = 1.0/12;
+                // loop over every adjacent triangle
+                for (LABEL_STORE::const_iterator tri_adj_it = tri_adj_labels->begin();
+                     tri_adj_it != tri_adj_labels->end(); tri_adj_it++)
+                {
+                    // get the adjacent triangle, the index and the value from the processed data
+                    indexed_force_tri_3D* A_TRI = tg.get_triangle(*tri_adj_it);
+                    int ds_a_idx = A_TRI->get_ds_index();
+                    FP_TYPE V = data_processed->get_data(t, ds_a_idx);
+                    if (V != mv)
+                    {
+                        sum_V += S*V;
+                        sum_W += S;
+                    }
+                }
+                // assign the value
+                if (sum_W == 0.0)
+                    data_smooth->set_data(t, ds_idx, mv);
+                else
+                    data_smooth->set_data(t, ds_idx, sum_V/sum_W);
+            }
+        }
+    }
+    // assign the smoothed data to the processed data
+    delete data_processed;
+    data_processed = data_smooth;
 }
