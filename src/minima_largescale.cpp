@@ -12,6 +12,7 @@
 #include <sstream>
 #include <math.h>
 #include <vector>
+#include "geo_convert.h"
 
 /******************************************************************************/
 
@@ -61,112 +62,176 @@ bool minima_largescale::process_data(void)
 {
     // get the information for the current datastore
     int n_ts = ds.get_number_of_time_steps();
+    int n_idxs = ds.get_number_of_indices();
     FP_TYPE mv = ds.get_missing_value();
+    
     // create a new datastore
-    data_processed->set_size(n_ts, ds.get_number_of_indices());
+    data_processed->set_size(n_ts, n_idxs);
     data_processed->set_missing_value(mv);
     
-    std::cout << "# Processing data." << std::endl;
-    
-    // get the triangles at the extrema detection level
-    // we only have to process this level and below
-/*    for (int l=grid_level; l<tg.get_max_level(); l++)
+    std::cout << "# Processing data" << std::endl;
+    // create the smoothed largescale data
+    data_store* data_smooth = create_smoothed_largescale();
+    // now subtract the smoothed largescale data from the input data
+    for (int t=0; t<n_ts; t++)
     {
-        // calculate number of levels to go up the mesh to find the large scale flow
-        int n_up = l - ls_msh_lvl;
-        std::list<QT_TRI_NODE*> tris_qn = tg.get_triangles_at_level(l);
-        for (std::list<QT_TRI_NODE*>::iterator it_qt = tris_qn.begin();
-             it_qt != tris_qn.end(); it_qt++)
+        for (int d=0; d<n_idxs; d++)
         {
-            // get the index into the tri-grid
-            indexed_force_tri_3D* TRI = (*it_qt)->get_data();
-            int ds_idx = TRI->get_ds_index();
-            
-            // get the parent triangle
-            QT_TRI_NODE* qt_p_node = (*it_qt);
-            for (int f=0; f<=n_up; f++)
-                qt_p_node = qt_p_node->get_parent();
-            indexed_force_tri_3D* P_TRI = qt_p_node->get_data();
-            
-            // we want to do a distance weighted mean for the background value so get
-            // the list of adjacent triangles for the parent triangle
-            const LABEL_STORE* p_tri_adj_labels = P_TRI->get_adjacent_labels(adj_type);
-
-            // two lists, one of indices and one of weights
-            std::vector<int> p_ds_indices;
-            std::vector<FP_TYPE> p_ds_weights;
-
-            // add the first - weight is 1000/distance
-            FP_TYPE distance = tg.distance_between_triangles(TRI->get_label(), P_TRI->get_label());
-            FP_TYPE D = 1000.0;
-            if (distance < 1000.0)    // prevent a div by zero or over weighting
-                distance = 1000.0;
-            FP_TYPE W0 = D/(distance);
-            int I0 = P_TRI->get_ds_index();
-            p_ds_indices.push_back(I0);
-            p_ds_weights.push_back(W0);
-
-            // now do this for each triangle in the tri list
-            for (LABEL_STORE::const_iterator p_tri_adj_it = p_tri_adj_labels->begin();
-                 p_tri_adj_it != p_tri_adj_labels->end(); p_tri_adj_it++)
-            {
-                // get the distance
-                distance = tg.distance_between_triangles(TRI->get_label(), *p_tri_adj_it);
-                // get the triangle's ds index
-                int p_adj_ds_index = tg.get_triangle(*p_tri_adj_it)->get_ds_index();
-                FP_TYPE W1 = D/(distance);
-                p_ds_indices.push_back(p_adj_ds_index);
-                p_ds_weights.push_back(W1);
-            }
-
-             
-            // use this index over every timestep to subtract the background field
-            for (int t=0; t<n_ts; t++)
-            {
-                // get the extrema level value
-                FP_TYPE dV = ds.get_data(t, ds_idx);
-                // default to missing
-                FP_TYPE V = mv;
-                // if not missing
-                if (is_mv(dV, mv))
-                    continue;
-                // otherwise do the weighted sum of the parent triangle values
-                // get the parent value
-                FP_TYPE sum_pV = 0.0;
-                FP_TYPE sum_w = 0.0;
-                for (int c=0; c<p_ds_indices.size(); c++)
-                {
-                    FP_TYPE pV = ds.get_data(t, p_ds_indices[c]);
-                    FP_TYPE W = p_ds_weights[c];
-                    if (!is_mv(pV, mv))
-                    {
-                        sum_pV += pV * W;
-                        sum_w += W;
-                    }
-                }
-                if (sum_w > 0)
-                    V =  dV - sum_pV / sum_w;
-                else
-                    V = mv;
-                data_processed->set_data(t, ds_idx, V);
-            }
+            // subtract the foreground (actual) data from the background (smoothed largescale)
+            FP_TYPE fV = ds.get_data(t,d);
+            FP_TYPE bV = data_smooth->get_data(t,d);
+            FP_TYPE V = fV - bV;
+            // set the data in the data processed data_store
+            data_processed->set_data(t,d,V);
         }
     }
-    // smooth the data
-    smooth_processed_data(grid_level);*/
-    create_smoothed_largescale();
+//    smooth_processed_data(ls_msh_lvl);
     // option to save the output - build the filename first
     std::string out_fname = ds_fname.substr(0, ds_fname.size()-4);
     std::stringstream ss;
+    ss << "_L" << tg.get_max_level()-1 << "_E" << grid_level << "_S" << ls_msh_lvl << "_ls_del.rgd";
+    data_processed->save(out_fname+ss.str());
+    ss.str("");
     ss << "_L" << tg.get_max_level()-1 << "_E" << grid_level << "_S" << ls_msh_lvl << "_ls.rgd";
-    out_fname += ss.str();
-    data_processed->save(out_fname);
+    data_smooth->save(out_fname+ss.str());
+    // clear the smoothed data
+    delete data_smooth;
     return true;
 }
 
 /******************************************************************************/
 
-void minima_largescale::create_smoothed_largescale(void)
+int triangles_share_points(force_tri_3D* tri_a, force_tri_3D* tri_b)
+{
+    // record how many points the two triangles share.  NB - these triangles can
+    // be at different levels in the mesh.
+    int n_shared_pts = 0;
+    // loop through each point in triangle A
+    for (int i=0; i<3; i++)
+        // loop through each point in triangle B
+        for (int j=0; j<3; j++)
+        {
+            // note - it is sufficient to check that they share an index into
+            // the point cloud, due to the method of subdividing the grid
+            if ((*tri_a)[i] == (*tri_b)[j])
+                n_shared_pts++;
+        }
+        
+    // matching points will be detected twice
+    return n_shared_pts;
+}
+
+/******************************************************************************/
+
+void smooth_single_triangle(tri_grid* tg, QT_TRI_NODE* tri_qn, data_store* data_smooth)
+{
+    // get all the adjacent triangles
+    const LABEL_STORE* adj_labs = tri_qn->get_data()->get_adjacent_labels(POINT);
+    FP_TYPE mv = data_smooth->get_missing_value();
+    // for each child triangle, except the centroid
+    for (int c=0; c<3; c++)
+    {
+        // get the child triangle node
+        QT_TRI_NODE* child_qn = tri_qn->get_child(c);
+        // check that it is not NULL
+        if (child_qn == NULL)
+            continue;
+        indexed_force_tri_3D* child_tri = child_qn->get_data();
+        // now build a list of indices into the data store where the adjacent
+        // triangles at the tri_qn level share a point with the triangle at
+        // the child_qn level
+        std::vector<int> ds_indices;        // storage for ds indices
+        
+        for (LABEL_STORE::const_iterator it_adj_labs = adj_labs->begin();
+             it_adj_labs != adj_labs->end(); it_adj_labs++)
+        {
+            // get the triangle from the tri grid
+            indexed_force_tri_3D* adj_tri = tg->get_triangle(*it_adj_labs);
+            // check for NULL triangle
+            if (adj_tri == NULL)
+                continue;
+            // check if they share a vertex
+            if (triangles_share_points(child_tri, adj_tri) > 0)
+                // if they do then add this adjacent triangle at the level above 
+                // this child triangle to the list of ds indices
+                ds_indices.push_back(adj_tri->get_ds_index());
+        }
+        // also add the current triangles ds index
+        ds_indices.push_back(tri_qn->get_data()->get_ds_index());
+        
+        // now loop over each timestep and do the averaging into the child
+        // triangle ds index
+        int child_ds_index = child_tri->get_ds_index();
+        int n_ds = ds_indices.size();
+        for (int t=0; t<data_smooth->get_number_of_time_steps(); t++)
+        {
+            // do the averaging by looping over each ds index
+            FP_TYPE sum = 0.0;
+            int N = 0;
+            // check first that there are ds_indices to loop over
+            if (n_ds == 0)
+                data_smooth->set_data(t, child_ds_index, mv);
+            else
+            {
+                for (int d=0; d<n_ds; d++)
+                {
+                    FP_TYPE V = data_smooth->get_data(t, ds_indices[d]);
+                    if (V != mv)
+                    {
+                        sum += V;
+                        N += 1;
+                    }
+                }
+                if (N > 0)
+                    data_smooth->set_data(t, child_ds_index, sum / N);
+                else
+                    data_smooth->set_data(t, child_ds_index, mv);
+            }
+        }
+    }
+    // now assign the centroid to have just the value of the mean of the
+    // 3 triangles above and the value of the parent triangle
+    QT_TRI_NODE* child_qn = tri_qn->get_child(3);
+    if (child_qn != NULL)
+    {
+        // get a list of the ds indices
+        std::vector<int> ds_indices;
+        for (int c=0; c<3; c++)
+        {
+            // get the child triangle node
+            QT_TRI_NODE* child_adj_qn = tri_qn->get_child(c);
+            if (child_adj_qn != NULL)
+            {
+                ds_indices.push_back(child_adj_qn->get_data()->get_ds_index());
+            }
+        }
+        // add the parent triangle
+        ds_indices.push_back(tri_qn->get_data()->get_ds_index());
+
+        for (int t=0; t<data_smooth->get_number_of_time_steps(); t++)
+        {
+            FP_TYPE sum_tris = 0.0;
+            int N = 0;
+            for (int d=0; d<ds_indices.size(); d++)
+            {
+                FP_TYPE V = data_smooth->get_data(t, ds_indices[d]);
+                if (V != mv)
+                {
+                    sum_tris += V;
+                    N += 1;
+                }
+            }
+            if (N > 0)
+                data_smooth->set_data(t, child_qn->get_data()->get_ds_index(), sum_tris / N);
+            else
+                data_smooth->set_data(t, child_qn->get_data()->get_ds_index(), mv);
+        }
+    }
+}
+
+/******************************************************************************/
+
+data_store* minima_largescale::create_smoothed_largescale(void)
 {
     // create the largescale background field by smoothing the field at 
     // level e-nup to levels l, where e is the level to detect extrema at,
@@ -175,106 +240,20 @@ void minima_largescale::create_smoothed_largescale(void)
     
     // create new smoothed data output
     data_store* data_smooth = new data_store();
-    int n_ts = ds.get_number_of_time_steps();
-    FP_TYPE mv = ds.get_missing_value();
-    // create a new datastore
-    data_smooth->set_size(n_ts, ds.get_number_of_indices());
-    data_smooth->set_missing_value(mv);
-    
-    // get and loop through the triangles at the large scale flow level
-    std::list<QT_TRI_NODE*> tris_qn = tg.get_triangles_at_level(ls_msh_lvl);
-    for (std::list<QT_TRI_NODE*>::iterator it_qt = tris_qn.begin();
-         it_qt != tris_qn.end(); it_qt++)
+    // copy the data from the non-processed datastore to the smoothed datastore
+    data_smooth->copy(ds);
+
+    // loop through each level from the large scale level to the max_level
+    for (int l = ls_msh_lvl; l < tg.get_max_level(); l++)
     {
-        LABEL SL = (*it_qt)->get_data()->get_label();
-        // get the corner triangles at one level below
-        LABEL_STORE corner_tris = tg.get_corner_child_triangles(SL, 1);
-        // for each triangle, get the adjacent triangles to the corner tris
-        for (int cti=0; cti<corner_tris.size(); cti++)
+        // get all the triangles at this level
+        std::list<QT_TRI_NODE*> tl = tg.get_triangles_at_level(l);
+        // loop over all of these triangles
+        for (std::list<QT_TRI_NODE*>::iterator it_tl = tl.begin(); it_tl != tl.end(); it_tl++)
         {
-            // get the starting label
-            LABEL CL = corner_tris[cti];
-            const LABEL_STORE* adj_corner_tris = tg.get_triangle(CL)->get_adjacent_labels(POINT);
-            // now get the parents of these adjacent corner triangles.  Only add each parent once
-            // this builds a list of triangles at the large scale flow level which surround the 
-            // corner of the triangle.  Build these as ds indices and weights
-            std::vector<int> ds_indices;
-            std::vector<FP_TYPE> ds_weights;
-            // add the first index with weight of 2 (twice as much as the surrounding ones
-            indexed_force_tri_3D* C_TRI = tg.get_triangle(CL);
-            ds_indices.push_back(C_TRI->get_ds_index());
-            ds_weights.push_back(2.0);
-            
-            for (LABEL_STORE::const_iterator it_adj_corner_tris  = adj_corner_tris->begin();
-                                             it_adj_corner_tris != adj_corner_tris->end();
-                                             it_adj_corner_tris++)
-            {
-                // get the parent of the corner triangles
-                indexed_force_tri_3D* p_adj_corner_tri = tg.get_triangle_node(CL)->get_parent()->get_data();
-                // get the ds index label
-                int ds_idx_adj_CT = p_adj_corner_tri->get_ds_index();
-                // add if not already added
-                if (std::find(ds_indices.begin(), ds_indices.end(), ds_idx_adj_CT) == ds_indices.end())
-                {
-                    ds_indices.push_back(ds_idx_adj_CT);
-                    ds_weights.push_back(1.0);
-                }
-            }
-            // we now have a list of indices and weights that we can use, through time and the mesh
-            // levels to assign the large scale flow value to the corner triangles at higher resolutions
-            // loop over the time
-            // propagate this value down the mesh
-            for (int l=1; l<=tg.get_max_level()-ls_msh_lvl; l++) // number of levels to descend
-            {
-                // get the corner tris
-                LABEL_STORE child_corner_tris = tg.get_corner_child_triangles(SL, l);
-                // get the corner tri that corresponds to the current corner we are in
-                LABEL child_corner_tri = child_corner_tris[cti];
-                // get the ds index
-                int ds_idx = tg.get_triangle(child_corner_tri)->get_ds_index();
-                for (int t=0; t<ds.get_number_of_time_steps(); t++)
-                {
-                    // calculate the triangle value
-                    FP_TYPE sum_V = 0.0;
-                    FP_TYPE sum_W = 0.0;
-                    // weighted sum of surrounding triangles
-                    for (int v=0; v<ds_indices.size(); v++)
-                    {
-                        FP_TYPE V1 = ds.get_data(t, ds_indices[v]);
-                        if (V1 != mv)
-                        {
-                            sum_V += V1 * ds_weights[v];
-                            sum_W += ds_weights[v];
-                        }
-                    }
-                    FP_TYPE V = sum_V / sum_W;
-                    // set the value
-                    if (sum_W != 0.0)
-                        data_smooth->set_data(t, ds_idx, V);
-                }
-            }
-        }
-        // now add the value for the centroid - this is just the value of the large scale triangle
-        // need the ds index
-        int SL_ds_idx = tg.get_triangle(SL)->get_ds_index();
-        // propagate the value down the mesh
-        for (int l=1; l<tg.get_max_level()-ls_msh_lvl; l++) // number of levels to descend
-        {
-            LABEL child_centroid_tri = tg.get_centroid_child_triangle(SL, l);
-            if (child_centroid_tri.label != -1)
-            {
-                // get the index
-                int ds_idx = tg.get_triangle(child_centroid_tri)->get_ds_index();
-                for (int t=0; t<ds.get_number_of_time_steps(); t++)
-                {
-                    // get the value
-                    FP_TYPE V = ds.get_data(t, SL_ds_idx);
-                    // set the value
-                    data_smooth->set_data(t, ds_idx, V);
-                }
-            }
+            // smooth this triangle
+            smooth_single_triangle(&tg, *it_tl, data_smooth);
         }
     }
-    delete data_processed;
-    data_processed = data_smooth;
+    return data_smooth;
 }
