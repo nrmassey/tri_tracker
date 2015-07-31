@@ -42,11 +42,6 @@ class tri_grid
         LABEL get_triangle_for_point(vector_3D* P, int level);
         // get the distance between two triangles in the tri-grid
         FP_TYPE distance_between_triangles(LABEL SL, LABEL EL);
-        // get the centroid triangle at a level (end) descended from another level (start)
-        LABEL get_centroid_child_triangle(LABEL SL, int n_levels);
-        // get the list of triangles at the corners of the parent triangle that are 
-        // n_levels descended from the parent triangle
-        LABEL_STORE get_corner_child_triangles(LABEL SL, int n_levels);
         // get the metadata
         META_DATA_TYPE* get_meta_data(void);
         // input / output functions
