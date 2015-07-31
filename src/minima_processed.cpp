@@ -169,7 +169,7 @@ bool minima_processed::is_in_object(indexed_force_tri_3D* O_TRI,
     // less than 1000km radius
     is_in &= tg.distance_between_triangles(O_TRI->get_label(), C_TRI->get_label())/1000.0 < 1000.0;
     // within one contour
-    is_in &= cl_v < ol_v_C + contour_value;
+    is_in &= cl_v <= ol_v_C;
     
     return is_in;
 }
@@ -315,7 +315,9 @@ void minima_processed::trim_objects(void)
             // remove those with a surface area > 5,000km^2
             if (ex_list.get(t, o1)->object_labels.size()*surf_A > (5000)*(5000))
                 ex_list.get(t, o1)->object_labels.clear();// delete!
-
+            // remove those with less than four triangles
+            if (ex_list.get(t, o1)->object_labels.size() < 4)
+                ex_list.get(t, o1)->object_labels.clear();// delete!
         }
         tstep_out_end(t);   
     }
