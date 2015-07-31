@@ -102,25 +102,22 @@ def fix_tri(P):
 ###############################################################################
 
 def plot_data(sp0, sp1, tg, ds, time_step, level, colmap=cm.RdYlBu_r, dzt=1, keep_scale=False,\
-              symmetric_cb=True, pole_longitude=0.0, pole_latitude=90.0):
+              symmetric_cb=True, pole_longitude=0.0, pole_latitude=90.0, plot_min=-1e20, plot_max=1e20):
     # plot the mesh and the values on the mesh
     # get the triangles first
     tri_list = tg.get_triangles_at_level(level)
     ds_list = tg.get_ds_indices_at_level(level)
     # see if we should keep the same scale between timesteps
-    if not keep_scale:
-        max_V = ds.max(time_step, ds_list)
-        min_V = ds.min(time_step, ds_list)
+    if (plot_min == -1e20 and plot_max == 1e20):
+        if not keep_scale:
+            max_V = ds.max(time_step, ds_list)
+            min_V = ds.min(time_step, ds_list)
+        else:
+            max_V = ds.max(-1, ds_list)
+            min_V = ds.min(-1, ds_list)
     else:
-        max_V = ds.max(-1, ds_list)
-        min_V = ds.min(-1, ds_list)
-    
-    max_V = 1050 * 100
-    min_V = 930 * 100
-#    max_V = 50 * 100
-#    min_V = -50 * 100
-    
-#    print min_V, max_V
+        max_V = plot_max
+        min_V = plot_min
     
     if (symmetric_cb):
         if (abs(min_V) > abs(max_V)):
@@ -506,14 +503,17 @@ if __name__ == "__main__":
     n_steps     = 1
     pole_latitude = 90.0
     pole_longitude = 0.0
+    plot_min = -1e20
+    plot_max = 1e20
     
-    opts, args = getopt.getopt(sys.argv[1:], 'm:o:r:t:s:e:l:f:x:y:n:g:w:p:q:d', 
+    opts, args = getopt.getopt(sys.argv[1:], 'm:o:r:t:s:e:l:f:x:y:n:g:w:p:q:1:2:d', 
                                ['mesh_file=', 'out_name=', 'regrid_file=', 't_step=', 'n_steps',
                                 'extrema_file=', 'level=', 'track_file=', 'draw_mesh',
                                 'lat_limits=', 'lon_limits=', 'extrema_num=',
                                 'orig_file=', 'orig_var=',                          
                                 'wind_file=',
-                                'pole_lon=', 'pole_lat='])
+                                'pole_lon=', 'pole_lat=',
+                                'plot_max=', 'plot_min='])
 
     for opt, val in opts:
         if opt in ['--mesh_file',   '-m']:
@@ -552,6 +552,10 @@ if __name__ == "__main__":
             pole_longitude = float(val)
         if opt in ['--pole_lat',  '-q']:
             pole_latitude = float(val)
+        if opt in ['--plot_min', '-1']:
+            plot_min = float(val)
+        if opt in ['--plot_max', '-2']:
+            plot_max = float(val)
 
     # load each part in
     tg = load_mesh_file(mesh_file)
@@ -577,13 +581,14 @@ if __name__ == "__main__":
 #        projection = ccrs.NorthPolarStereo()
         projection = ccrs.PlateCarree()
     colmap=cm.RdYlBu_r
-    mesh_grid_level = grid_level
+    mesh_grid_level = 3#grid_level
     for t_step in range(time_step, time_step+n_steps):
         sp0 = plt.subplot(gs[0:6,:], projection=projection)
         if regrid_file != "":
             sp1 = plt.subplot(gs[6,1:-1])
-            plot_data(sp0, sp1, tg, ds, t_step, grid_level, colmap=colmap, dzt=10, keep_scale=True,\
-                      symmetric_cb=False, pole_longitude=pole_longitude, pole_latitude=pole_latitude)
+            plot_data(sp0, sp1, tg, ds, t_step, grid_level, colmap=colmap, dzt=1, keep_scale=True,\
+                      symmetric_cb=False, pole_longitude=pole_longitude, pole_latitude=pole_latitude,
+                      plot_min=plot_min, plot_max=plot_max)
 
         if mesh_file != "" and draw_mesh:
             plot_mesh(sp0, tg, mesh_grid_level, pole_longitude=pole_longitude, pole_latitude=pole_latitude)
