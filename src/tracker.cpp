@@ -108,16 +108,6 @@ void tracker::build_first_frame(void)
 
 /*****************************************************************************/
 
-FP_TYPE calculate_steering_distance(steering_extremum* EX_svex, FP_TYPE hrs_ts)
-{
-    // calculate the distance covered in hrs per t_step from the steering term
-    FP_TYPE V = sqrt(EX_svex->sv_u*EX_svex->sv_u + EX_svex->sv_v*EX_svex->sv_v);
-    FP_TYPE D = V * hrs_ts*60.0*60.0;   // convert hrs_ts to seconds_ts
-    return D;
-}
-
-/*****************************************************************************/
-
 FP_TYPE distance(track* TR, steering_extremum* EX_svex, FP_TYPE sr)
 {
     // calculate the distance from the track to the candidate point
@@ -303,22 +293,18 @@ int tracker::apply_rules(track* TR, steering_extremum* EX_svex, FP_TYPE& cost, i
     rules_bf = 0;
     // calculate and return the components of the cost function
     FP_TYPE distance_val = distance(TR, EX_svex, sr);
-    // apply one of two distance rules. These are adaptive constraints.
-    // 1. Less than the steering distance (projected distance from geostrophic wind)
-    // 2. Less than the search radius
+    
+    // Apply distance rule
+    // 1. Less than the search radius
 
-    FP_TYPE steering_dist = calculate_steering_distance(EX_svex, hrs_per_t_step);
-    // check for rogue steering distances
-    if (steering_dist > sr * 2)
-        steering_dist = sr * 2;
-    if (distance_val <= sr or distance_val <= steering_dist)
+    if (distance_val <= sr)
         rules_bf = DISTANCE;
     
     // don't do any other processing if rules_bf = 0 (i.e. out of range)
     if (rules_bf > 0)
     {
-        // overlap only allowed for first few timesteps
-        if (TR->get_persistence() >= 1 && distance_val <= 100*1e3)
+        // overlap only allowed after first timestep
+        if (TR->get_persistence() >= 1)
         {
             FP_TYPE overlap_val = overlap(TR, EX_svex);
             // more than overlap_val% overlap (note - the cost is 100 - the overlap)
@@ -330,7 +316,7 @@ int tracker::apply_rules(track* TR, steering_extremum* EX_svex, FP_TYPE& cost, i
         }
         if (TR->get_persistence() >= 1 && EX_svex->sv_u != mv)
         {
-            // don't allow steering_val to be more than 45 degrees
+            // don't allow steering_val to be more than 90 degrees
             FP_TYPE steering_val = steering(TR, EX_svex, hrs_per_t_step);
             if (steering_val < MAX_GEOWIND)
             {
@@ -341,7 +327,7 @@ int tracker::apply_rules(track* TR, steering_extremum* EX_svex, FP_TYPE& cost, i
         }
         if (TR->get_persistence() >= 2)
         {
-            // don't allow tracks to move more than 45 degrees over a timestep
+            // don't allow tracks to move more than 90 degrees over a timestep
             FP_TYPE curvature_val = curvature(TR, EX_svex);
             if (curvature_val < MAX_CURVATURE)
             {

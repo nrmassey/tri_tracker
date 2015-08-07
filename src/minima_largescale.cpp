@@ -43,7 +43,7 @@ void minima_largescale::parse_arg_string(std::string method_string)
         throw(std::string("minima_largescale parameters = (mesh level of large scale features, contour value, min delta)"));
     
     std::stringstream stream(method_string.substr(c_pos, e_pos-c_pos));
-    stream >> ls_msh_lvl >> dummy >> contour_value >> dummy >> min_delta ;    // dummy reads the comma
+    stream >> ls_msh_lvl >> dummy >> contour_value >> dummy >> min_delta;    // dummy reads the comma
     
     // add to the metadata
     std::stringstream ss;
@@ -53,7 +53,7 @@ void minima_largescale::parse_arg_string(std::string method_string)
     ss.str(""); ss << contour_value;
     meta_data["contour_value"] = ss.str();
     ss.str(""); ss << min_delta;
-    meta_data["minimum_delta"] = ss.str();
+    meta_data["min_delta"] = ss.str();
 }
 
 /******************************************************************************/
@@ -85,17 +85,22 @@ bool minima_largescale::process_data(void)
             data_processed->set_data(t,d,V);
         }
     }
-//    smooth_processed_data(ls_msh_lvl);
     // option to save the output - build the filename first
     std::string out_fname = ds_fname.substr(0, ds_fname.size()-4);
     std::stringstream ss;
-    ss << "_L" << tg.get_max_level()-1 << "_E" << grid_level << "_S" << ls_msh_lvl << "_ls_del.rgd";
+    // large scale field subtracted from data at extrema location level
+    ss << "_L" << tg.get_max_level()-1 << "_E" << extrema_level << "_S" << ls_msh_lvl << "_ls_del.rgd";
     data_processed->save(out_fname+ss.str());
+    // just the smoothed large scale / background field
     ss.str("");
-    ss << "_L" << tg.get_max_level()-1 << "_E" << grid_level << "_S" << ls_msh_lvl << "_ls.rgd";
+    ss << "_L" << tg.get_max_level()-1 << "_E" << extrema_level << "_S" << ls_msh_lvl << "_ls.rgd";
     data_smooth->save(out_fname+ss.str());
+    
     // clear the smoothed data
     delete data_smooth;
+    
+    // smooth the processed data below the large scale mesh level
+    smooth_processed_data(ls_msh_lvl+1);
     return true;
 }
 
@@ -125,6 +130,8 @@ int triangles_share_points(force_tri_3D* tri_a, force_tri_3D* tri_b)
 
 void smooth_single_triangle(tri_grid* tg, QT_TRI_NODE* tri_qn, data_store* data_smooth)
 {
+    // debug option - whether we should smooth or just copy the triangle value
+    bool smooth_on = true;
     // get all the adjacent triangles
     const LABEL_STORE* adj_labs = tri_qn->get_data()->get_adjacent_labels(POINT);
     FP_TYPE mv = data_smooth->get_missing_value();
@@ -142,19 +149,22 @@ void smooth_single_triangle(tri_grid* tg, QT_TRI_NODE* tri_qn, data_store* data_
         // the child_qn level
         std::vector<int> ds_indices;        // storage for ds indices
         
-        for (LABEL_STORE::const_iterator it_adj_labs = adj_labs->begin();
-             it_adj_labs != adj_labs->end(); it_adj_labs++)
+        if (smooth_on)
         {
-            // get the triangle from the tri grid
-            indexed_force_tri_3D* adj_tri = tg->get_triangle(*it_adj_labs);
-            // check for NULL triangle
-            if (adj_tri == NULL)
-                continue;
-            // check if they share a vertex
-            if (triangles_share_points(child_tri, adj_tri) > 0)
-                // if they do then add this adjacent triangle at the level above 
-                // this child triangle to the list of ds indices
-                ds_indices.push_back(adj_tri->get_ds_index());
+            for (LABEL_STORE::const_iterator it_adj_labs = adj_labs->begin();
+                 it_adj_labs != adj_labs->end(); it_adj_labs++)
+            {
+                // get the triangle from the tri grid
+                indexed_force_tri_3D* adj_tri = tg->get_triangle(*it_adj_labs);
+                // check for NULL triangle
+                if (adj_tri == NULL)
+                    continue;
+                // check if they share a vertex
+                if (triangles_share_points(child_tri, adj_tri) > 0)
+                    // if they do then add this adjacent triangle at the level above 
+                    // this child triangle to the list of ds indices
+                    ds_indices.push_back(adj_tri->get_ds_index());
+            }
         }
         // also add the current triangles ds index
         ds_indices.push_back(tri_qn->get_data()->get_ds_index());
@@ -196,13 +206,16 @@ void smooth_single_triangle(tri_grid* tg, QT_TRI_NODE* tri_qn, data_store* data_
     {
         // get a list of the ds indices
         std::vector<int> ds_indices;
-        for (int c=0; c<3; c++)
+        if (smooth_on)
         {
-            // get the child triangle node
-            QT_TRI_NODE* child_adj_qn = tri_qn->get_child(c);
-            if (child_adj_qn != NULL)
+            for (int c=0; c<3; c++)
             {
-                ds_indices.push_back(child_adj_qn->get_data()->get_ds_index());
+                // get the child triangle node
+                QT_TRI_NODE* child_adj_qn = tri_qn->get_child(c);
+                if (child_adj_qn != NULL)
+                {
+                    ds_indices.push_back(child_adj_qn->get_data()->get_ds_index());
+                }
             }
         }
         // add the parent triangle

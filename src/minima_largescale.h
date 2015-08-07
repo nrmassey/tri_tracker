@@ -12,6 +12,7 @@
 #define MINIMA_LARGESCALE_H
 
 #include "minima_processed.h"
+#include "indexed_force_tri_3D.h"
 
 /*****************************************************************************/
 

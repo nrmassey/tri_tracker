@@ -35,7 +35,7 @@ class extrema_locator
         void save(std::string output_fname, bool save_text=false);
         void set_steering_vector(steering_vector* sv);
         void set_inputs(std::string input_fname, std::string mesh_fname,
-                        int grid_level, ADJACENCY adj_type);
+                        int extrema_level, ADJACENCY adj_type);
         void calculate_steering_vector(int o, int t);
         virtual void parse_arg_string(std::string method_string) = 0;
         virtual void locate(void);
@@ -43,7 +43,7 @@ class extrema_locator
     protected:  
         /*********************************************************************/
         // control variables
-        int grid_level;
+        int extrema_level;
         ADJACENCY adj_type;
         
         /*********************************************************************/
@@ -79,6 +79,7 @@ class extrema_locator
                                  const LABEL_STORE* o2);
         void tstep_out_begin(int t);
         void tstep_out_end(int t);
+        void get_leaf_node_labels(QT_TRI_NODE* c_tri_node, LABEL_STORE& label_list, int max_level);
 };
 
 #endif

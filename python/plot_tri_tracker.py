@@ -234,6 +234,7 @@ def plot_extrema(sp, tg, ex, time_step, ex_num=-1, pole_longitude=0.0, pole_lati
             lat = C[1]
         E = (lon, lat)
         sp.plot(E[0], E[1],'ro', ms=2.5, mec='r', zorder=3, transform=ccrs.PlateCarree())
+        sp.text(E[0], E[1], str(int(ex_t.delta)), fontsize=8, transform=ccrs.PlateCarree())
         plot_object_triangles(sp, tg, ex_t.object_list, pole_longitude, pole_latitude)
 #       plot_geostrophic_wind(sp, ex_t.steer_x, ex_t.steer_y, lon, lat, pole_longitude, pole_latitude)
 
@@ -584,6 +585,8 @@ if __name__ == "__main__":
     mesh_grid_level = 3#grid_level
     for t_step in range(time_step, time_step+n_steps):
         sp0 = plt.subplot(gs[0:6,:], projection=projection)
+        sp0.get_axes().set_extent([lon_limits[0], lon_limits[1], lat_limits[0], lat_limits[1]],
+                                   crs=ccrs.PlateCarree())
         if regrid_file != "":
             sp1 = plt.subplot(gs[6,1:-1])
             plot_data(sp0, sp1, tg, ds, t_step, grid_level, colmap=colmap, dzt=1, keep_scale=True,\
@@ -610,8 +613,6 @@ if __name__ == "__main__":
 
         sp0.coastlines()
         sp0.gridlines()
-        sp0.get_axes().set_extent([lon_limits[0], lon_limits[1], lat_limits[0], lat_limits[1]],
-                                   crs=ccrs.PlateCarree())
         sp0.set_aspect(1.0)
         if n_steps > 0:
             this_out_name = out_name[:-4] + "_%03i" % t_step + ".png"

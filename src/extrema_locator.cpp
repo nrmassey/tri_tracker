@@ -92,21 +92,21 @@ void extrema_locator::set_steering_vector(steering_vector* isv)
 /*****************************************************************************/
 
 void extrema_locator::set_inputs(std::string input_fname, std::string mesh_fname,
-                                 int i_grid_level, ADJACENCY i_adj_type)
+                                 int i_extrema_level, ADJACENCY i_adj_type)
 {
     // load the data
     ds_fname = input_fname;
     ds.load(input_fname);
     tg.load(mesh_fname);
     // set the other inputs
-    grid_level = i_grid_level;
+    extrema_level = i_extrema_level;
     adj_type = i_adj_type;
     
     // create the meta data
     std::stringstream ss;
     meta_data["mesh_file_name"] = mesh_fname;
     meta_data["input_file_name"] = input_fname;
-    ss << i_grid_level;
+    ss << i_extrema_level;
     meta_data["extrema_grid_level"] = ss.str();
     meta_data["adjacency_type"] = i_adj_type == POINT ? "point" : "edge";
 }
@@ -119,7 +119,7 @@ void extrema_locator::find_extrema(void)
     ex_list.set_size(ds.get_number_of_time_steps());
     std::cout << "# Locating extrema, timestep: ";
     // get a list of all the triangles at the required level
-    std::list<QT_TRI_NODE*> tris = tg.get_triangles_at_level(grid_level);
+    std::list<QT_TRI_NODE*> tris = tg.get_triangles_at_level(extrema_level);
     // get the missing value
     FP_TYPE mv = ds.get_missing_value();
     // repeat over all timesteps
@@ -148,7 +148,7 @@ void extrema_locator::find_extrema(void)
 
 /*****************************************************************************/
 
-void get_leaf_node_labels(QT_TRI_NODE* c_tri_node, LABEL_STORE& label_list, int max_level)
+void extrema_locator::get_leaf_node_labels(QT_TRI_NODE* c_tri_node, LABEL_STORE& label_list, int max_level)
 {
     // we know how to form the labels at the child node - add 1 to 4 to the
     // end of the label and repeat this n times, where n is the number of
@@ -179,7 +179,7 @@ void extrema_locator::refine_extrema(void)
     
     // first check that the extrema level is not the maximum grid level
     int max_lev = tg.get_max_level() - 1;
-    if (grid_level == max_lev)
+    if (extrema_level == max_lev)
         return;
     
     std::cout << "# Refining extrema, timestep: ";
