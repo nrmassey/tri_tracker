@@ -350,6 +350,15 @@ void minima_processed::smooth_processed_data(int start_level)
             int ds_idx = TRI->get_ds_index();
             // get the adjacent triangles
             const LABEL_STORE* tri_adj_labels = TRI->get_adjacent_labels(adj_type);
+            std::vector<int> ds_indices;
+            for (LABEL_STORE::const_iterator tri_adj_it = tri_adj_labels->begin();
+                 tri_adj_it != tri_adj_labels->end(); tri_adj_it++)
+            {
+                // get the adjacent triangle, the index and the value from the processed data
+                indexed_force_tri_3D* A_TRI = tg.get_triangle(*tri_adj_it);
+                int ds_a_idx = A_TRI->get_ds_index();
+                ds_indices.push_back(ds_a_idx);
+            }
             // loop over every timestep
             for (int t=0; t<n_ts; t++)
             {
@@ -365,13 +374,9 @@ void minima_processed::smooth_processed_data(int start_level)
                 // scaling for surrounding triangles
                 FP_TYPE S = 1.0/12;
                 // loop over every adjacent triangle
-                for (LABEL_STORE::const_iterator tri_adj_it = tri_adj_labels->begin();
-                     tri_adj_it != tri_adj_labels->end(); tri_adj_it++)
+                for (int i=0; i<ds_indices.size(); i++)
                 {
-                    // get the adjacent triangle, the index and the value from the processed data
-                    indexed_force_tri_3D* A_TRI = tg.get_triangle(*tri_adj_it);
-                    int ds_a_idx = A_TRI->get_ds_index();
-                    FP_TYPE V = data_processed->get_data(t, ds_a_idx);
+                    FP_TYPE V = data_processed->get_data(t, ds_indices[i]);
                     if (V != mv)
                     {
                         sum_V += S*V;

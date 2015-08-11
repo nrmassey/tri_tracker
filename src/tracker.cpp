@@ -26,6 +26,7 @@ const int STEERING = 0x04;
 const int CURVATURE= 0x08;
 
 const FP_TYPE MAX_CURVATURE = 90.0;
+const FP_TYPE CURVATURE_S = 1e-6;
 const FP_TYPE MAX_GEOWIND = 90.0;
 
 /*****************************************************************************/
@@ -248,8 +249,8 @@ bool tracker::should_replace_candidate_point(track* TR, track_point* cur_cand,
     {
         if (((cur_cand->rules_bf & CURVATURE) != 0) && ((new_cand->rules_bf & CURVATURE) != 0))
         {
-            FP_TYPE cur_cand_curve = curvature(TR, &(cur_cand->pt));
-            FP_TYPE new_cand_curve = curvature(TR, &(new_cand->pt));
+            FP_TYPE cur_cand_curve = curvature(TR, &(cur_cand->pt)) * cur_cand_distance * CURVATURE_S;
+            FP_TYPE new_cand_curve = curvature(TR, &(new_cand->pt)) * new_cand_distance * CURVATURE_S;
             if (new_cand_curve < cur_cand_curve)
             {
                 replace = true;
@@ -332,7 +333,7 @@ int tracker::apply_rules(track* TR, steering_extremum* EX_svex, FP_TYPE& cost, i
             if (curvature_val < MAX_CURVATURE)
             {
                 rules_bf |= CURVATURE;
-                cost = curvature_val * distance_val * 1e-6;
+                cost = curvature_val * distance_val * CURVATURE_S;
             }
         }
     }
@@ -514,7 +515,7 @@ void tracker::find_tracks(void)
         }
     }
     std::cout << std::endl;
-    apply_merge_tracks();
+//    apply_merge_tracks();
 }
 
 /*****************************************************************************/
@@ -620,7 +621,8 @@ void tracker::merge_tracks(track* forw_track, track* back_track, int c_step)
     interp_pt.pt = interp_pt_pt;
     
     // check that the curvature doesn't violate the curvature rule
-    if (curvature(forw_track, &(interp_pt.pt)) < MAX_CURVATURE)
+    if ((curvature(forw_track, &(interp_pt.pt)) < MAX_CURVATURE) &&
+        (curvature(back_track, &(interp_pt.pt)) < MAX_CURVATURE))
     {
         // add the interpolated points svex to the track as a created track point
         // add it to the end of the forward track
