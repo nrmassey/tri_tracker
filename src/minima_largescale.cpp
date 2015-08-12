@@ -86,15 +86,15 @@ bool minima_largescale::process_data(void)
         }
     }
     // option to save the output - build the filename first
-    std::string out_fname = ds_fname.substr(0, ds_fname.size()-4);
-    std::stringstream ss;
-    // large scale field subtracted from data at extrema location level
-    ss << "_L" << tg.get_max_level()-1 << "_E" << extrema_level << "_S" << ls_msh_lvl << "_ls_del.rgd";
-    data_processed->save(out_fname+ss.str());
-    // just the smoothed large scale / background field
-    ss.str("");
-    ss << "_L" << tg.get_max_level()-1 << "_E" << extrema_level << "_S" << ls_msh_lvl << "_ls.rgd";
-    data_smooth->save(out_fname+ss.str());
+//     std::string out_fname = ds_fname.substr(0, ds_fname.size()-4);
+//     std::stringstream ss;
+//     // large scale field subtracted from data at extrema location level
+//     ss << "_L" << tg.get_max_level()-1 << "_E" << extrema_level << "_S" << ls_msh_lvl << "_ls_del.rgd";
+//     data_processed->save(out_fname+ss.str());
+//     // just the smoothed large scale / background field
+//     ss.str("");
+//     ss << "_L" << tg.get_max_level()-1 << "_E" << extrema_level << "_S" << ls_msh_lvl << "_ls.rgd";
+//     data_smooth->save(out_fname+ss.str());
     
     // clear the smoothed data
     delete data_smooth;
