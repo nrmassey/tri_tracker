@@ -49,10 +49,13 @@ class tracker
         void build_extrema_queue(int timestep);
         
         // functions for optimising the tracks
-        void optimise_tracks(void);
+        int optimise_tracks(int tr_An, int tr_Bn);
+        void apply_optimise_tracks(void);
         // merge tracks using phantom feature points
         void merge_tracks(track* forw_track, track* back_track, int c_step);
         void apply_merge_tracks(void);
+        // get a list of overlapping tracks (overlapping in time) for a particular track number
+        std::vector<int> get_overlapping_tracks(int track_number);
         
         // functions for deriving the initial tracks
         int  determine_track_for_candidate(steering_extremum* svex, int t);

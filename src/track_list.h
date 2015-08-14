@@ -27,6 +27,7 @@ struct track_point
 
 class track
 {
+    friend class tracker;
     public:
         track(void);
 
