@@ -23,11 +23,14 @@
 const int DISTANCE = 0x01;
 const int OVERLAP  = 0x02;
 const int STEERING = 0x04;
-const int CURVATURE= 0x08;
+const int INTENSITY = 0x08;
+const int CURVATURE= 0x16;
 
 const FP_TYPE MAX_CURVATURE = 90.0;
 const FP_TYPE CURVATURE_S = 1e-3;
 const FP_TYPE MAX_GEOWIND = 90.0;
+const FP_TYPE MAX_INTENSITY = 1e6;
+const FP_TYPE MAX_COST = 3e4;
 
 /*****************************************************************************/
 
@@ -109,7 +112,7 @@ void tracker::build_first_frame(void)
 
 /*****************************************************************************/
 
-FP_TYPE distance(track* TR, steering_extremum* EX_svex, FP_TYPE sr)
+FP_TYPE distance(track* TR, steering_extremum* EX_svex)
 {
     // calculate the distance from the track to the candidate point
     steering_extremum* TR_svex = &(TR->get_last_track_point()->pt);
@@ -228,6 +231,17 @@ FP_TYPE overlap(track* TR, steering_extremum* EX_svex)
 
 /*****************************************************************************/
 
+FP_TYPE intensity(track* TR, steering_extremum* EX_svex)
+{
+    // calculate the change in intensity between track points
+    steering_extremum* trk_pt = &(TR->get_last_track_point()->pt);
+    FP_TYPE intensity_diff = fabs(trk_pt->intensity - EX_svex->intensity);
+    return intensity_diff;
+}
+
+/*****************************************************************************/
+
+
 bool tracker::should_replace_candidate_point(track* TR, track_point* cur_cand,
                                              track_point* new_cand, FP_TYPE& cost)
 {
@@ -235,14 +249,14 @@ bool tracker::should_replace_candidate_point(track* TR, track_point* cur_cand,
     // we need to compare values for CURVATURE, STEERING, OVERLAP and DISTANCE
     // in that order. i.e. CURVATURE is at the top of a hierarchy of rules
     bool replace = false;
-    FP_TYPE cur_cand_distance = distance(TR, &(cur_cand->pt), sr);
-    FP_TYPE new_cand_distance = distance(TR, &(new_cand->pt), sr);
+    FP_TYPE cur_cand_distance = distance(TR, &(cur_cand->pt));
+    FP_TYPE new_cand_distance = distance(TR, &(new_cand->pt));
     if (cur_cand->rules_bf < new_cand->rules_bf)
     {
         replace = true;
         // get the costs
         if ((new_cand->rules_bf & CURVATURE) != 0)
-            cost = curvature(TR, &(new_cand->pt)) * new_cand_distance * CURVATURE_S;
+            cost = curvature(TR, &(new_cand->pt)) + new_cand_distance * CURVATURE_S;
         else if ((new_cand->rules_bf & STEERING) != 0)
             cost = steering(TR, &(new_cand->pt), hrs_per_t_step);
         else if ((new_cand->rules_bf & OVERLAP) != 0)
@@ -260,6 +274,16 @@ bool tracker::should_replace_candidate_point(track* TR, track_point* cur_cand,
             {
                 replace = true;
                 cost = new_cand_curve;
+            }
+        }
+        else if (((cur_cand->rules_bf & INTENSITY) != 0) && ((new_cand->rules_bf & INTENSITY) != 0))
+        {
+            FP_TYPE cur_cand_intensity = intensity(TR, &(cur_cand->pt));
+            FP_TYPE new_cand_intensity = intensity(TR, &(new_cand->pt));
+            if (new_cand_intensity < cur_cand_intensity)
+            {
+                replace = true;
+                cost = new_cand_intensity;
             }
         }
         else if (((cur_cand->rules_bf & STEERING) != 0) && ((new_cand->rules_bf & STEERING) != 0))
@@ -296,17 +320,40 @@ bool tracker::should_replace_candidate_point(track* TR, track_point* cur_cand,
 
 /*****************************************************************************/
 
+FP_TYPE get_adaptive_sr(track* TR, int n_t_steps)
+{
+    // get the mean displacement over the last n_t_steps
+    int first_idx = TR->get_persistence()-3;
+    FP_TYPE dist = 0.0;
+    for (int idx=first_idx; idx<TR->get_persistence()-1; idx++)
+    {
+        steering_extremum* TR_pt_1 = &(TR->get_track_point(idx)->pt);
+        steering_extremum* TR_pt_2 = &(TR->get_track_point(idx+1)->pt);
+        dist += haversine(TR_pt_1->lon, TR_pt_1->lat, TR_pt_2->lon, TR_pt_2->lat, EARTH_R);
+    }
+    dist = dist / n_t_steps;
+    return dist*1.25;
+}
+
+/*****************************************************************************/
+
 int tracker::apply_rules(track* TR, steering_extremum* EX_svex, FP_TYPE& cost)
 {
     // bit field
     int rules_bf = 0;
     // calculate and return the components of the cost function
-    FP_TYPE distance_val = distance(TR, EX_svex, sr);
+    FP_TYPE distance_val = distance(TR, EX_svex);
     
     // Apply distance rule
-    // 1. Less than the search radius
-
-    if (distance_val <= sr)
+    // 1. For tracks that have lasted for more than 24 hrs, the mean displacement
+    //    over 24 hours
+    FP_TYPE search_rad = sr;
+/*    int n_t_steps_required = 24/hrs_per_t_step;
+    if (TR->get_persistence() >= n_t_steps_required)
+        search_rad = get_adaptive_sr(TR, n_t_steps_required);*/
+    
+    // 2. Less than the user specified search radius
+    if (distance_val <= search_rad)
     {
         rules_bf = DISTANCE;
         cost = distance_val;
@@ -324,6 +371,16 @@ int tracker::apply_rules(track* TR, steering_extremum* EX_svex, FP_TYPE& cost)
             {
                 rules_bf |= OVERLAP;
                 cost = 100 - overlap_val;
+            }
+        }
+        if (TR->get_persistence() >= 1)
+        {
+            FP_TYPE intensity_val = intensity(TR, EX_svex);
+            // more than overlap_val% overlap (note - the cost is 100 - the overlap)
+            if (intensity_val < MAX_INTENSITY)
+            {
+                rules_bf |= INTENSITY;
+                cost = intensity_val;
             }
         }
         if (TR->get_persistence() >= 1 && EX_svex->sv_u != mv)
@@ -352,6 +409,11 @@ int tracker::apply_rules(track* TR, steering_extremum* EX_svex, FP_TYPE& cost)
                     rules_bf = 0;
                     cost = 2e20;
                 }
+            }
+            if (curvature_val * distance_val * CURVATURE_S > MAX_COST)
+            {
+                rules_bf = 0;
+                cost = 2e20;
             }
         }
     }
@@ -530,10 +592,16 @@ void tracker::find_tracks(void)
         }
     }
     std::cout << std::endl;
-    // merge the tracks
-    apply_merge_tracks();
     // optimise the tracks to increase length and reduce curvature
-    apply_optimise_tracks();
+    for (int i=0; i<3; i++)
+    {
+        // optimise the tracks
+        apply_optimise_tracks();
+        // join any tracks that are possible to join
+        apply_join_tracks();
+        // merge the tracks
+        apply_merge_tracks();
+    }
 }
 
 /*****************************************************************************/
@@ -854,7 +922,7 @@ int exchange_points_outcome(track* tr_A, track* tr_B, int tr_A_idx, int tr_B_idx
     // these are the local curves at (t-2,t-1,t), (t-1,t,t+1), (t,t+1,t+2)
     // i.e. all of the local curves involving the current point
     // loop through starting with first point
-    const int L=5;
+    const int L=3;
     int D=L/2;
     track_point* track_points[L];
     for (int i=0; i<L; i++)
@@ -882,6 +950,54 @@ int exchange_points_outcome(track* tr_A, track* tr_B, int tr_A_idx, int tr_B_idx
 
 /*****************************************************************************/
 
+track create_compound_track(track* tr_A, track* tr_B, int split_idx_A, int split_idx_B)
+{
+    // create one track from the two tracks split at idx_A for first track
+    // and idx_B for second track
+    track new_track = track();
+    for (int i=0; i<split_idx_A; i++)
+    {
+        new_track.set_candidate_point(*(tr_A->get_track_point(i)));
+        new_track.consolidate_candidate_point();
+    }
+    
+    for (int i=split_idx_B; i<tr_B->get_persistence(); i++)
+    {
+        new_track.set_candidate_point(*(tr_B->get_track_point(i)));
+        new_track.consolidate_candidate_point();
+    }
+    return new_track;
+}
+
+/*****************************************************************************/
+
+track create_partial_track(track* tr, int split_idx, int direction)
+{
+    // create the remainder of the track. 
+    // direction=0 = track is indices 0 to split_idx
+    // direction=1 = track is indices split_idx to persistence
+    int s,e;
+    track new_track = track();
+    if (direction == 0)
+    {
+        s = 0;
+        e = split_idx;
+    }
+    else
+    {
+        s = split_idx;
+        e = tr->get_persistence();
+    }
+    for (int i=s; i<e; i++)
+    {
+        new_track.set_candidate_point(*(tr->get_track_point(i)));
+        new_track.consolidate_candidate_point();
+    }
+    return new_track;
+}
+
+/*****************************************************************************/
+
 int tracker::optimise_tracks(int tr_An, int tr_Bn)
 {
     // get the tracks
@@ -901,13 +1017,21 @@ int tracker::optimise_tracks(int tr_An, int tr_Bn)
         int b = exchange_points_outcome(tr_A, tr_B, i, i+tr_B_offset, sr);
         if (b > 0)
         {
-            // replace point in track A at index i with point in track B at index i+tr_B_offset
-            track_point* tr_pt_A = tr_A->get_track_point(i);
-            track_point* tr_pt_B = tr_B->get_track_point(i+tr_B_offset);
-            track_point temp = *tr_pt_A;
-            tr_A->tr[i] = *tr_pt_B;
-            tr_B->tr[i+tr_B_offset] = temp;
+            // create three new tracks:
+            // 1. the track containing the 1st part of track A and the 2nd part of track B
+            track compound_track = create_compound_track(tr_A, tr_B, i, i+tr_B_offset);
+            tr_list.add_track(compound_track);
+            // 2. the track containing the 1st part of track B
+            track ptrack_B = create_partial_track(tr_B, i+tr_B_offset,0);
+            tr_list.add_track(ptrack_B);
+            // 3. the track containing the 2nd part of track A
+            track ptrack_A = create_partial_track(tr_A, i, 1);
+            tr_list.add_track(ptrack_A);
+            // clear track A and B for deletion
+            tr_A->tr.clear();
+            tr_B->tr.clear();
             opt_count += 1;
+            break;  // only want to do this once per iteration per track
         }
     }
     return opt_count;
@@ -921,37 +1045,93 @@ void tracker::apply_optimise_tracks(void)
     std::cout << "# Optimising tracks, track number: " ;
     bool exchange = true;
     int exchange_count = 0;
-    while (exchange and exchange_count < 1000)
+    for (int tr_An=0; tr_An < tr_list.get_number_of_tracks(); tr_An++)
     {
-        exchange = false;
-        for (int tr_An=0; tr_An < tr_list.get_number_of_tracks(); tr_An++)
+        std::cout << tr_An;
+        std::cout.flush();
+        // get the overlapping tracks for this 
+        std::vector<int> overlap_trs = get_overlapping_tracks(tr_An);
+        for (int tr_B = 0; tr_B < overlap_trs.size(); tr_B++)
         {
-            std::cout << tr_An;
-            std::cout.flush();
-            // get the overlapping tracks for this 
-            std::vector<int> overlap_trs = get_overlapping_tracks(tr_An);
-            for (int tr_B = 0; tr_B < overlap_trs.size(); tr_B++)
+            int tr_Bn = overlap_trs[tr_B];
+            if (tr_Bn == tr_An)
+                continue;
+            if (optimise_tracks(tr_An, tr_Bn) > 0)
             {
-                int tr_Bn = overlap_trs[tr_B];
-                if (tr_Bn == tr_An)
-                    continue;
-                if (optimise_tracks(tr_An, tr_Bn) > 0)
-                    exchange = true;
-            }
-
-            int e = tr_An;
-            if (tr_An == 0)
-                std::cout << "\b";
-            while (e > 0)
-            {
-                e = e / 10;
-                std::cout << "\b";
+                exchange = true;
+                exchange_count += 1;
             }
         }
-        if (exchange)
-            exchange_count +=1;
+        // prune the empty tracks
+        tr_list.prune_tracks();
+        int e = tr_An;
+        if (tr_An == 0)
+            std::cout << "\b";
+        while (e > 0)
+        {
+            e = e / 10;
+            std::cout << "\b";
+        }
     }
-    std::cout << " " << exchange_count << " track point swaps " << std::endl;
+    std::cout << std::endl;
 }
 
 /*****************************************************************************/
+
+void tracker::apply_join_tracks(void)
+{
+    // loop through all tracks
+    std::cout << "# Joining tracks, track number: " ;
+    for (int tr_An=0; tr_An < tr_list.get_number_of_tracks(); tr_An++)
+    {
+        std::cout << tr_An;
+        std::cout.flush();
+        // loop through all tracks
+        for (int tr_Bn = 0; tr_Bn < tr_list.get_number_of_tracks(); tr_Bn++)
+        {
+            // don't join the same track to itself!
+            if (tr_An == tr_Bn)
+                continue;
+            track* tr_A = tr_list.get_track(tr_An);
+            track* tr_B = tr_list.get_track(tr_Bn);
+            // get the last track point of A and first track point of B
+            track_point* tr_pt_A = tr_A->get_last_track_point();
+            track_point* tr_pt_B = tr_B->get_track_point(0);
+            // check that tr_pt_B is tr_pt_A + 1
+            if (tr_pt_B->timestep == tr_pt_A->timestep + 1)
+            {
+                // calculate distance
+                FP_TYPE dist = haversine(tr_pt_A->pt.lon, tr_pt_A->pt.lat,
+                                         tr_pt_B->pt.lon, tr_pt_B->pt.lat, EARTH_R);
+                if (dist < sr && tr_A->get_persistence() >= 2
+                              && tr_B->get_persistence() >= 2)
+                {
+                    track_point* tr_pt_C = tr_B->get_track_point(1);
+                    // check that curvature and distance will not violate MAX_COST
+                    FP_TYPE curv =  get_curvature(tr_pt_A->pt.lon, tr_pt_A->pt.lat,
+                                                  tr_pt_B->pt.lon, tr_pt_B->pt.lat,
+                                                  tr_pt_C->pt.lon, tr_pt_C->pt.lat);
+                    if (curv * dist * CURVATURE_S < MAX_COST)
+                    {
+                        // create the new track from all of A and all of B
+                        track new_track = create_compound_track(tr_A, tr_B, tr_A->get_persistence(), 0);
+                        tr_list.add_track(new_track);
+                        tr_A->tr.clear();
+                        tr_B->tr.clear();
+                    }
+                }
+            }
+        }
+        // prune the empty tracks
+        tr_list.prune_tracks();
+        int e = tr_An;
+        if (tr_An == 0)
+            std::cout << "\b";
+        while (e > 0)
+        {
+            e = e / 10;
+            std::cout << "\b";
+        }
+    }
+    std::cout << std::endl;
+}

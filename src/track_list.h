@@ -14,10 +14,11 @@
 
 /*****************************************************************************/
 
-struct track_point
+class track_point
 {
     public:
         track_point(void) : timestep(0), rules_bf(0) {}
+        track_point(const track_point& rhs) : pt(rhs.pt), timestep(rhs.timestep), rules_bf(rhs.rules_bf) {}
         steering_extremum pt;   // point
         int timestep;
         int rules_bf;
@@ -69,6 +70,7 @@ class track_list
         // add and consolidate tracks
         void add_track(track& new_track);
         void consolidate_tracks(void);
+        void prune_tracks(void);
         
         // save / load
         void save(std::string output_fname);

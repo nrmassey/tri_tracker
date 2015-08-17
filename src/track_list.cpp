@@ -195,6 +195,22 @@ void track_list::consolidate_tracks(void)
 
 /*****************************************************************************/
 
+void track_list::prune_tracks(void)
+{
+    // remove any tracks with 0 length
+    std::vector<track> new_tr_list;
+    for (unsigned int tr=0; tr<tr_list.size(); tr++)
+    {
+        if (tr_list[tr].get_persistence() != 0)
+        {
+            new_tr_list.push_back(tr_list[tr]);
+        }
+    }
+    tr_list = new_tr_list;
+}
+
+/*****************************************************************************/
+
 META_DATA_TYPE* track_list::get_meta_data(void)
 {
     return &meta_data;
@@ -274,14 +290,17 @@ void track_list::save_text(std::string output_fname)
         for (int tp=0; tp < it->get_persistence(); tp++)
         {
             FP_TYPE c = 0.0;
+            FP_TYPE d = 0.0;
+            const FP_TYPE CURVATURE_S = 1e-3;
             if (tp >= 2)
             {
                 steering_extremum* tp0 = &((*trk)[tp-2].pt);
                 steering_extremum* tp1 = &((*trk)[tp-1].pt);
                 steering_extremum* tp2 = &((*trk)[tp].pt);
+                d = haversine(tp1->lon, tp1->lat, tp2->lon, tp2->lat, EARTH_R) * CURVATURE_S;
                 c = get_curvature(tp0->lon, tp0->lat, 
                                   tp1->lon, tp1->lat,
-                                  tp2->lon, tp2->lat);
+                                  tp2->lon, tp2->lat) * d;
             }
 
             // get the track point
