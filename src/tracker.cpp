@@ -256,7 +256,7 @@ bool tracker::should_replace_candidate_point(track* TR, track_point* cur_cand,
         replace = true;
         // get the costs
         if ((new_cand->rules_bf & CURVATURE) != 0)
-            cost = curvature(TR, &(new_cand->pt)) + new_cand_distance * CURVATURE_S;
+            cost = curvature(TR, &(new_cand->pt)) * new_cand_distance * CURVATURE_S;
         else if ((new_cand->rules_bf & STEERING) != 0)
             cost = steering(TR, &(new_cand->pt), hrs_per_t_step);
         else if ((new_cand->rules_bf & OVERLAP) != 0)
@@ -337,6 +337,16 @@ FP_TYPE get_adaptive_sr(track* TR, int n_t_steps)
 
 /*****************************************************************************/
 
+FP_TYPE calculate_steering_distance(steering_extremum* EX_svex, FP_TYPE hrs_ts)
+{
+    // calculate the distance covered in hrs per t_step from the steering term
+    FP_TYPE V = sqrt(EX_svex->sv_u*EX_svex->sv_u + EX_svex->sv_v*EX_svex->sv_v);
+    FP_TYPE D = V * hrs_ts*60.0*60.0;   // convert hrs_ts to seconds_ts
+    return D;
+}
+
+/*****************************************************************************/
+
 int tracker::apply_rules(track* TR, steering_extremum* EX_svex, FP_TYPE& cost)
 {
     // bit field
@@ -345,15 +355,15 @@ int tracker::apply_rules(track* TR, steering_extremum* EX_svex, FP_TYPE& cost)
     FP_TYPE distance_val = distance(TR, EX_svex);
     
     // Apply distance rule
-    // 1. For tracks that have lasted for more than 24 hrs, the mean displacement
-    //    over 24 hours
-    FP_TYPE search_rad = sr;
-/*    int n_t_steps_required = 24/hrs_per_t_step;
-    if (TR->get_persistence() >= n_t_steps_required)
-        search_rad = get_adaptive_sr(TR, n_t_steps_required);*/
+    // 1. The steering distance calculated from the geostrophic wind / steering vector.
+    
+    FP_TYPE steering_dist = calculate_steering_distance(EX_svex, hrs_per_t_step);
+    // check for rogue steering distances
+    if (steering_dist > sr * 2)
+        steering_dist = sr * 2;
     
     // 2. Less than the user specified search radius
-    if (distance_val <= search_rad)
+    if (distance_val <= sr || distance_val <= steering_dist)
     {
         rules_bf = DISTANCE;
         cost = distance_val;
@@ -498,7 +508,6 @@ bool tracker::assign_candidate(steering_extremum c_svex, int min_tr, int t)
         cand_pt.pt = c_svex;
         cand_pt.timestep = t;
         FP_TYPE cost = 2e20;
-        int rules_bf = 0;
         cand_pt.rules_bf = apply_rules(tr_list.get_track(min_tr), &(c_svex), cost);
         tr_list.get_track(min_tr)->set_candidate_point(cand_pt);
         return true;
@@ -680,7 +689,6 @@ bool check_curvature(track* forw_track, track* back_track, track_point& interp_p
     // now check that the track maintains the curvature into the potentially
     // appended track, using the interpolated point and the first two points 
     // of the back_track
-    int pr = forw_track->get_persistence(); // last point in the track
     steering_extremum* TR_pt_1 = &(interp_pt.pt);
     steering_extremum* TR_pt_2 = &(back_track->get_track_point(0)->pt);
     steering_extremum* TR_pt_3 = &(back_track->get_track_point(1)->pt);
@@ -922,7 +930,7 @@ int exchange_points_outcome(track* tr_A, track* tr_B, int tr_A_idx, int tr_B_idx
     // these are the local curves at (t-2,t-1,t), (t-1,t,t+1), (t,t+1,t+2)
     // i.e. all of the local curves involving the current point
     // loop through starting with first point
-    const int L=3;
+    const int L=5;
     int D=L/2;
     track_point* track_points[L];
     for (int i=0; i<L; i++)
@@ -936,15 +944,12 @@ int exchange_points_outcome(track* tr_A, track* tr_B, int tr_A_idx, int tr_B_idx
             track_points[i] = tr_A->get_track_point(tr_A_idx+i-D);
     }
     // calculate the mean curvature
-    FP_TYPE track_A_curve = mean_curvature(track_points, L) * dist_A * CURVATURE_S;
-    if (track_A_curve >= 0.0)
-    {
-        // calculate the mean curvature if the point is replaced by point B
-        track_points[2] = tr_pt_B;
-        FP_TYPE track_B_curve = mean_curvature(track_points, L) * dist_B * CURVATURE_S;
-        if (track_B_curve < track_A_curve and track_B_curve >= 0.0)
-            return 1;
-    }
+    FP_TYPE track_A_cost = mean_curvature(track_points, L) + dist_A * CURVATURE_S;
+    // calculate the mean curvature if the point is replaced by point B
+    track_points[2] = tr_pt_B;
+    FP_TYPE track_B_cost = mean_curvature(track_points, L) + dist_B * CURVATURE_S;
+    if (track_B_cost < track_A_cost)
+        return 1;
     return 0;
 }
 
@@ -1028,8 +1033,10 @@ int tracker::optimise_tracks(int tr_An, int tr_Bn)
             track ptrack_A = create_partial_track(tr_A, i, 1);
             tr_list.add_track(ptrack_A);
             // clear track A and B for deletion
-            tr_A->tr.clear();
-            tr_B->tr.clear();
+            if (tr_A->tr.size() != 0)
+                tr_A->tr.clear();
+            if (tr_B->tr.size() != 0)
+                tr_B->tr.clear();
             opt_count += 1;
             break;  // only want to do this once per iteration per track
         }
@@ -1097,14 +1104,16 @@ void tracker::apply_join_tracks(void)
             // get the last track point of A and first track point of B
             track_point* tr_pt_A = tr_A->get_last_track_point();
             track_point* tr_pt_B = tr_B->get_track_point(0);
+            if (tr_A->tr.size() == 0 or tr_B->tr.size() == 0)
+                continue;
+
             // check that tr_pt_B is tr_pt_A + 1
             if (tr_pt_B->timestep == tr_pt_A->timestep + 1)
             {
                 // calculate distance
                 FP_TYPE dist = haversine(tr_pt_A->pt.lon, tr_pt_A->pt.lat,
                                          tr_pt_B->pt.lon, tr_pt_B->pt.lat, EARTH_R);
-                if (dist < sr && tr_A->get_persistence() >= 2
-                              && tr_B->get_persistence() >= 2)
+                if (dist < sr)
                 {
                     track_point* tr_pt_C = tr_B->get_track_point(1);
                     // check that curvature and distance will not violate MAX_COST
@@ -1116,8 +1125,11 @@ void tracker::apply_join_tracks(void)
                         // create the new track from all of A and all of B
                         track new_track = create_compound_track(tr_A, tr_B, tr_A->get_persistence(), 0);
                         tr_list.add_track(new_track);
-                        tr_A->tr.clear();
-                        tr_B->tr.clear();
+                        // clear the old tracks
+                        if (tr_A->tr.size() != 0)
+                            tr_A->tr.clear();
+                        if (tr_B->tr.size() != 0)
+                            tr_B->tr.clear();
                     }
                 }
             }

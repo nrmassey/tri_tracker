@@ -307,7 +307,6 @@ void extrema_locator::merge_objects(void)
             LABEL_STORE* o1_shell_labs = obj_c_shells[o1].get_labels();
             if (o1_shell_labs->size() == 0) // deleted object as above
                 continue;
-            indexed_force_tri_3D* O1_TRI = tg.get_triangle((*o1_shell_labs)[0]);
             // get the labels in the object as well as the shell
             LABEL_STORE* o1_labs = &(ex_list.get(t, o1)->object_labels);
             for (int o2=0; o2<o_s; o2++)
