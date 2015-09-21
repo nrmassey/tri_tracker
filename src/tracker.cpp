@@ -926,7 +926,7 @@ int exchange_points_outcome(track* tr_A, track* tr_B, int tr_A_idx, int tr_B_idx
     FP_TYPE dist_A = haversine(tr_pt_A_prev->pt.lon, tr_pt_A_prev->pt.lat,
                                tr_pt_A->pt.lon, tr_pt_A->pt.lat, EARTH_R);
     
-    // calculate up to three curvature measures for the existing track
+    // calculate up to five curvature measures for the existing track
     // these are the local curves at (t-2,t-1,t), (t-1,t,t+1), (t,t+1,t+2)
     // i.e. all of the local curves involving the current point
     // loop through starting with first point
@@ -944,10 +944,10 @@ int exchange_points_outcome(track* tr_A, track* tr_B, int tr_A_idx, int tr_B_idx
             track_points[i] = tr_A->get_track_point(tr_A_idx+i-D);
     }
     // calculate the mean curvature
-    FP_TYPE track_A_cost = mean_curvature(track_points, L) + dist_A * CURVATURE_S;
+    FP_TYPE track_A_cost = mean_curvature(track_points, L) * dist_A * CURVATURE_S;
     // calculate the mean curvature if the point is replaced by point B
     track_points[2] = tr_pt_B;
-    FP_TYPE track_B_cost = mean_curvature(track_points, L) + dist_B * CURVATURE_S;
+    FP_TYPE track_B_cost = mean_curvature(track_points, L) * dist_B * CURVATURE_S;
     if (track_B_cost < track_A_cost)
         return 1;
     return 0;
