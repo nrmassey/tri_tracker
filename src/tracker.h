@@ -21,7 +21,7 @@ class tracker
 {
     public:
         tracker(std::vector<std::string> input_fname, FP_TYPE sr,
-                FP_TYPE ov, FP_TYPE hrs_per_t_step);
+                FP_TYPE ov, FP_TYPE hrs_per_t_step, int opt_steps);
         ~tracker(void);
         void find_tracks(void);
         void save(std::string output_fname);
@@ -34,6 +34,7 @@ class tracker
         FP_TYPE hrs_per_t_step; // number of hours per timestep
         std::vector<std::string> input_fname;
         FP_TYPE mv;             // missing value
+        int opt_steps;          // number of optimisation iterations
 
         // output track list
         track_list tr_list;
@@ -54,7 +55,10 @@ class tracker
         // merge tracks using phantom feature points
         void merge_tracks(track* forw_track, track* back_track, int c_step);
         void apply_merge_tracks(void);
+        // join tracks in subsequent timesteps
         void apply_join_tracks(void);
+        // split short tracks (<=2 timesteps)
+        void split_short_tracks(void);
         // get a list of overlapping tracks (overlapping in time) for a particular track number
         std::vector<int> get_overlapping_tracks(int track_number);
         

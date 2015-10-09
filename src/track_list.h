@@ -51,10 +51,15 @@ class track
         FP_TYPE get_curvature_sum(int n_steps=-1);
         FP_TYPE get_curvature_mean(int n_steps=-1);
         FP_TYPE get_curvature_stddev(int n_steps=-1, FP_TYPE mean=2e20);
+        
+        // get / set deleted
+        void set_deleted();
+        bool is_deleted();
 
     private:
         track_point cand_pt;
         std::vector<track_point> tr;
+        bool deleted;
 };
 
 /*****************************************************************************/

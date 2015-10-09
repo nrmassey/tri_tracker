@@ -22,10 +22,13 @@ void steering_extremum::set(FP_TYPE ilon, FP_TYPE ilat, FP_TYPE iintensity, FP_T
 /*****************************************************************************/
 
 void steering_extremum::set(FP_TYPE ilon, FP_TYPE ilat, FP_TYPE iintensity, FP_TYPE idelta,
-     				        FP_TYPE iu, FP_TYPE iv, LABEL_STORE& iobject_labels)
+     				        FP_TYPE iu, FP_TYPE iv, LABEL_STORE iobject_labels)
 {
 	set(ilon, ilat, iintensity, idelta, iu, iv);
-	object_labels = iobject_labels;
+	object_labels.clear();
+	for (LABEL_STORE::iterator it_obj_lab = iobject_labels.begin();
+		 it_obj_lab != iobject_labels.end(); it_obj_lab++)
+    	object_labels.push_back(*it_obj_lab);
 }
 
 /*****************************************************************************/

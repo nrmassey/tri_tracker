@@ -15,8 +15,8 @@
 
 track::track(void)
 {
-    tr.clear();
     cand_pt.timestep = -1;
+    deleted = false;
 }
 
 /*****************************************************************************/
@@ -24,6 +24,20 @@ track::track(void)
 void track::set_candidate_point(track_point icand_pt)
 {
     cand_pt = icand_pt;
+}
+
+/*****************************************************************************/
+
+void track::set_deleted(void)
+{
+    deleted = true;
+}
+
+/*****************************************************************************/
+
+bool track::is_deleted(void)
+{
+    return deleted;
 }
 
 /*****************************************************************************/
@@ -201,7 +215,7 @@ void track_list::prune_tracks(void)
     std::vector<track> new_tr_list;
     for (unsigned int tr=0; tr<tr_list.size(); tr++)
     {
-        if (tr_list[tr].get_persistence() != 0)
+        if (! tr_list[tr].is_deleted())
         {
             new_tr_list.push_back(tr_list[tr]);
         }

@@ -296,7 +296,6 @@ void minima_processed::trim_objects(void)
     }
     indexed_force_tri_3D* c_tri = tg.get_triangle(svex->object_labels[0]);
     FP_TYPE surf_A = c_tri->surface_area();
-    
     for (int t=0; t<ex_list.size(); t++)
     {
         tstep_out_begin(t);
@@ -321,7 +320,8 @@ void minima_processed::trim_objects(void)
         }
         tstep_out_end(t);   
     }
-    std::cout << " Number of objects: " << sum_o << " ";
+    std::cout << std::endl;
+    std::cout << "# Number of objects: " << sum_o << " ";
     std::cout << std::endl;
 }
 

@@ -30,13 +30,14 @@ const FP_TYPE MAX_CURVATURE = 90.0;
 const FP_TYPE CURVATURE_S = 1e-3;
 const FP_TYPE MAX_GEOWIND = 90.0;
 const FP_TYPE MAX_INTENSITY = 1e6;
-const FP_TYPE MAX_COST = 3e4;
+const FP_TYPE MAX_COST = 2e4;
+const int MIN_PERSISTENCE = 2;
 
 /*****************************************************************************/
 
 tracker::tracker(std::vector<std::string> iinput_fname, FP_TYPE isr,
-                 FP_TYPE iov, FP_TYPE ihrs_per_t_step)
-        : sr(isr), ov(iov), hrs_per_t_step(ihrs_per_t_step)
+                 FP_TYPE iov, FP_TYPE ihrs_per_t_step, int iopt_steps)
+        : sr(isr), ov(iov), hrs_per_t_step(ihrs_per_t_step), opt_steps(iopt_steps)
 {
     input_fname = iinput_fname;
     for (unsigned int i=0; i<input_fname.size(); i++)
@@ -602,10 +603,12 @@ void tracker::find_tracks(void)
     }
     std::cout << std::endl;
     // optimise the tracks to increase length and reduce curvature
-    for (int i=0; i<3; i++)
+    for (int i=0; i<opt_steps; i++)
     {
         // optimise the tracks
         apply_optimise_tracks();
+        // split short tracks to free up some points
+        split_short_tracks();
         // join any tracks that are possible to join
         apply_join_tracks();
         // merge the tracks
@@ -753,8 +756,9 @@ void tracker::merge_tracks(track* forw_track, track* back_track, int c_step)
             track_point current_pt = *(back_track->get_track_point(tp));
             forw_track->set_candidate_point(current_pt);
             forw_track->consolidate_candidate_point();
-            back_track->get_track_point(tp)->timestep = -1;
         }
+        // set the back track as deleted
+        back_track->set_deleted();
     }
 }
 
@@ -817,16 +821,7 @@ void tracker::apply_merge_tracks(void)
             std::cout << "\b";
         }
     }
-    // now delete the tracks that have been merged with other tracks by
-    // creating a new track list excluding those with timestep = -1
-    track_list new_track_list;
-    for (int tr=0; tr<tr_list.get_number_of_tracks(); tr++)
-    {
-        track* c_track = tr_list.get_track(tr);
-        if (c_track->get_track_point(0)->timestep != -1)
-            new_track_list.add_track(*c_track);
-    }
-    tr_list = new_track_list;
+    tr_list.prune_tracks();
     std::cout << std::endl;
 }
 
@@ -835,13 +830,16 @@ void tracker::apply_merge_tracks(void)
 std::vector<int> tracker::get_overlapping_tracks(int track_number)
 {
     track* tr_A = tr_list.get_track(track_number);
+    // create the output vector
+    std::vector<int> overlap_trs;
+    
+    if (tr_A->is_deleted() == 0)
+        return overlap_trs;
+        
     // get the timesteps
     int tr_A_st = tr_A->get_track_point(0)->timestep;
     int tr_A_ed = tr_A->get_last_track_point()->timestep;
     int ets = 2;     // extra timesteps
-    
-    // create the output vector
-    std::vector<int> overlap_trs;
     
     // loop over each track and get the overlapping tracks for this track
     for (int c_tr = 0; c_tr < tr_list.get_number_of_tracks(); c_tr++)
@@ -879,17 +877,22 @@ FP_TYPE mean_curvature(track_point** TR_pts, int L)
             continue;
         else
         {
-            // calculate the local curve
+            // get distance between A and previous A point
+            FP_TYPE dist_A = haversine(TR_pts[i+1]->pt.lon, TR_pts[i+1]->pt.lat,
+                                       TR_pts[i+2]->pt.lon, TR_pts[i+2]->pt.lat,
+                                       EARTH_R);
+            // calculate the local curve / cost
             sum_curve += get_curvature(TR_pts[i]->pt.lon,   TR_pts[i]->pt.lat,
                                        TR_pts[i+1]->pt.lon, TR_pts[i+1]->pt.lat,
-                                       TR_pts[i+2]->pt.lon, TR_pts[i+2]->pt.lat);
+                                       TR_pts[i+2]->pt.lon, TR_pts[i+2]->pt.lat) * 
+                                       dist_A * CURVATURE_S;
             N += 1;
         }
     }
-    if (N != 0)
-        return sum_curve / N;
+    if (N == 0)
+        return MAX_COST;
     else
-        return -1.0;
+        return sum_curve / N;
 }
 
 /*****************************************************************************/
@@ -910,7 +913,6 @@ int exchange_points_outcome(track* tr_A, track* tr_B, int tr_A_idx, int tr_B_idx
         tr_A_idx_prev = tr_A_idx+1;     // one after
     
     // get the track points
-    track_point* tr_pt_A = tr_A->get_track_point(tr_A_idx);
     track_point* tr_pt_B = tr_B->get_track_point(tr_B_idx);
     track_point* tr_pt_A_prev = tr_A->get_track_point(tr_A_idx_prev);
     
@@ -921,10 +923,6 @@ int exchange_points_outcome(track* tr_A, track* tr_B, int tr_A_idx, int tr_B_idx
     // if greater than search radius return 0
     if (dist_B > sr)
         return 0;
-
-    // get distance between A and previous A point
-    FP_TYPE dist_A = haversine(tr_pt_A_prev->pt.lon, tr_pt_A_prev->pt.lat,
-                               tr_pt_A->pt.lon, tr_pt_A->pt.lat, EARTH_R);
     
     // calculate up to five curvature measures for the existing track
     // these are the local curves at (t-2,t-1,t), (t-1,t,t+1), (t,t+1,t+2)
@@ -944,10 +942,14 @@ int exchange_points_outcome(track* tr_A, track* tr_B, int tr_A_idx, int tr_B_idx
             track_points[i] = tr_A->get_track_point(tr_A_idx+i-D);
     }
     // calculate the mean curvature
-    FP_TYPE track_A_cost = mean_curvature(track_points, L) * dist_A * CURVATURE_S;
-    // calculate the mean curvature if the point is replaced by point B
-    track_points[2] = tr_pt_B;
-    FP_TYPE track_B_cost = mean_curvature(track_points, L) * dist_B * CURVATURE_S;
+    FP_TYPE track_A_cost = mean_curvature(track_points, L);
+    // calculate the mean curvature if the points after 2 are replaced by point B
+    for (int i=2; i<L; i++)
+    {
+        if (tr_B_idx+i-D >= 0 && tr_B_idx+i-D < tr_B->get_persistence())
+            track_points[i] = tr_B->get_track_point(tr_B_idx+i-D);
+    }
+    FP_TYPE track_B_cost = mean_curvature(track_points, L);
     if (track_B_cost < track_A_cost)
         return 1;
     return 0;
@@ -1008,6 +1010,10 @@ int tracker::optimise_tracks(int tr_An, int tr_Bn)
     // get the tracks
     track* tr_A = tr_list.get_track(tr_An);
     track* tr_B = tr_list.get_track(tr_Bn);
+    
+    if (tr_A->is_deleted() || tr_B->is_deleted())
+        return 0;
+    
     // get the start points of each of the tracks
     int tr_A_st = tr_A->get_track_point(0)->timestep;
     int tr_B_st = tr_B->get_track_point(0)->timestep;
@@ -1033,12 +1039,9 @@ int tracker::optimise_tracks(int tr_An, int tr_Bn)
             track ptrack_A = create_partial_track(tr_A, i, 1);
             tr_list.add_track(ptrack_A);
             // clear track A and B for deletion
-            if (tr_A->tr.size() != 0)
-                tr_A->tr.clear();
-            if (tr_B->tr.size() != 0)
-                tr_B->tr.clear();
+            tr_A->tr.clear();
+            tr_B->tr.clear();
             opt_count += 1;
-            break;  // only want to do this once per iteration per track
         }
     }
     return opt_count;
@@ -1069,8 +1072,6 @@ void tracker::apply_optimise_tracks(void)
                 exchange_count += 1;
             }
         }
-        // prune the empty tracks
-        tr_list.prune_tracks();
         int e = tr_An;
         if (tr_An == 0)
             std::cout << "\b";
@@ -1080,6 +1081,7 @@ void tracker::apply_optimise_tracks(void)
             std::cout << "\b";
         }
     }
+    tr_list.prune_tracks();
     std::cout << std::endl;
 }
 
@@ -1102,9 +1104,10 @@ void tracker::apply_join_tracks(void)
             track* tr_A = tr_list.get_track(tr_An);
             track* tr_B = tr_list.get_track(tr_Bn);
             // get the last track point of A and first track point of B
-            track_point* tr_pt_A = tr_A->get_last_track_point();
+            int n_pt_A = tr_A->get_persistence();
+            track_point* tr_pt_A = tr_A->get_track_point(n_pt_A-1);
             track_point* tr_pt_B = tr_B->get_track_point(0);
-            if (tr_A->tr.size() == 0 or tr_B->tr.size() == 0)
+            if (tr_A->is_deleted() or tr_B->is_deleted())
                 continue;
 
             // check that tr_pt_B is tr_pt_A + 1
@@ -1115,27 +1118,23 @@ void tracker::apply_join_tracks(void)
                                          tr_pt_B->pt.lon, tr_pt_B->pt.lat, EARTH_R);
                 if (dist < sr)
                 {
-                    track_point* tr_pt_C = tr_B->get_track_point(1);
+                    track_point* tr_pt_C = tr_A->get_track_point(n_pt_A-2);
                     // check that curvature and distance will not violate MAX_COST
-                    FP_TYPE curv =  get_curvature(tr_pt_A->pt.lon, tr_pt_A->pt.lat,
-                                                  tr_pt_B->pt.lon, tr_pt_B->pt.lat,
-                                                  tr_pt_C->pt.lon, tr_pt_C->pt.lat);
-                    if (curv * dist * CURVATURE_S < MAX_COST)
+                    FP_TYPE curv =  get_curvature(tr_pt_C->pt.lon, tr_pt_C->pt.lat,
+                                                  tr_pt_A->pt.lon, tr_pt_A->pt.lat,
+                                                  tr_pt_B->pt.lon, tr_pt_B->pt.lat);
+                    if (curv < MAX_CURVATURE && curv * dist * CURVATURE_S < MAX_COST)
                     {
                         // create the new track from all of A and all of B
                         track new_track = create_compound_track(tr_A, tr_B, tr_A->get_persistence(), 0);
                         tr_list.add_track(new_track);
                         // clear the old tracks
-                        if (tr_A->tr.size() != 0)
-                            tr_A->tr.clear();
-                        if (tr_B->tr.size() != 0)
-                            tr_B->tr.clear();
+                        tr_A->set_deleted();
+                        tr_B->set_deleted();
                     }
                 }
             }
         }
-        // prune the empty tracks
-        tr_list.prune_tracks();
         int e = tr_An;
         if (tr_An == 0)
             std::cout << "\b";
@@ -1145,5 +1144,50 @@ void tracker::apply_join_tracks(void)
             std::cout << "\b";
         }
     }
+    tr_list.prune_tracks();
+    std::cout << std::endl;
+}
+
+/*****************************************************************************/
+
+void tracker::split_short_tracks(void)
+{
+    std::cout << "# Splitting short tracks, track number: " ;
+    for (int tr_An=0; tr_An < tr_list.get_number_of_tracks(); tr_An++)
+    {
+        std::cout << tr_An;
+        std::cout.flush();
+        // Split tracks with a persistence <= MIN_PERSISTENCE into a number
+        // of tracks with one timestep - these can them be joined to other tracks
+        track* tr_A = tr_list.get_track(tr_An);
+        int P = tr_A->get_persistence();
+        if (P <= MIN_PERSISTENCE && P > 1)
+        {
+            // loop through all points in the track and create a new track
+            for (int i=0; i < P; i++)
+            {
+                // get the track point
+                track_point* tr_pt_A = tr_A->get_track_point(i);
+                // create a new track containing just this track point
+                track new_track;
+                // add to the track
+                new_track.set_candidate_point(*tr_pt_A);
+                new_track.consolidate_candidate_point();
+                // add to the track list
+                tr_list.add_track(new_track);
+            }
+            // set as deleted
+            tr_A->set_deleted();
+        }
+        int e = tr_An;
+        if (tr_An == 0)
+            std::cout << "\b";
+        while (e > 0)
+        {
+            e = e / 10;
+            std::cout << "\b";
+        }
+    }
+    tr_list.prune_tracks();
     std::cout << std::endl;
 }
