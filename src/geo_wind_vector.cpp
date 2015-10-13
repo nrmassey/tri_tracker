@@ -138,15 +138,21 @@ spline form_lon_spline(ncdata* nc_data, int lon_idx, int lat_idx, int z, int t)
     // construct a 5 pt spline from the data in the lon direction
     std::vector<FP_TYPE> lon_vals(spl_size, 0.0);
     std::vector<FP_TYPE> x_vals(spl_size);
+    // ncdata boundaries
+    int n_lons = nc_data->get_lon_len();
+    int n_t = nc_data->get_t_len();
     for (int i=-spl2; i<spl2+1; i++)
     {
         int lat_i, lon_i;
         get_lon_lat_idx(nc_data, lon_idx, lat_idx, i, 0, lon_i, lat_i);
-        lon_vals[i+spl2] = nc_data->get_data(lon_i, lat_i, z, t);
-        if (nc_data->has_rotated_grid())
-            x_vals[i+spl2] = nc_data->get_rotated_grid()->get_global_longitude_value(lon_i, lat_i) * f_deg_to_rad;
-        else
-            x_vals[i+spl2] = nc_data->get_lon_from_idx(lon_i)* f_deg_to_rad;
+        if (lon_i >= 0 && lon_i < n_lons && t < n_t)
+        {
+            lon_vals[i+spl2] = nc_data->get_data(lon_i, lat_i, z, t);
+            if (nc_data->has_rotated_grid())
+                x_vals[i+spl2] = nc_data->get_rotated_grid()->get_global_longitude_value(lon_i, lat_i) * f_deg_to_rad;
+            else
+                x_vals[i+spl2] = nc_data->get_lon_from_idx(lon_i)* f_deg_to_rad;
+        }
     }
     spline lon_spline(lon_vals, x_vals, nc_data->get_missing_value());
     return lon_spline;
@@ -161,17 +167,22 @@ spline form_lat_spline(ncdata* nc_data, int lon_idx, int lat_idx, int z, int t)
     // construct a 5 pt spline from the data in the lat direction
     std::vector<FP_TYPE> lat_vals(spl_size, 0.0);
     std::vector<FP_TYPE> y_vals(spl_size);
+    int n_lats = nc_data->get_lat_len();
+    int n_t = nc_data->get_t_len();
     
     for (int j=-spl2; j<spl2+1; j++)
     {
         int lat_i, lon_i;
         get_lon_lat_idx(nc_data, lon_idx, lat_idx, 0, j, lon_i, lat_i);
-        // put the data values in backwards
-        lat_vals[spl2-j] = nc_data->get_data(lon_i, lat_i, z, t);
-        if (nc_data->has_rotated_grid())
-            y_vals[spl2-j] = nc_data->get_rotated_grid()->get_global_latitude_value(lon_i, lat_i) * f_deg_to_rad;
-        else
-            y_vals[spl2-j] = nc_data->get_lat_from_idx(lat_i) * f_deg_to_rad;
+        if (lat_i >= 0 && lat_i < n_lats && t < n_t)
+        {
+            // put the data values in backwards
+            lat_vals[spl2-j] = nc_data->get_data(lon_i, lat_i, z, t);
+            if (nc_data->has_rotated_grid())
+                y_vals[spl2-j] = nc_data->get_rotated_grid()->get_global_latitude_value(lon_i, lat_i) * f_deg_to_rad;
+            else
+                y_vals[spl2-j] = nc_data->get_lat_from_idx(lat_i) * f_deg_to_rad;
+        }
     }
     spline lat_spline(lat_vals, y_vals, nc_data->get_missing_value());
     return lat_spline;

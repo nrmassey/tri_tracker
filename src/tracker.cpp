@@ -602,15 +602,15 @@ void tracker::find_tracks(void)
         }
     }
     std::cout << std::endl;
+    // split short tracks to free up some points
+    split_short_tracks();
     // optimise the tracks to increase length and reduce curvature
     for (int i=0; i<opt_steps; i++)
     {
         // optimise the tracks
-        apply_optimise_tracks();
-        // split short tracks to free up some points
-        split_short_tracks();
+//        apply_optimise_tracks();
         // join any tracks that are possible to join
-        apply_join_tracks();
+//        apply_join_tracks();
         // merge the tracks
         apply_merge_tracks();
     }
@@ -682,30 +682,7 @@ track_point project_point(track* TR, int direction, FP_TYPE hrs_per_ts, int c_st
 
 /*****************************************************************************/
 
-bool check_curvature(track* forw_track, track* back_track, track_point& interp_pt)
-{
-    // first check that interpolated point is within the curvature range of
-    // the forward projected track
-    bool curv_ok = false;
-    curv_ok = (curvature(forw_track, &(interp_pt.pt)) < MAX_CURVATURE);
-    
-    // now check that the track maintains the curvature into the potentially
-    // appended track, using the interpolated point and the first two points 
-    // of the back_track
-    steering_extremum* TR_pt_1 = &(interp_pt.pt);
-    steering_extremum* TR_pt_2 = &(back_track->get_track_point(0)->pt);
-    steering_extremum* TR_pt_3 = &(back_track->get_track_point(1)->pt);
-    FP_TYPE c = get_curvature(TR_pt_1->lon, TR_pt_1->lat,
-                              TR_pt_2->lon, TR_pt_2->lat,
-                              TR_pt_3->lon, TR_pt_3->lat);
-    curv_ok &= (fabs(c) < MAX_CURVATURE);
-    
-    return curv_ok;
-}
-
-/*****************************************************************************/
-
-void tracker::merge_tracks(track* forw_track, track* back_track, int c_step)
+track_point create_interpolated_point(track* forw_track, track* back_track, int c_step)
 {
     // create the interpolated point first - average all values for last point
     // in forw_track and first point in back_track
@@ -740,26 +717,29 @@ void tracker::merge_tracks(track* forw_track, track* back_track, int c_step)
     
     // set the interpolated point
     interp_pt.pt = interp_pt_pt;
+    return interp_pt;
+}
+
+/*****************************************************************************/
+
+void tracker::merge_tracks(track* forw_track, track* back_track, int c_step)
+{
+    track_point interp_pt = create_interpolated_point(forw_track, back_track, c_step);
+    // add the interpolated points svex to the track as a created track point
+    // add it to the end of the forward track
+    forw_track->set_candidate_point(interp_pt);
+    forw_track->consolidate_candidate_point();
     
-    // check that the curvature doesn't violate the curvature rule
-    if (check_curvature(forw_track, back_track, interp_pt))
+    // now loop through the back track and add the points to the forward track.
+    // Set the timestep in the back track to -1 so we can delete it later
+    for (int tp=0; tp<back_track->get_persistence(); tp++)
     {
-        // add the interpolated points svex to the track as a created track point
-        // add it to the end of the forward track
-        forw_track->set_candidate_point(interp_pt);
+        track_point current_pt = *(back_track->get_track_point(tp));
+        forw_track->set_candidate_point(current_pt);
         forw_track->consolidate_candidate_point();
-    
-        // now loop through the back track and add the points to the forward track.
-        // Set the timestep in the back track to -1 so we can delete it later
-        for (int tp=0; tp<back_track->get_persistence(); tp++)
-        {
-            track_point current_pt = *(back_track->get_track_point(tp));
-            forw_track->set_candidate_point(current_pt);
-            forw_track->consolidate_candidate_point();
-        }
-        // set the back track as deleted
-        back_track->set_deleted();
     }
+    // set the back track as deleted
+    back_track->set_deleted();
 }
 
 /*****************************************************************************/
@@ -782,7 +762,7 @@ void tracker::apply_merge_tracks(void)
         // point track is within the search radius of the forward projected track
         // store the minimum track and minimum distance
         int min_tr = -1;
-        FP_TYPE min_dist = 2e20;
+        FP_TYPE min_cost = 2e20;
         for (int ct=0; ct<tr_list.get_number_of_tracks(); ct++)
         {
             // don't compare the same track with itself
@@ -798,11 +778,21 @@ void tracker::apply_merge_tracks(void)
             // check distance against search radius
             if (dist < sr && back_proj_pt.timestep == forw_proj_pt.timestep)
             {
-                // check against minimum distance and use this track for merging
-                if (dist < min_dist)
+                // perform checks against minimum distance and curvature value and 
+                // use this track for merging if both criteria are met
+                // create the interpolated point
+                track_point proj_pt = create_interpolated_point(forw_track, back_track, 1);
+                // get the curvature cost between the last two points of the forward track
+                // and the projected point
+                FP_TYPE C = curvature(forw_track, &(proj_pt.pt));
+                track_point* forw_last_pt = forw_track->get_last_track_point();
+                FP_TYPE D = haversine(forw_last_pt->pt.lon, forw_last_pt->pt.lat, 
+                                      proj_pt.pt.lon, proj_pt.pt.lat, EARTH_R);
+                FP_TYPE cost = C * CURVATURE_S * D;
+                if (cost < MAX_COST)
                 {
                     min_tr = ct;
-                    min_dist = dist;
+                    min_cost = cost;
                 }
             }
         }
@@ -897,6 +887,38 @@ FP_TYPE mean_curvature(track_point** TR_pts, int L)
 
 /*****************************************************************************/
 
+FP_TYPE max_curvature(track_point** TR_pts, int L)
+{
+    // loop through the track points
+    int D=L/2;
+    FP_TYPE max = -1.0;
+    for (int i=0; i<L-D; i++)
+    {
+        if (TR_pts[i] == NULL || TR_pts[i+1] == NULL || TR_pts[i+2] == NULL)
+            continue;
+        else
+        {
+            // get distance between A and previous A point
+            FP_TYPE dist_A = haversine(TR_pts[i+1]->pt.lon, TR_pts[i+1]->pt.lat,
+                                       TR_pts[i+2]->pt.lon, TR_pts[i+2]->pt.lat,
+                                       EARTH_R);
+            // calculate the local curve / cost
+            FP_TYPE C = get_curvature(TR_pts[i]->pt.lon,   TR_pts[i]->pt.lat,
+                                      TR_pts[i+1]->pt.lon, TR_pts[i+1]->pt.lat,
+                                      TR_pts[i+2]->pt.lon, TR_pts[i+2]->pt.lat) * 
+                                      dist_A * CURVATURE_S;
+            if (C > max)
+                max = C;
+        }
+    }
+    if (max == -1.0)
+        return MAX_COST;
+    else
+        return max;
+}
+
+/*****************************************************************************/
+
 int exchange_points_outcome(track* tr_A, track* tr_B, int tr_A_idx, int tr_B_idx, FP_TYPE sr)
 {
     // check that the index required in track_B actually exists in track_B
@@ -949,6 +971,7 @@ int exchange_points_outcome(track* tr_A, track* tr_B, int tr_A_idx, int tr_B_idx
         if (tr_B_idx+i-D >= 0 && tr_B_idx+i-D < tr_B->get_persistence())
             track_points[i] = tr_B->get_track_point(tr_B_idx+i-D);
     }
+    track_points[2] = tr_B->get_track_point(tr_B_idx);
     FP_TYPE track_B_cost = mean_curvature(track_points, L);
     if (track_B_cost < track_A_cost)
         return 1;
