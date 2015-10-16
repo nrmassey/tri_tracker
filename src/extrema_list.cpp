@@ -173,7 +173,7 @@ void extrema_list::load(std::string input_fname, FP_TYPE& mv, bool append)
 {
 	// read extrema in a binary format file
 	std::ifstream in_file;
-	std::cout << "# Loading extrema data" << std::endl;
+	std::cout << "# Loading extrema data: " << input_fname.c_str() << std::endl;
 	in_file.open(input_fname.c_str(), std::ios::in | std::ios::binary);
 	if (!in_file)
         throw(std::string("Loading extrema data.  File could not be opened: ") + input_fname);

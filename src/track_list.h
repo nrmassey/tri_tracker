@@ -48,9 +48,9 @@ class track
         FP_TYPE get_length(int n_tsteps=-1);
         int get_persistence(void);
         FP_TYPE get_deviation(void);
-        FP_TYPE get_curvature_sum(int n_steps=-1);
-        FP_TYPE get_curvature_mean(int n_steps=-1);
-        FP_TYPE get_curvature_stddev(int n_steps=-1, FP_TYPE mean=2e20);
+        FP_TYPE get_curvature_sum(void);
+        FP_TYPE get_curvature_mean(void);
+        FP_TYPE get_curvature_stddev(FP_TYPE mean=2e20);
         
         // get / set deleted
         void set_deleted();

@@ -68,6 +68,9 @@ track_point* track::get_last_track_point(void)
 
 track_point* track::get_track_point(int idx)
 {
+/*    std::vector<track_point>::iterator it_list = tr.begin();
+    std::advance(it_list, idx);
+    return &(*it_list);*/
     return &(tr[idx]);
 }
 
@@ -83,16 +86,16 @@ std::vector<track_point>* track::get_track(void)
 FP_TYPE track::get_length(int n_tsteps)
 {
     FP_TYPE length=0.0;
-    int st = 0;
-    if (n_tsteps == -1)
-        st = 1;
-    else
-        st = tr.size() - n_tsteps;
-    for (unsigned int i=1; i<tr.size(); i++)
+    std::vector<track_point>::iterator it_tp0 = tr.begin();
+    std::vector<track_point>::iterator it_tp1 = tr.begin();
+    it_tp1++;
+    while(it_tp1 != tr.end())
     {
-        steering_extremum* tp1 = &(tr[i].pt);
-        steering_extremum* tp0 = &(tr[i-1].pt);
+        steering_extremum* tp1 = &(it_tp1->pt);
+        steering_extremum* tp0 = &(it_tp0->pt);
         length += haversine(tp0->lon, tp0->lat, tp1->lon, tp1->lat, EARTH_R);
+        it_tp0++;
+        it_tp1++;
     }
     return length;
 }
@@ -116,60 +119,72 @@ int track::get_persistence(void)
 
 /*****************************************************************************/
 
-FP_TYPE track::get_curvature_sum(int n_tsteps)
+FP_TYPE track::get_curvature_sum(void)
 {
     FP_TYPE curve_sum = 0.0;
-    int st = 0;
-    if (n_tsteps == -1)
-        st = 2;
-    else
-        st = tr.size() - n_tsteps;
-    for (unsigned int i=2; i<tr.size(); i++)
+    std::vector<track_point>::iterator it_tp0 = tr.begin();
+    std::vector<track_point>::iterator it_tp1 = tr.begin();
+    std::vector<track_point>::iterator it_tp2 = tr.begin();
+    it_tp1++;
+    it_tp2++; it_tp2++;         // inc by 2
+    while(it_tp2 != tr.end())
     {
-        steering_extremum* tp0 = &(tr[i-2].pt);
-        steering_extremum* tp1 = &(tr[i-1].pt);
-        steering_extremum* tp2 = &(tr[i].pt);
+        steering_extremum* tp0 = &(it_tp0->pt);
+        steering_extremum* tp1 = &(it_tp1->pt);
+        steering_extremum* tp2 = &(it_tp2->pt);
         curve_sum += get_curvature(tp0->lon, tp0->lat, tp1->lon, tp1->lat,
                                    tp2->lon, tp2->lat);
+        it_tp0++;
+        it_tp1++;
+        it_tp2++;
     }
     return curve_sum;
 }
 
 /*****************************************************************************/
 
-FP_TYPE track::get_curvature_mean(int n_tsteps)
+FP_TYPE track::get_curvature_mean(void)
 {
-    FP_TYPE c_sum = get_curvature_sum(n_tsteps);
-    return c_sum / get_persistence();
+    FP_TYPE c_sum = get_curvature_sum();
+    int P = get_persistence();
+    if (P != 0.0)
+        return c_sum / P;
+    else
+        return c_sum;
 }
 
 /*****************************************************************************/
 
-FP_TYPE track::get_curvature_stddev(int n_tsteps, FP_TYPE mean)
+FP_TYPE track::get_curvature_stddev(FP_TYPE mean)
 {
     // get the mean
     FP_TYPE c_mean;
     if (mean == 2e20)
-        c_mean = get_curvature_mean(n_tsteps);
+        c_mean = get_curvature_mean();
     else
         c_mean = mean;
         
     // calculate the standard deviation
     FP_TYPE curve_dev_sum = 0.0;
-    int st = 0;
-    if (n_tsteps == -1)
-        st = 2;
-    else
-        st = tr.size() - n_tsteps;
-    for (unsigned int i=2; i<tr.size(); i++)
+    std::vector<track_point>::iterator it_tp0 = tr.begin();
+    std::vector<track_point>::iterator it_tp1 = tr.begin();
+    std::vector<track_point>::iterator it_tp2 = tr.begin();
+    it_tp1++;
+    it_tp2++; it_tp2++;         // inc by 2
+
+    while(it_tp2 != tr.end())
     {
-        steering_extremum* tp0 = &(tr[i-2].pt);
-        steering_extremum* tp1 = &(tr[i-1].pt);
-        steering_extremum* tp2 = &(tr[i].pt);
+        steering_extremum* tp0 = &(it_tp0->pt);
+        steering_extremum* tp1 = &(it_tp1->pt);
+        steering_extremum* tp2 = &(it_tp2->pt);
+
         FP_TYPE this_curve = get_curvature(tp0->lon, tp0->lat, 
                                            tp1->lon, tp1->lat,
                                            tp2->lon, tp2->lat);
         curve_dev_sum += (this_curve - c_mean) * (this_curve - c_mean);
+        it_tp0++;
+        it_tp1++;
+        it_tp2++;
     }
     return sqrt(curve_dev_sum * 1.0 / get_persistence());
 }
@@ -189,6 +204,10 @@ int track_list::get_number_of_tracks(void)
 
 track* track_list::get_track(int track_n)
 {
+/*    std::vector<track>::iterator it_list = tr_list.begin();
+    std::advance(it_list, track_n);
+
+    return &(*it_list);*/
     return &(tr_list[track_n]);
 }
 
@@ -203,8 +222,8 @@ void track_list::add_track(track& new_track)
 
 void track_list::consolidate_tracks(void)
 {
-    for (unsigned int tr=0; tr<tr_list.size(); tr++)
-        tr_list[tr].consolidate_candidate_point();
+    for (std::vector<track>::iterator it_list = tr_list.begin(); it_list != tr_list.end(); it_list++)
+        it_list->consolidate_candidate_point();
 }
 
 /*****************************************************************************/
@@ -213,13 +232,9 @@ void track_list::prune_tracks(void)
 {
     // remove any tracks with 0 length
     std::vector<track> new_tr_list;
-    for (unsigned int tr=0; tr<tr_list.size(); tr++)
-    {
-        if (! tr_list[tr].is_deleted())
-        {
-            new_tr_list.push_back(tr_list[tr]);
-        }
-    }
+    for (std::vector<track>::iterator it_list = tr_list.begin(); it_list != tr_list.end(); it_list++)
+        if (! it_list->is_deleted())
+            new_tr_list.push_back(*it_list);
     tr_list = new_tr_list;
 }
 
@@ -266,10 +281,10 @@ void track_list::save(std::string output_fname)
         // write the number of track points
         write_int(out, it->get_persistence());
         std::vector<track_point>* trk = it->get_track();
-        for (int tp=0; tp < it->get_persistence(); tp++)
+        for (std::vector<track_point>::iterator i_tp = trk->begin(); i_tp != trk->end(); i_tp++)
         {
             // get the track point
-            track_point* trk_pt = &((*trk)[tp]);
+            track_point* trk_pt = &(*i_tp);
             // write the frame number first
             write_int(out, trk_pt->timestep);
             // write the extremum point
@@ -299,7 +314,8 @@ void track_list::save_text(std::string output_fname)
     for (std::vector<track>::iterator it=tr_list.begin(); it!=tr_list.end(); it++)
     {
         // write the number of track points
-        out << it->get_persistence() << " " << it->get_curvature_mean() << std::endl;
+        if (it->get_persistence() >= 2)
+            out << it->get_persistence() << " " << it->get_curvature_mean() << std::endl;
         std::vector<track_point>* trk = it->get_track();
         for (int tp=0; tp < it->get_persistence(); tp++)
         {
@@ -327,7 +343,7 @@ void track_list::save_text(std::string output_fname)
             out << c << " ";
             // write the extremum point
             trk_pt->pt.save_text(out);
-            out << std::endl;           // component costs          
+            out << std::endl;           // component costs
         }
     }
     out.close();        

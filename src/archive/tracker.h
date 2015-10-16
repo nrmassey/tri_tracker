@@ -49,14 +49,16 @@ class tracker
         // build the queue of extrema for the timestep
         void build_extrema_queue(int timestep);
         
+        // functions for optimising the tracks
+        int optimise_tracks(int tr_An, int tr_Bn);
+        void apply_optimise_tracks(void);
+        // merge tracks using phantom feature points
+        void merge_tracks(track* forw_track, track* back_track, int c_step);
+        void apply_merge_tracks(void);
+        // join tracks in subsequent timesteps
+        void apply_join_tracks(void);
         // split short tracks (<=2 timesteps)
         void split_short_tracks(void);
-        
-        // optimisation processes
-        void add_phantom_points(void);
-        void del_phantom_points(void);
-        void apply_optimise_tracks(void);
-        
         // get a list of overlapping tracks (overlapping in time) for a particular track number
         std::vector<int> get_overlapping_tracks(int track_number);
         
