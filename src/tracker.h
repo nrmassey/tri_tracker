@@ -56,7 +56,8 @@ class tracker
         void add_phantom_points(void);
         void del_phantom_points(void);
         void apply_optimise_tracks(void);
-        
+        track create_composite_track(track* tr_A, int tr_A_st, int tr_A_ed,
+                                     track* tr_B, int tr_B_st, int tr_B_ed);
         // get a list of overlapping tracks (overlapping in time) for a particular track number
         std::vector<int> get_overlapping_tracks(int track_number);
         

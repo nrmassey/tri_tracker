@@ -849,6 +849,20 @@ void tracker::del_phantom_points(void)
 
 /*****************************************************************************/
 
+track tracker::create_composite_track(track* tr_A, int tr_A_st, int tr_A_ed,
+                                      track* tr_B, int tr_B_st, int tr_B_ed)
+{
+    track new_track;
+    for (int a=tr_A_st; a<=tr_A_ed; a++)
+        new_track.tr.push_back(tr_A->tr[a]);
+    
+    for (int b=tr_B_st; b<=tr_B_ed; b++)
+        new_track.tr.push_back(tr_B->tr[b]);
+    return new_track;
+}
+
+/*****************************************************************************/
+
 void tracker::apply_optimise_tracks(void)
 {
     // optimise the tracks by exchanging segments of track between the tracks
@@ -871,6 +885,13 @@ void tracker::apply_optimise_tracks(void)
         
         // get the tracks which overlap this one
         std::vector<int> ov_trks = get_overlapping_tracks(tr_An);
+        
+        for (int tr=0; tr<ov_trks; tr++)
+        {
+            track* trk_B = tr_list.get_track(tr_Bn);
+            // create compound overlapping tracks from all combinations  of
+            // the overlapping tracks
+        }
         
         if (tr_An == 0)
             std::cout << "\b";
