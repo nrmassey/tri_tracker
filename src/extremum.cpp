@@ -78,6 +78,7 @@ void steering_extremum::load(std::ifstream& in_file)
 	sv_v = read_float(in_file);
 	// read the object labels
 	int n_tris_in_obj = read_int(in_file);
+	object_labels.clear();
 	for (int o=0; o<n_tris_in_obj; o++)
 	{
 		LABEL obj_label = read_label(in_file);

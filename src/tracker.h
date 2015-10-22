@@ -49,17 +49,18 @@ class tracker
         // build the queue of extrema for the timestep
         void build_extrema_queue(int timestep);
         
-        // split short tracks (<=2 timesteps)
-        void split_short_tracks(void);
-        
         // optimisation processes
         void add_phantom_points(void);
         void del_phantom_points(void);
         void apply_optimise_tracks(void);
-        track create_composite_track(track* tr_A, int tr_A_st, int tr_A_ed,
-                                     track* tr_B, int tr_B_st, int tr_B_ed);
+        track create_composite_track(track* trk_A, track* trk_B, int tr_B_st, int tr_B_ed);
+        void create_and_evaluate_composite_tracks(track* tr_A, track* tr_B,
+                                                  FP_TYPE& comp_trk_cost, 
+                                                  FP_TYPE& comp_trk_len,
+                                                  int& tr_Bsi, int& tr_Bse);
+        void add_optimised_tracks(track* trk_A, track* trk_B, int tr_Bs, int tr_Be);
         // get a list of overlapping tracks (overlapping in time) for a particular track number
-        std::vector<int> get_overlapping_tracks(int track_number);
+        std::vector<int> get_overlapping_tracks(track* tr_A);
         
         // functions for deriving the initial tracks
         int  determine_track_for_candidate(steering_extremum* svex, int t);

@@ -83,7 +83,7 @@ std::vector<track_point>* track::get_track(void)
 
 /*****************************************************************************/
 
-FP_TYPE track::get_length(int n_tsteps)
+FP_TYPE track::get_length(void)
 {
     FP_TYPE length=0.0;
     std::vector<track_point>::iterator it_tp0 = tr.begin();
@@ -233,7 +233,7 @@ void track_list::prune_tracks(void)
     // remove any tracks with 0 length
     std::vector<track> new_tr_list;
     for (std::vector<track>::iterator it_list = tr_list.begin(); it_list != tr_list.end(); it_list++)
-        if (! it_list->is_deleted())
+        if (! it_list->is_deleted() && it_list->get_persistence() != 0)
             new_tr_list.push_back(*it_list);
     tr_list = new_tr_list;
 }

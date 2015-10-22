@@ -20,9 +20,21 @@ class extremum
         extremum(const extremum& ex) : lon(ex.lon), lat(ex.lat), 
                  intensity(ex.intensity), delta(ex.delta)
         {
-        for (LABEL_STORE::const_iterator it_obj_lab = ex.object_labels.begin();
-             it_obj_lab != ex.object_labels.end(); it_obj_lab++)
-             object_labels.push_back(*it_obj_lab);
+            object_labels.clear();
+            for (LABEL_STORE::const_iterator it_obj_lab = ex.object_labels.begin();
+                 it_obj_lab != ex.object_labels.end(); it_obj_lab++)
+                 object_labels.push_back(*it_obj_lab);
+        }
+        void operator=(const extremum&ex)
+        {
+            lon = ex.lon;
+            lat = ex.lat;
+            intensity = ex.intensity;
+            delta = ex.delta;
+            object_labels.clear();
+            for (LABEL_STORE::const_iterator it_obj_lab = ex.object_labels.begin();
+                 it_obj_lab != ex.object_labels.end(); it_obj_lab++)
+                 object_labels.push_back(*it_obj_lab);
         }
         extremum(FP_TYPE ilon, FP_TYPE ilat, FP_TYPE iintensity, FP_TYPE idelta):
                  lon(ilon), lat(ilat), intensity(iintensity), delta(idelta) {}
