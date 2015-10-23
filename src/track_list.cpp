@@ -17,6 +17,7 @@ track::track(void)
 {
     cand_pt.timestep = -1;
     deleted = false;
+    tr.clear();
 }
 
 /*****************************************************************************/
@@ -76,9 +77,14 @@ track_point* track::get_track_point(int idx)
 
 /*****************************************************************************/
 
-std::vector<track_point>* track::get_track(void)
+track* track::subset(int st_idx, int ed_idx)
 {
-    return &tr;
+    // subset a track into a new track
+    track* new_track = new track();
+    new_track->tr.resize(ed_idx-st_idx);
+    for (int i=st_idx; i<ed_idx; i++)
+        new_track->tr[i-st_idx] = tr[i];
+    return new_track;
 }
 
 /*****************************************************************************/
@@ -280,7 +286,7 @@ void track_list::save(std::string output_fname)
     {
         // write the number of track points
         write_int(out, it->get_persistence());
-        std::vector<track_point>* trk = it->get_track();
+        std::vector<track_point>* trk = &(it->tr);
         for (std::vector<track_point>::iterator i_tp = trk->begin(); i_tp != trk->end(); i_tp++)
         {
             // get the track point
@@ -316,7 +322,7 @@ void track_list::save_text(std::string output_fname)
         // write the number of track points
         if (it->get_persistence() >= 2)
             out << it->get_persistence() << " " << it->get_curvature_mean() << std::endl;
-        std::vector<track_point>* trk = it->get_track();
+        std::vector<track_point>* trk = &(it->tr);
         for (int tp=0; tp < it->get_persistence(); tp++)
         {
             FP_TYPE c = 0.0;

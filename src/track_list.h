@@ -28,6 +28,7 @@ class track_point
 
 class track
 {
+    friend class track_list;
     friend class tracker;
     public:
         track(void);
@@ -40,9 +41,12 @@ class track
         // end of the track
         void consolidate_candidate_point(void);
 
+        // get various points on the track
         track_point* get_last_track_point(void);
         track_point* get_track_point(int idx);
-        std::vector<track_point>* get_track(void);
+        
+        // subset a track into a new track
+        track* subset(int st_idx, int ed_idx);
         
         // get length / persistence / deviation / sum of curvature
         FP_TYPE get_length(void);
