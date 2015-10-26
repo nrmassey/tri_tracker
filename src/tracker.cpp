@@ -919,6 +919,7 @@ struct opt_outcome
 {
     FP_TYPE cur_opt_cost;
     FP_TYPE cur_opt_len;
+    int pers;
     
     int trk_A_st;
     int trk_A_ed;
@@ -950,7 +951,7 @@ void tracker::apply_optimise_tracks(void)
         
         // don't optimise tracks that have only one point!
         // check whether this track has been deleted
-        if (trk_Al < 2 || trk_A->is_deleted())
+        if (trk_A->is_deleted())
         {
             if (tr_An == 0)
                 std::cout << "\b";
@@ -1008,16 +1009,18 @@ void tracker::apply_optimise_tracks(void)
                                 // get the length and cost of the merged track
                                 FP_TYPE new_cost = total_curvature_cost(merged_track);
                                 FP_TYPE new_len = merged_track->get_length();
+//                                std::cout << " " << trk_A->get_persistence() << " " << merged_track->get_persistence() 
+//                                          << " " << trk_A_cost << " " << new_cost << " " << std::endl;
                                 // check whether the distance is greater in the merged track
                                 // and the total cost is less
                                 if (new_len >= 0.9 * OPT.cur_opt_len &&
                                     new_cost <= 1.1 * OPT.cur_opt_cost)
                                 {
-                                    std::cout << " " << trk_A_cost << " " << new_cost << std::endl;
                                     OPT.cur_opt_len = new_len;
                                     OPT.cur_opt_cost = new_cost;
                                     OPT.trk_B_st = trk_B_st;
                                     OPT.trk_B_ed = trk_B_ed;
+                                    OPT.pers = merged_track->get_persistence();
                                 }
                                 delete merged_track;
                             }
@@ -1025,16 +1028,16 @@ void tracker::apply_optimise_tracks(void)
                         }
                     }
                     delete trk_A_sub;
-                    
 /*                }
             }*/
         
         }
         
         // does the track require merging and new tracks creating?
-        if (OPT.cur_opt_cost < trk_A_cost)
+        if (OPT.cur_opt_cost < trk_A_cost && OPT.pers > 3)
         {
             std::cout << " " << trk_A_cost << " " << OPT.cur_opt_cost << " " << std::endl;
+            std::cout << " " << trk_Al << " " << OPT.pers << " " << std::endl;
         }
         
         if (tr_An == 0)
