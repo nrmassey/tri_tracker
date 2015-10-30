@@ -17,6 +17,23 @@
 
 /*****************************************************************************/
 
+// Optimisation routine outcome
+struct opt_outcome
+{
+    FP_TYPE cur_opt_cost;
+    FP_TYPE cur_opt_len;
+    
+    int trk_A_st;
+    int trk_A_ed;
+    int trk_A_idx;
+    
+    int trk_B_st;
+    int trk_B_ed;
+    int trk_B_idx;
+};
+
+/*****************************************************************************/
+
 class tracker
 {
     public:
@@ -50,12 +67,12 @@ class tracker
         void build_extrema_queue(int timestep);
         
         // optimisation processes
-        void add_phantom_points(void);
-        void del_phantom_points(void);
+        void add_phantom_points(track* trk_P);
+        void remove_phantom_points(track* trk_P);
         void apply_optimise_tracks(void);
-        track* merge_tracks(track* trk_A, track* trk_B);
-
-        void add_optimised_tracks(track* trk_A, track* trk_B, int tr_Bs, int tr_Be);
+        track* merge_tracks(track* trk_A, track* trk_B, bool& contains_A);
+        void add_optimised_track(opt_outcome OPT);
+        
         // get a list of overlapping tracks (overlapping in time) for a particular track number
         std::vector<int> get_overlapping_tracks(track* tr_A);
         

@@ -54,7 +54,11 @@ void track::consolidate_candidate_point(void)
 {
     // assign the current candidate point to the track
     if (cand_pt.timestep != -1)
+    {
+/*        if (get_persistence() > 0)
+            assert(get_last_track_point()->timestep == cand_pt.timestep -1);*/
         tr.push_back(cand_pt);
+    }
     cand_pt.timestep = -1;  // clear the candidate point
 }
 
@@ -84,6 +88,9 @@ track* track::subset(int st_idx, int ed_idx)
     new_track->tr.resize(ed_idx-st_idx);
     for (int i=st_idx; i<ed_idx; i++)
         new_track->tr[i-st_idx] = tr[i];
+    
+    // check that the track is continuous
+    
     return new_track;
 }
 
@@ -320,8 +327,10 @@ void track_list::save_text(std::string output_fname)
     for (std::vector<track>::iterator it=tr_list.begin(); it!=tr_list.end(); it++)
     {
         // write the number of track points
+        FP_TYPE curv_mean = 0.0;
         if (it->get_persistence() >= 2)
-            out << it->get_persistence() << " " << it->get_curvature_mean() << std::endl;
+            curv_mean = it->get_curvature_mean();
+        out << it->get_persistence() << " " << curv_mean << std::endl;
         std::vector<track_point>* trk = &(it->tr);
         for (int tp=0; tp < it->get_persistence(); tp++)
         {

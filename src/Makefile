@@ -14,13 +14,13 @@ CPP = g++ -stdlib=libstdc++
 INCLUDE_DIRS = -Itclap/include/ -I./
 LIBRARY_DIRS = -L/usr/local/lib
 
-DEBUG_FLAGS = -Wno-deprecated -O0 -g -Wall -pg
-RELEASE_FLAGS = -Wno-deprecated -O3 -msse3
+DEBUG_FLAGS = -Wno-deprecated -O0 -g -Wall -pg 
+RELEASE_FLAGS = -Wno-deprecated -O3 -msse3 -g
 PROFILE_FLAGS = $(RELEASE_FLAGS) -pg
 COMMON_FLAGS = -DFP_TYPE=float
-FLAGS = $(RELEASE_FLAGS) $(COMMON_FLAGS)
+#FLAGS = $(RELEASE_FLAGS) $(COMMON_FLAGS)
 #FLAGS = $(PROFILE_FLAGS) $(COMMON_FLAGS)
-#FLAGS = $(DEBUG_FLAGS) $(COMMON_FLAGS)
+FLAGS = $(DEBUG_FLAGS) $(COMMON_FLAGS)
 
 # Linker variables
 LDFLAGS = $(FLAGS) -stdlib=libstdc++

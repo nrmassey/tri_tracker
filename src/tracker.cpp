@@ -31,6 +31,7 @@ const FP_TYPE MAX_CURVATURE = 90.0;
 const FP_TYPE CURVATURE_S = 1e-3;
 const FP_TYPE MAX_GEOWIND = 90.0;
 const FP_TYPE MAX_INTENSITY = 1e6;
+const FP_TYPE MAX_COST = 60 * 1000.0;
 
 /*****************************************************************************/
 
@@ -143,7 +144,6 @@ void project_point_from_track(track* TR, int direction, int c_step, FP_TYPE& P_l
     steering_extremum* TR_pt_1 = NULL; 
     steering_extremum* TR_pt_2 = NULL;
     int pr = TR->get_persistence(); // last point in the track
-
     if (direction == 1)
     {
         TR_pt_1 = &(TR->get_track_point(pr-2)->pt);
@@ -154,9 +154,8 @@ void project_point_from_track(track* TR, int direction, int c_step, FP_TYPE& P_l
         TR_pt_1 = &(TR->get_track_point(1)->pt);
         TR_pt_2 = &(TR->get_track_point(0)->pt);
     }
-
-    P_lon = TR_pt_2->lon + c_step * (TR_pt_2->lon - TR_pt_1->lon);
-    P_lat = TR_pt_2->lat + c_step * (TR_pt_2->lat - TR_pt_1->lat);
+    P_lon = TR_pt_2->lon + (TR_pt_2->lon - TR_pt_1->lon);
+    P_lat = TR_pt_2->lat + (TR_pt_2->lat - TR_pt_1->lat);
 }
 
 /*****************************************************************************/
@@ -237,7 +236,6 @@ FP_TYPE total_curvature_cost(track* TR)
 }
 
 /*****************************************************************************/
-
 
 FP_TYPE overlap(track* TR, steering_extremum* EX_svex)
 {
@@ -439,10 +437,11 @@ int tracker::apply_rules(track* TR, steering_extremum* EX_svex, FP_TYPE& cost)
         {
             // don't allow tracks to move more than 90 degrees over a timestep
             FP_TYPE curvature_val = curvature(TR, EX_svex);
+            FP_TYPE curvature_cost = curvature_val * distance_val * CURVATURE_S;
             if (curvature_val < MAX_CURVATURE)
             {
                 rules_bf |= CURVATURE;
-                cost = curvature_val * distance_val * CURVATURE_S;
+                cost = curvature_cost;
             }
             else
             {
@@ -451,6 +450,12 @@ int tracker::apply_rules(track* TR, steering_extremum* EX_svex, FP_TYPE& cost)
                     rules_bf = 0;
                     cost = 2e20;
                 }
+            }
+            // penalise if max cost exceeded
+            if (curvature_cost > MAX_COST)
+            {
+                rules_bf = 0;
+                cost = 2e20;
             }
         }
     }
@@ -631,9 +636,7 @@ void tracker::find_tracks(void)
     // do the optimisation
     for (int o=0; o<opt_steps; o++)
     {
-//        add_phantom_points();
         apply_optimise_tracks();
-//        del_phantom_points();
         tr_list.prune_tracks();
     }
 }
@@ -662,7 +665,7 @@ track_point project_point(track* TR, int direction, FP_TYPE hrs_per_ts, int c_st
     // calculate projection from last two points
     if (pr > 1)
     {
-        project_point_from_track(TR, direction, c_step, ret_pt.pt.lon, ret_pt.pt.lat);        
+        project_point_from_track(TR, direction, c_step, ret_pt.pt.lon, ret_pt.pt.lat); 
         // check which is further from last point - this or the point projected from
         // the steering vector
         FP_TYPE proj_dist  = haversine(TR_pt_1->lon, TR_pt_1->lat, ret_pt.pt.lon, ret_pt.pt.lat, EARTH_R);
@@ -690,7 +693,7 @@ track_point project_point(track* TR, int direction, FP_TYPE hrs_per_ts, int c_st
     // copy the intensity and delta
     ret_pt.pt.intensity = TR_pt_1->intensity;
     ret_pt.pt.delta = TR_pt_1->delta;
-    ret_pt.pt.object_labels.clear();
+    ret_pt.pt.object_labels.push_back(LABEL(0,0));
     return ret_pt;
 }
 
@@ -699,7 +702,7 @@ track_point project_point(track* TR, int direction, FP_TYPE hrs_per_ts, int c_st
 bool tracks_overlap(track* trk_A, track* trk_B)
 {
     // check first for deleted tracks
-    if (trk_B->is_deleted())
+    if (trk_A->is_deleted())
         return false;
     
     if (trk_B->is_deleted())
@@ -711,12 +714,12 @@ bool tracks_overlap(track* trk_A, track* trk_B)
     
     int tr_B_st = trk_B->get_track_point(0)->timestep;
     int tr_B_ed = trk_B->get_last_track_point()->timestep;
-    // four overlapping scenarios handled by four clauses:
+
+    // four overlapping scenarios handled by three clauses:
     //     +----+ +----+      +----+       +-+          tr_A
     //   +----+     +----+     +--+      +-----+        tr_B
     if ((tr_A_st >= tr_B_st && tr_A_st <= tr_B_ed) ||
         (tr_A_ed >= tr_B_st && tr_A_ed <= tr_B_ed) ||
-        (tr_A_st >= tr_B_st && tr_A_ed <= tr_B_ed) ||
         (tr_A_st <= tr_B_st && tr_A_ed >= tr_B_ed))
         return true;
     else
@@ -744,76 +747,38 @@ std::vector<int> tracker::get_overlapping_tracks(track* tr_A)
 
 /*****************************************************************************/
 
-void tracker::add_phantom_points(void)
+void tracker::add_phantom_points(track* trk_P)
 {
-    // add a phantom feature point to the beginning and end of the track
-    // this aids in the optimisation process
-    std::cout << "# Adding phantom feature points, track number: " ;
-    for (int tr_An=0; tr_An < tr_list.get_number_of_tracks(); tr_An++)
-    {
-        std::cout << tr_An;
-        std::cout.flush();
-        
-        // get the track
-        track* tr_A = tr_list.get_track(tr_An);
-        // project a point forward and backward from the track
-        track_point proj_forw = project_point(tr_A, 1, hrs_per_t_step, 1, sr);
-        track_point proj_back = project_point(tr_A, -1, hrs_per_t_step, 1, sr);
-        
-        // set them to be phantom points
-        proj_forw.rules_bf = PHANTOM;
-        proj_back.rules_bf = PHANTOM;
-        
-        // add to the front and back of the track list
-        tr_A->tr.insert(tr_A->tr.begin(),proj_back);
-        tr_A->tr.push_back(proj_forw);
-        
-        int e = tr_An;
-        if (tr_An == 0)
-            std::cout << "\b";
-        while (e > 0)
-        {
-            e = e / 10;
-            std::cout << "\b";
-        }
-    }
-    std::cout << std::endl;
+    // add phantom points to a track
+    // project a point forward and backward from the track
+    track_point proj_forw = project_point(trk_P, 1, hrs_per_t_step, 1, sr);
+    track_point proj_back = project_point(trk_P, -1, hrs_per_t_step, 1, sr);
+
+    // set them to be phantom points
+    proj_forw.rules_bf = PHANTOM;
+    proj_back.rules_bf = PHANTOM;
+
+    // add to the front and back of the track list
+    trk_P->tr.insert(trk_P->tr.begin(),proj_back);
+    trk_P->tr.push_back(proj_forw);
 }
 
 /*****************************************************************************/
 
-void tracker::del_phantom_points(void)
+void tracker::remove_phantom_points(track* trk_P)
 {
-    // remove the phantom features point at the beginning and end of the track
-    std::cout << "# Removing phantom feature points, track number: " ;
-    for (int tr_An=0; tr_An < tr_list.get_number_of_tracks(); tr_An++)
-    {
-        std::cout << tr_An;
-        std::cout.flush();
-        int e = tr_An;
-        
-        // get the track
-        track* tr_A = tr_list.get_track(tr_An);
-        // check if last track point and first track point are PHANTOM
-        if (tr_A->tr.front().rules_bf == PHANTOM)
-            tr_A->tr.erase(tr_A->tr.begin());
-        if (tr_A->tr.back().rules_bf == PHANTOM)
-            tr_A->tr.pop_back();
-        
-        if (tr_An == 0)
-            std::cout << "\b";
-        while (e > 0)
-        {
-            e = e / 10;
-            std::cout << "\b";
-        }
-    }
-    std::cout << std::endl;
+    // remove the phantom feature points from the end and the beginning of
+    // the track, but not from the middle
+    if (trk_P->tr.front().rules_bf == PHANTOM)
+        trk_P->tr.erase(trk_P->tr.begin());
+    if (trk_P->tr.back().rules_bf == PHANTOM)
+        trk_P->tr.pop_back();
 }
 
 /*****************************************************************************/
 
-track* tracker::merge_tracks(track* trk_A, track* trk_B)
+
+track* tracker::merge_tracks(track* trk_A, track* trk_B, bool& contains_A)
 {
     // create a composite track which contains track A with a section replaced
     // by a section of track B.  This section occurs between the timesteps 
@@ -830,6 +795,9 @@ track* tracker::merge_tracks(track* trk_A, track* trk_B)
     int off_A = trk_A_tss - min_tss;
     int off_B = trk_B_tss - min_tss;
     
+    // does the track contain any of track A?
+    contains_A = false;
+    
     // note case might occur where min_tss < 0 as the phantom point is
     // projected backwards from zero.  This is fine! :)
     track* new_track = new track();
@@ -840,93 +808,74 @@ track* tracker::merge_tracks(track* trk_A, track* trk_B)
     {
         int ts = min_tss + tp;
         // check for copy from trk_B
-        std::string trk_used;
-        if ((ts < trk_A_tss && ts >= trk_B_tss && ts <= trk_B_tse) or
-            (ts > trk_A_tse && ts <= trk_B_tse))
+        if (ts >= trk_B_tss && ts <= trk_B_tse)
             new_track->tr[tp] = *(trk_B->get_track_point(tp-off_B));
-        else
+        else if (ts >= trk_A_tss && ts <= trk_A_tse)
+        {
             new_track->tr[tp] = *(trk_A->get_track_point(tp-off_A));
+            contains_A = true;
+        }
     }
+/*    for (int tp=1; tp<new_track->get_persistence(); tp++)
+    {
+        assert(new_track->tr[tp].timestep == new_track->tr[tp-1].timestep+1);
+    }*/
     return new_track;
 }
 
 /*****************************************************************************/
 
-void tracker::add_optimised_tracks(track* trk_A, track* trk_B, int tr_Bs, int tr_Be)
+void tracker::add_optimised_track(opt_outcome OPT)
 {
-    // there will be up to four:
-    // 1. the part of B before tr_Bs, which is not used within A
-    // 2. the part of B after tr_Be, which is not used within A
-    // 3. the part of A which lies between the timesteps of tr_Bs and tr_Be
-    // 4. the composite track
+    // the OPT struct contains the information needed to create the new tracks:
+    // trk_A_st  - end index of the trk A subset
+    // trk_A_ed  - starting index of the trk_A subset
+    // trk_A_idx - index into track list for track A
     
-    // track 1 - B before tr_Bs
-/*    if (tr_Bs > 0)
-    {
-        track new_track_1;
-        new_track_1.tr.resize(tr_Bs);
-        for (int tp=0; tp < tr_Bs; tp++)
-            new_track_1.tr[tp] = *(trk_B->get_track_point(tp));
-        // add the tracks if they do not have zero length
-        if (new_track_1.get_persistence() != 0)
-            tr_list.add_track(new_track_1);
-    }
+    // trk_B_st  - end index of the trk B subset
+    // trk_B_ed  - starting index of the trk_B subset
+    // trk_B_idx - index into track list for track B
+
+    // there will be up to five tracks newly created:
+    // 1. the part of A before the first timestep of the merged track (might be zero length)
+    // 2. the part of A after the last timestep of the merged track (might be zero length)
+
+    // get the tracks
+    track* trk_A = tr_list.get_track(OPT.trk_A_idx);
+    track* trk_B = tr_list.get_track(OPT.trk_B_idx);
+
+    // subset the tracks according to the OPT info
+    track* sub_trk_A = trk_A->subset(OPT.trk_A_st, OPT.trk_A_ed);
+    track* sub_trk_B = trk_B->subset(OPT.trk_B_st, OPT.trk_B_ed);
     
-    // track 2 - B after tr_Be
-    if (tr_Be > 0)
-    {
-        int n_pts = trk_B->get_persistence() - tr_Be;
-        track new_track_2;
-        new_track_2.tr.resize(n_pts);
-        for (int tp=0; tp < n_pts; tp++)
-            new_track_2.tr[tp] = *(trk_B->get_track_point(tp+tr_Be));
-        if (new_track_2.get_persistence() != 0)
-            tr_list.add_track(new_track_2);
-    }
+    // add the projected points (as this is what the indices are based upon)
+    if (sub_trk_A->get_persistence() > 1)
+        add_phantom_points(sub_trk_A);
+    if (sub_trk_B->get_persistence() > 1)
+        add_phantom_points(sub_trk_B);
     
-    // track 3 - the part of A that will be replaced by the segment of B
-    track new_track_3;
-    int trk_A_tss = trk_A->get_track_point(0)->timestep;
-    int trk_A_tse = trk_A->get_last_track_point()->timestep;
-    int trk_B_tss = trk_B->get_track_point(0)->timestep;
-    int trk_off_A = trk_B_tss - trk_A_tss;
-    for (int tp=tr_Bs; tp < tr_Be; tp++)
+    // add the merged track
+    bool contains_A = false;
+    if (tracks_overlap(sub_trk_A, sub_trk_B))
     {
-        if (trk_B_tss + tp >= trk_A_tss && trk_B_tss + tp <= trk_A_tse &&
-            new_track_3.get_persistence() != 0)
-        {
-            new_track_3.tr.push_back(*(trk_A->get_track_point(tp+trk_off_A)));
-        }
+        // merge the tracks together
+        track merged_track = *(merge_tracks(sub_trk_A, sub_trk_B, contains_A));
+        // remove the phantom points from the front and rear of the track
+        remove_phantom_points(&merged_track);
+        // add the merged track
+        if (merged_track.get_persistence() > 0)
+            tr_list.add_track(merged_track);
+        // set trk_A and trk_B as deleted
+        if (contains_A)
+            trk_A->set_deleted();
+        trk_B->set_deleted();
     }
 
-   if (new_track_3.get_persistence() != 0)
-        tr_list.add_track(new_track_3);
+    // clean up memory allocs
+    delete sub_trk_A;
+    delete sub_trk_B;
 
-    // track 4 - composite track
-    track new_track_4 = create_composite_track(trk_A, trk_B, tr_Bs, tr_Be);
-    
-    if (new_track_4.get_persistence() != 0)
-        tr_list.add_track(new_track_4);*/
-
-    // set original A and B to be deleted, append new tracks to the end
-    trk_A->set_deleted();
-    trk_B->set_deleted();
 }
-
-/*****************************************************************************/
-
-struct opt_outcome
-{
-    FP_TYPE cur_opt_cost;
-    FP_TYPE cur_opt_len;
-    int pers;
-    
-    int trk_A_st;
-    int trk_A_ed;
-    
-    int trk_B_st;
-    int trk_B_ed;
-};
 
 /*****************************************************************************/
 
@@ -938,6 +887,7 @@ void tracker::apply_optimise_tracks(void)
     int n_tracks = tr_list.get_number_of_tracks();
     
     opt_outcome OPT;
+    std::list<opt_outcome> OPT_ALL;
     
     for (int tr_An=0; tr_An < n_tracks; tr_An++)
     {
@@ -962,14 +912,11 @@ void tracker::apply_optimise_tracks(void)
             }
             continue;
         }
-            
         // otherwise get the current length and cost of the track
         FP_TYPE trk_A_cost = total_curvature_cost(trk_A);
 
         OPT.cur_opt_cost = trk_A_cost;
         OPT.cur_opt_len = trk_A->get_length();
-        OPT.trk_A_st = 0;
-        OPT.trk_A_ed = trk_Al;
         
         // get the tracks which overlap this one
         std::vector<int> ov_trks = get_overlapping_tracks(trk_A);
@@ -977,7 +924,7 @@ void tracker::apply_optimise_tracks(void)
         for (int tr_Bn=0; tr_Bn<ov_trks.size(); tr_Bn++)
         {
             // don't merged with yourself!
-            if (tr_An == tr_Bn)
+            if (tr_An == ov_trks[tr_Bn])
                 continue;
             // get the second track and its persistence
             track* trk_B = tr_list.get_track(ov_trks[tr_Bn]);
@@ -988,39 +935,53 @@ void tracker::apply_optimise_tracks(void)
                 continue;
                 
             // now loop over all the possible permutations of trk_A and trk_B
-            int trk_A_st=0;
-            int trk_A_ed = trk_Al;
-/*            for (int trk_A_st=0; trk_A_st<trk_Al; trk_A_st++)   // loop from the beginning of track A
+            for (int trk_A_st=0; (trk_A_st<3 && trk_A_st < trk_Al); trk_A_st++)   // loop from the beginning of track A
             {
-                for (int trk_A_ed = trk_Al-1; trk_A_ed > trk_A_st; trk_A_ed--)  // loop from the end of track A
-                {*/
+                for (int trk_A_ed = trk_Al-1; (trk_A_ed > trk_Al-4 && trk_A_ed > trk_A_st); trk_A_ed--)  // loop from the end of track A
+                {
                     // subset track A
                     track* trk_A_sub = trk_A->subset(trk_A_st, trk_A_ed);
+                    // add the projected end / start points
+                    if (trk_A_sub->get_persistence() > 1)
+                        add_phantom_points(trk_A_sub);
+                    // record the start and end indices of the trk_A subset
+                    OPT.trk_A_st = trk_A_st;
+                    OPT.trk_A_ed = trk_A_ed;
+                    
+                    // create track B subsets
                     for (int trk_B_st=0; trk_B_st<trk_Bl; trk_B_st++)   // loop from the beginning of track B
                     {
                         for (int trk_B_ed = trk_Bl; trk_B_ed > trk_B_st; trk_B_ed--)    // loop from the end of track B
                         {
                             // subset track B
                             track* trk_B_sub = trk_B->subset(trk_B_st, trk_B_ed);
+                            if (trk_A_sub->get_persistence() > 1)
+                                add_phantom_points(trk_B_sub);
                             // check they overlap and produce the merged track if they do
                             if (tracks_overlap(trk_A_sub, trk_B_sub))
                             {
-                                track* merged_track = merge_tracks(trk_A_sub, trk_B_sub);
+                                bool contains_A = false;
+                                track* merged_track = merge_tracks(trk_A_sub, trk_B_sub, contains_A);
+                                // don't do anything if the new track does not contain any of trk A
+                                if (!contains_A)
+                                {
+                                    delete merged_track;
+                                    continue;
+                                }
                                 // get the length and cost of the merged track
                                 FP_TYPE new_cost = total_curvature_cost(merged_track);
                                 FP_TYPE new_len = merged_track->get_length();
-//                                std::cout << " " << trk_A->get_persistence() << " " << merged_track->get_persistence() 
-//                                          << " " << trk_A_cost << " " << new_cost << " " << std::endl;
                                 // check whether the distance is greater in the merged track
                                 // and the total cost is less
                                 if (new_len >= 0.9 * OPT.cur_opt_len &&
-                                    new_cost <= 1.1 * OPT.cur_opt_cost)
+                                    new_cost <= 1.1 * OPT.cur_opt_cost &&
+                                    new_cost < MAX_COST)
                                 {
                                     OPT.cur_opt_len = new_len;
                                     OPT.cur_opt_cost = new_cost;
+                                    OPT.trk_B_idx = ov_trks[tr_Bn];
                                     OPT.trk_B_st = trk_B_st;
                                     OPT.trk_B_ed = trk_B_ed;
-                                    OPT.pers = merged_track->get_persistence();
                                 }
                                 delete merged_track;
                             }
@@ -1028,18 +989,16 @@ void tracker::apply_optimise_tracks(void)
                         }
                     }
                     delete trk_A_sub;
-/*                }
-            }*/
-        
+                }
+            }
         }
         
         // does the track require merging and new tracks creating?
-        if (OPT.cur_opt_cost < trk_A_cost && OPT.pers > 3)
+        if (OPT.cur_opt_cost < trk_A_cost)
         {
-            std::cout << " " << trk_A_cost << " " << OPT.cur_opt_cost << " " << std::endl;
-            std::cout << " " << trk_Al << " " << OPT.pers << " " << std::endl;
+            OPT.trk_A_idx = tr_An;
+            add_optimised_track(OPT);
         }
-        
         if (tr_An == 0)
             std::cout << "\b";
         while (e > 0)
