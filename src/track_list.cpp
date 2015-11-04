@@ -84,12 +84,12 @@ track_point* track::get_track_point(int idx)
 track* track::subset(int st_idx, int ed_idx)
 {
     // subset a track into a new track
+    assert(st_idx >= 0);
+    assert(ed_idx <= tr.size());
     track* new_track = new track();
     new_track->tr.resize(ed_idx-st_idx);
     for (int i=st_idx; i<ed_idx; i++)
         new_track->tr[i-st_idx] = tr[i];
-    
-    // check that the track is continuous
     
     return new_track;
 }
@@ -135,6 +135,8 @@ int track::get_persistence(void)
 FP_TYPE track::get_curvature_sum(void)
 {
     FP_TYPE curve_sum = 0.0;
+    if (tr.size() < 2)
+        return 0.0;
     std::vector<track_point>::iterator it_tp0 = tr.begin();
     std::vector<track_point>::iterator it_tp1 = tr.begin();
     std::vector<track_point>::iterator it_tp2 = tr.begin();
@@ -246,8 +248,14 @@ void track_list::prune_tracks(void)
     // remove any tracks with 0 length
     std::vector<track> new_tr_list;
     for (std::vector<track>::iterator it_list = tr_list.begin(); it_list != tr_list.end(); it_list++)
-        if (! it_list->is_deleted() && it_list->get_persistence() != 0)
+    {
+        // check if all points are phantom
+        bool all_phantom = true;
+        for (int tp=0; tp<it_list->get_persistence(); tp++)
+            all_phantom &= (it_list->get_track_point(tp)->rules_bf == 255);
+        if (! it_list->is_deleted() && it_list->get_persistence() != 0 && !all_phantom)
             new_tr_list.push_back(*it_list);
+    }
     tr_list = new_tr_list;
 }
 
@@ -336,16 +344,14 @@ void track_list::save_text(std::string output_fname)
         {
             FP_TYPE c = 0.0;
             FP_TYPE d = 0.0;
-            const FP_TYPE CURVATURE_S = 1e-3;
             if (tp >= 2)
             {
                 steering_extremum* tp0 = &((*trk)[tp-2].pt);
                 steering_extremum* tp1 = &((*trk)[tp-1].pt);
                 steering_extremum* tp2 = &((*trk)[tp].pt);
-                d = haversine(tp1->lon, tp1->lat, tp2->lon, tp2->lat, EARTH_R) * CURVATURE_S;
                 c = get_curvature(tp0->lon, tp0->lat, 
                                   tp1->lon, tp1->lat,
-                                  tp2->lon, tp2->lat) * d;
+                                  tp2->lon, tp2->lat);
             }
 
             // get the track point

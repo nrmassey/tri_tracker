@@ -70,7 +70,7 @@ class tracker
         void add_phantom_points(track* trk_P);
         void remove_phantom_points(track* trk_P);
         void apply_optimise_tracks(void);
-        track* merge_tracks(track* trk_A, track* trk_B, bool& contains_A);
+        track* merge_tracks(track* trk_A, track* trk_B);
         void add_optimised_track(opt_outcome OPT);
         
         // get a list of overlapping tracks (overlapping in time) for a particular track number
