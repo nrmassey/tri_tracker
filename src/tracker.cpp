@@ -27,8 +27,9 @@ const int STEERING  = 0x08;
 const int CURVATURE = 0x16;
 const int PHANTOM   = 0xFF;
 
-const FP_TYPE MAX_CURVATURE = 90.0;
-const FP_TYPE MAX_GEOWIND = 90.0;
+const FP_TYPE MAX_COST = 60.0 * 1e3;
+const FP_TYPE CURV_S = 1e-3;
+const FP_TYPE MAX_GEOWIND = 60.0;
 const FP_TYPE MAX_INTENSITY = 1e6;
 
 // constants for first / last timestep just to aid debugging
@@ -194,20 +195,60 @@ FP_TYPE steering(track* TR, steering_extremum* EX_svex, FP_TYPE hrs_ts)
 
 /*****************************************************************************/
 
-FP_TYPE curvature(track* TR, steering_extremum* EX_svex)
+FP_TYPE curvature_cost(track_point* tp0, track_point* tp1, track_point* tp2)
 {
-    // Calculate the curvature as the change in bearing between (pt1 -> pt2)
-    // and (pt2 -> candidate point)
-    int pr = TR->get_persistence(); // last point in the track
-    steering_extremum* TR_pt_1 = &(TR->get_track_point(pr-2)->pt);
-    steering_extremum* TR_pt_2 = &(TR->get_track_point(pr-1)->pt);
-    FP_TYPE c = get_curvature(TR_pt_1->lon, TR_pt_1->lat,
-                              TR_pt_2->lon, TR_pt_2->lat,
-                              EX_svex->lon, EX_svex->lat);
-    return fabs(c);
+    // get the total cost of the curvature - it's equal to the curvature * the 
+    // distances
+    FP_TYPE d1 = haversine(tp0->pt.lon, tp0->pt.lat, tp1->pt.lon, tp1->pt.lat, EARTH_R) * CURV_S;
+    FP_TYPE d2 = haversine(tp1->pt.lon, tp1->pt.lat, tp2->pt.lon, tp2->pt.lat, EARTH_R) * CURV_S;
+    FP_TYPE c = get_curvature(tp0->pt.lon, tp0->pt.lat,
+                              tp1->pt.lon, tp1->pt.lat,
+                              tp2->pt.lon, tp2->pt.lat);
+    FP_TYPE cost = fabs(c) * d1 * d2;
+    return cost;
 }
 
 /*****************************************************************************/
+
+FP_TYPE curvature_cost(track* TR, steering_extremum* EX_svex)
+{
+    // overloaded version taking a track - get the last two points of the track
+    int pr = TR->get_persistence();
+    track_point* tp0 = TR->get_track_point(pr-2);
+    track_point* tp1 = TR->get_track_point(pr-1);
+    // get the total cost of the curvature - it's equal to the curvature * the 
+    // distances
+    FP_TYPE d1 = haversine(tp0->pt.lon, tp0->pt.lat, tp1->pt.lon, tp1->pt.lat, EARTH_R) * CURV_S;
+    FP_TYPE d2 = haversine(tp1->pt.lon, tp1->pt.lat, EX_svex->lon, EX_svex->lat, EARTH_R) * CURV_S;
+    FP_TYPE c = get_curvature(tp0->pt.lon, tp0->pt.lat,
+                              tp1->pt.lon, tp1->pt.lat,
+                              EX_svex->lon, EX_svex->lat);
+    FP_TYPE cost = fabs(c) * d1 * d2 * CURV_S;
+    return cost;
+}
+
+/*****************************************************************************/
+
+FP_TYPE curvature_cost_mean(track* TR)
+{
+    int pr = TR->get_persistence();
+    if (pr < 2)
+        return 2e20;
+        
+    FP_TYPE cost_sum = 0.0;
+    
+    for (int tp=2; tp<pr; tp++)
+    {
+        track_point* tp0 = TR->get_track_point(pr-2);
+        track_point* tp1 = TR->get_track_point(pr-1);
+        track_point* tp2 = TR->get_track_point(pr);
+        cost_sum += curvature_cost(tp0, tp1, tp2);
+    }
+    return cost_sum / pr;
+}
+
+/*****************************************************************************/
+
 
 FP_TYPE overlap(track* TR, steering_extremum* EX_svex)
 {
@@ -258,7 +299,7 @@ bool tracker::should_replace_candidate_point(track* TR, track_point* cur_cand,
         replace = true;
         // get the costs
         if ((new_cand->rules_bf & CURVATURE) != 0)
-            cost = curvature(TR, &(new_cand->pt));
+            cost = curvature_cost(TR, &(new_cand->pt));
         else if ((new_cand->rules_bf & STEERING) != 0)
             cost = steering(TR, &(new_cand->pt), hrs_per_t_step);
         else if ((new_cand->rules_bf & OVERLAP) != 0)
@@ -270,9 +311,9 @@ bool tracker::should_replace_candidate_point(track* TR, track_point* cur_cand,
     {
         if (((cur_cand->rules_bf & CURVATURE) != 0) && ((new_cand->rules_bf & CURVATURE) != 0))
         {
-            FP_TYPE cur_cand_curve = curvature(TR, &(cur_cand->pt));
-            FP_TYPE new_cand_curve = curvature(TR, &(new_cand->pt));
-            if (new_cand_curve < cur_cand_curve)
+            FP_TYPE cur_cand_curve = curvature_cost(TR, &(cur_cand->pt));
+            FP_TYPE new_cand_curve = curvature_cost(TR, &(new_cand->pt));
+            if (new_cand_curve < cur_cand_curve && new_cand_curve < MAX_COST)
             {
                 replace = true;
                 cost = new_cand_curve;
@@ -408,12 +449,11 @@ int tracker::apply_rules(track* TR, steering_extremum* EX_svex, FP_TYPE& cost)
         if (TR->get_persistence() >= 2)
         {
             // don't allow tracks to move more than 90 degrees over a timestep
-            FP_TYPE curvature_val = curvature(TR, EX_svex);
-            FP_TYPE curvature_cost = curvature_val;
-            if (curvature_val < MAX_CURVATURE)
+            FP_TYPE curv_cost = curvature_cost(TR, EX_svex);
+            if (curv_cost < MAX_COST)
             {
                 rules_bf |= CURVATURE;
-                cost = curvature_cost;
+                cost = curv_cost;
             }
             else
             {
@@ -786,10 +826,8 @@ bool can_merge(track* trk_A, track* trk_B, FP_TYPE sr)
             // ensure it does not violate MAX_COST
             int trk_B_np = trk_B->get_persistence();
             track_point* tp_B0 = trk_B->get_track_point(trk_B_np-2);
-            FP_TYPE cost = get_curvature(tp_B0->pt.lon, tp_B0->pt.lat, 
-                                         tp_B->pt.lon,  tp_B->pt.lat, 
-                                         tp_A->pt.lon,  tp_A->pt.lat);
-            can_merge = cost < MAX_CURVATURE;
+            FP_TYPE cost = curvature_cost(tp_B0, tp_B, tp_A);
+            can_merge = cost < MAX_COST;
         }
     }
     else if (tr_B_st == tr_A_ed+1)
@@ -805,10 +843,8 @@ bool can_merge(track* trk_A, track* trk_B, FP_TYPE sr)
             // ensure it does not violate MAX_COST
             int trk_A_np = trk_A->get_persistence();
             track_point* tp_A0 = trk_A->get_track_point(trk_A_np-2);
-            FP_TYPE cost = get_curvature(tp_A0->pt.lon, tp_A0->pt.lat, 
-                                         tp_A->pt.lon,  tp_A->pt.lat, 
-                                         tp_B->pt.lon,  tp_B->pt.lat);
-            can_merge = cost < MAX_CURVATURE;
+            FP_TYPE cost = curvature_cost(tp_A0, tp_A, tp_B);
+            can_merge = cost < MAX_COST;
         }
     }
     else
@@ -1041,7 +1077,7 @@ void tracker::apply_optimise_tracks(void)
             continue;
             
         // otherwise get and store the length and cost of the track
-        FP_TYPE trk_A_cost = trk_A->get_curvature_mean();
+        FP_TYPE trk_A_cost = curvature_cost_mean(trk_A);
         FP_TYPE trk_A_len = trk_A->get_length();
         OPT.cur_opt_cost = trk_A_cost;
         OPT.cur_opt_len  = trk_A_len;
@@ -1088,7 +1124,7 @@ void tracker::apply_optimise_tracks(void)
                                 track* merged_track = merge_tracks(trk_A_sub, trk_B_sub);
                                 // get the length and cost of the merged track
                                 FP_TYPE new_len  = merged_track->get_length();
-                                FP_TYPE new_cost = merged_track->get_curvature_mean();
+                                FP_TYPE new_cost = curvature_cost_mean(merged_track);
                                 // check whether the distance is greater in the merged track
                                 // and the total cost is less
                                 if (new_len > OPT.cur_opt_len &&

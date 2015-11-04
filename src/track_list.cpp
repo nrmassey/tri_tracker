@@ -13,6 +13,10 @@
 
 /*****************************************************************************/
 
+extern FP_TYPE curvature_cost(track_point* tp0, track_point* tp1, track_point* tp2);
+
+/*****************************************************************************/
+
 track::track(void)
 {
     cand_pt.timestep = -1;
@@ -339,31 +343,26 @@ void track_list::save_text(std::string output_fname)
         if (it->get_persistence() >= 2)
             curv_mean = it->get_curvature_mean();
         out << it->get_persistence() << " " << curv_mean << std::endl;
-        std::vector<track_point>* trk = &(it->tr);
         for (int tp=0; tp < it->get_persistence(); tp++)
         {
             FP_TYPE c = 0.0;
             FP_TYPE d = 0.0;
+            track_point* tp2 = it->get_track_point(tp);
             if (tp >= 2)
             {
-                steering_extremum* tp0 = &((*trk)[tp-2].pt);
-                steering_extremum* tp1 = &((*trk)[tp-1].pt);
-                steering_extremum* tp2 = &((*trk)[tp].pt);
-                c = get_curvature(tp0->lon, tp0->lat, 
-                                  tp1->lon, tp1->lat,
-                                  tp2->lon, tp2->lat);
+                track_point* tp0 = it->get_track_point(tp-2);
+                track_point* tp1 = it->get_track_point(tp-1);
+                c = curvature_cost(tp0, tp1, tp2);
             }
 
-            // get the track point
-            track_point* trk_pt = &((*trk)[tp]);
             // write the frame number first
-            out << trk_pt->timestep << " ";
+            out << tp2->timestep << " ";
             // write the bitfield
-            out << trk_pt->rules_bf << " ";
+            out << tp2->rules_bf << " ";
             // write the all import curvature
             out << c << " ";
             // write the extremum point
-            trk_pt->pt.save_text(out);
+            tp2->pt.save_text(out);
             out << std::endl;           // component costs
         }
     }
