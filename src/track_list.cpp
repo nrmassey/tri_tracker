@@ -13,7 +13,7 @@
 
 /*****************************************************************************/
 
-extern FP_TYPE curvature_cost(track_point* tp0, track_point* tp1, track_point* tp2);
+extern FP_TYPE curvature_cost(track_point* tp0, track_point* tp1, track_point* tp2, FP_TYPE sr);
 
 /*****************************************************************************/
 
@@ -323,7 +323,7 @@ void track_list::save(std::string output_fname)
 
 /*****************************************************************************/
 
-void track_list::save_text(std::string output_fname)
+void track_list::save_text(std::string output_fname, FP_TYPE sr=1000)
 {
     if (tr_list.size() == 0)
         throw(std::string("# No tracks found!"));
@@ -340,19 +340,18 @@ void track_list::save_text(std::string output_fname)
     {
         // write the number of track points
         FP_TYPE curv_mean = 0.0;
-        if (it->get_persistence() >= 2)
+        if (it->get_persistence() >= 3)
             curv_mean = it->get_curvature_mean();
         out << it->get_persistence() << " " << curv_mean << std::endl;
         for (int tp=0; tp < it->get_persistence(); tp++)
         {
             FP_TYPE c = 0.0;
-            FP_TYPE d = 0.0;
             track_point* tp2 = it->get_track_point(tp);
             if (tp >= 2)
             {
                 track_point* tp0 = it->get_track_point(tp-2);
                 track_point* tp1 = it->get_track_point(tp-1);
-                c = curvature_cost(tp0, tp1, tp2);
+                c = curvature_cost(tp0, tp1, tp2, sr);
             }
 
             // write the frame number first
@@ -366,7 +365,7 @@ void track_list::save_text(std::string output_fname)
             out << std::endl;           // component costs
         }
     }
-    out.close();        
+    out.close();
 }
 
 /*****************************************************************************/

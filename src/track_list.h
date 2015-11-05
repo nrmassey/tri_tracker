@@ -83,7 +83,7 @@ class track_list
         
         // save / load
         void save(std::string output_fname);
-        void save_text(std::string output_fname);
+        void save_text(std::string output_fname, FP_TYPE sr);
         void load(std::string input_fname);
         
         // meta data for the track

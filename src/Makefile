@@ -14,7 +14,7 @@ CPP = g++ -stdlib=libstdc++
 INCLUDE_DIRS = -Itclap/include/ -I./
 LIBRARY_DIRS = -L/usr/local/lib
 
-DEBUG_FLAGS = -Wno-deprecated -O0 -g -Wall -pg 
+DEBUG_FLAGS = -Wno-deprecated -O0 -g -Wall -pg -D_GLIBCXX_DEBUG
 RELEASE_FLAGS = -Wno-deprecated -O3 -msse3 -g
 PROFILE_FLAGS = $(RELEASE_FLAGS) -pg
 COMMON_FLAGS = -DFP_TYPE=float
