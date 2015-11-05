@@ -229,6 +229,8 @@ FP_TYPE curvature_cost(track* TR, steering_extremum* EX_svex, FP_TYPE sr)
                               tp1->pt.lon, tp1->pt.lat,
                               EX_svex->lon, EX_svex->lat);
     FP_TYPE cost = (w1*(fabs(c)/90.0)) + (w2*(d1 + d2) * CURV_S/sr);
+    if (c > 110.0)
+        cost += 2e20;
     return cost;
 }
 
@@ -808,7 +810,7 @@ bool tracks_overlap(track* trk_A, track* trk_B, FP_TYPE sr)
         // get the distance
         track_point* tp_A = trk_A->get_track_point(0);
         track_point* tp_B = trk_B->get_last_track_point();
-        FP_TYPE hD = haversine(tp_A->pt.lon, tp_A->pt.lat, tp_B->pt.lon, tp_B->pt.lat, EARTH_R);
+        FP_TYPE hD = haversine(tp_B->pt.lon, tp_B->pt.lat, tp_A->pt.lon, tp_A->pt.lat, EARTH_R);
         // check against search radius
         return (hD < sr);
     }
@@ -843,7 +845,7 @@ bool can_merge(track* trk_A, track* trk_B, FP_TYPE sr)
     {
         track_point* tp_A = trk_A->get_track_point(0);
         track_point* tp_B = trk_B->get_last_track_point();
-        FP_TYPE hD = haversine(tp_A->pt.lon, tp_A->pt.lat, tp_B->pt.lon, tp_B->pt.lat, EARTH_R);
+        FP_TYPE hD = haversine(tp_B->pt.lon, tp_B->pt.lat, tp_A->pt.lon, tp_A->pt.lat, EARTH_R);
         // check against search radius
         can_merge = (hD < sr);               // can merge close single points
     }
@@ -1085,7 +1087,7 @@ void tracker::apply_optimise_tracks(void)
             continue;
             
         // otherwise get and store the length and cost of the track
-        FP_TYPE trk_A_cost = curvature_cost_max(trk_A, sr);
+        FP_TYPE trk_A_cost = curvature_cost_mean(trk_A, sr);
         FP_TYPE trk_A_len = trk_A->get_length();
         OPT.cur_opt_cost = trk_A_cost;
         OPT.cur_opt_len  = trk_A_len;
@@ -1126,6 +1128,7 @@ void tracker::apply_optimise_tracks(void)
                             // subset track B
                             track* trk_B_sub = trk_B->subset(trk_B_st, trk_B_ed);
                             // check that they are on subsequent timesteps and produce the merged track if they do
+                            // also check that the merged track maximum cost is less than MAX_COST
                             if (can_merge(trk_A_sub, trk_B_sub, sr))
                             {
                                 // Create the merged track
@@ -1134,10 +1137,9 @@ void tracker::apply_optimise_tracks(void)
                                 FP_TYPE new_max_cost = curvature_cost_max(merged_track,sr);
                                 // get the length and cost of the merged track
                                 FP_TYPE new_len  = merged_track->get_length();
-                                FP_TYPE new_cost = curvature_cost_max(merged_track, sr);
+                                FP_TYPE new_cost = curvature_cost_mean(merged_track, sr);
                                 // check whether the distance is greater in the merged track
-                                // and the total cost is less
-                                // also check that the merged track maximum cost is less than MAX_COST
+                                // and the total cost is less                                
                                 if (new_len > OPT.cur_opt_len &&
                                     new_cost < OPT.cur_opt_cost && new_cost != 0.0 &&
                                     new_max_cost < MAX_COST)
