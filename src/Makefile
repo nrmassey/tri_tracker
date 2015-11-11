@@ -14,7 +14,7 @@ CPP = g++ -stdlib=libstdc++
 INCLUDE_DIRS = -Itclap/include/ -I./
 LIBRARY_DIRS = -L/usr/local/lib
 
-DEBUG_FLAGS = -Wno-deprecated -O0 -g -Wall -pg -D_GLIBCXX_DEBUG
+DEBUG_FLAGS = -Wno-deprecated -O0 -g -Wall -pg #-D_GLIBCXX_DEBUG
 RELEASE_FLAGS = -Wno-deprecated -O3 -msse3 -g
 PROFILE_FLAGS = $(RELEASE_FLAGS) -pg
 COMMON_FLAGS = -DFP_TYPE=float
@@ -34,8 +34,8 @@ OBJ_DIR=../obj
 COMMON_CPP = vector_3D.cpp geo_convert.cpp set_cout_precision.cpp \
              force_tri_3D.cpp point_cloud.cpp force_point.cpp \
              bin_file_utils.cpp haversine.cpp tri_grid.cpp  \
-			 indexed_force_tri_3D.cpp extremum.cpp meta_data.cpp \
-			 read_from_string.cpp
+             indexed_force_tri_3D.cpp extremum.cpp meta_data.cpp \
+             read_from_string.cpp
 COMMON_OBJ = $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(COMMON_CPP)) 
 
 NETCDF_CPP = ncdata.cpp rotated_grid.cpp Rot2Global.cpp
@@ -53,6 +53,7 @@ TRI_GRID_TO_NC_OBJ = $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(TRI_GRID_TO_NC_CPP))
 EXTREMA_CPP = extrema.cpp extrema_locator.cpp data_store.cpp \
               maxima_locator.cpp minima_locator.cpp extrema_list.cpp \
               minima_background.cpp geo_wind_vector.cpp \
+              mslp_wind_vector.cpp \
               concentric_shell.cpp spline.cpp \
               minima_largescale.cpp minima_processed.cpp
 EXTREMA_OBJ = $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(EXTREMA_CPP))

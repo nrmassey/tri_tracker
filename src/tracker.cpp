@@ -27,7 +27,7 @@ const int STEERING  = 0x08;
 const int CURVATURE = 0x16;
 const int PHANTOM   = 0xFF;
 
-const FP_TYPE MAX_COST = 1.1;
+const FP_TYPE MAX_COST = 1.2;
 const FP_TYPE CURV_S = 1e-3;
 const FP_TYPE MAX_GEOWIND = 90.0;
 const FP_TYPE MAX_INTENSITY = 1e6;
@@ -119,8 +119,9 @@ FP_TYPE distance(track* TR, steering_extremum* EX_svex)
 {
     // calculate the distance from the track to the candidate point
     steering_extremum* TR_svex = &(TR->get_last_track_point()->pt);
-    FP_TYPE d = haversine(TR_svex->lon, TR_svex->lat, EX_svex->lon, EX_svex->lat, EARTH_R);
-    return d;
+    FP_TYPE d1 = haversine(TR_svex->lon, TR_svex->lat, EX_svex->lon, EX_svex->lat, EARTH_R);
+    FP_TYPE d2 = haversine(EX_svex->lon, EX_svex->lat, TR_svex->lon, TR_svex->lat, EARTH_R);
+    return d1 < d2 ? d1 : d2;
 }
 
 /*****************************************************************************/
@@ -207,8 +208,8 @@ FP_TYPE curvature_cost(track_point* tp0, track_point* tp1, track_point* tp2, FP_
     FP_TYPE c = get_curvature(tp0->pt.lon, tp0->pt.lat,
                               tp1->pt.lon, tp1->pt.lat,
                               tp2->pt.lon, tp2->pt.lat);
-    FP_TYPE cost = (w1*(fabs(c)/90.0)) + (w2*(d1 + d2) * CURV_S/sr);
-    if (c > 110.0)
+    FP_TYPE cost = (w1*(fabs(c)/90.0)) + (w2*(d1+d2) * CURV_S/sr);
+    if (c > 120.0)
         cost += 2e20;
     return cost;
 }
@@ -228,8 +229,8 @@ FP_TYPE curvature_cost(track* TR, steering_extremum* EX_svex, FP_TYPE sr)
     FP_TYPE c = get_curvature(tp0->pt.lon, tp0->pt.lat,
                               tp1->pt.lon, tp1->pt.lat,
                               EX_svex->lon, EX_svex->lat);
-    FP_TYPE cost = (w1*(fabs(c)/90.0)) + (w2*(d1 + d2) * CURV_S/sr);
-    if (c > 110.0)
+    FP_TYPE cost = (w1*(fabs(c)/90.0)) + (w2*(d1+d2) * CURV_S/sr);
+    if (c > 120.0)
         cost += 2e20;
     return cost;
 }
@@ -428,10 +429,11 @@ int tracker::apply_rules(track* TR, steering_extremum* EX_svex, FP_TYPE& cost)
     // Apply distance rule
     // 1. The steering distance calculated from the geostrophic wind / steering vector.
     
-    FP_TYPE steering_dist = calculate_steering_distance(EX_svex, hrs_per_t_step);
+/*    FP_TYPE steering_dist = calculate_steering_distance(EX_svex, hrs_per_t_step);
     // check for rogue steering distances
     if (steering_dist > sr * 2)
-        steering_dist = sr * 2;
+        steering_dist = sr * 2;*/
+    FP_TYPE steering_dist = sr;
     
     // 2. Less than the user specified search radius
     if (distance_val <= sr || distance_val <= steering_dist)
@@ -676,16 +678,21 @@ void tracker::find_tracks(void)
         apply_optimise_tracks();
         tr_list.prune_tracks();
     }
+
+    // interpolate any phantom points
+    for (int tr_An=0; tr_An < tr_list.get_number_of_tracks(); tr_An++)
+    {
+        // get the track and its persistence
+        track* trk_A = tr_list.get_track(tr_An);
+        interpolate_phantom_points(trk_A);
+    }
+    
     // add phantom points - debug purposes
 /*    for (int tr_An=0; tr_An < tr_list.get_number_of_tracks(); tr_An++)
     {
         // get the track and its persistence
         track* trk_A = tr_list.get_track(tr_An);
-        // check whether this track has been deleted
-        if (trk_A->is_deleted() || trk_A->get_persistence() == 0)
-            continue;
-        else
-            add_phantom_points(trk_A);
+        add_phantom_points(trk_A);
     }*/
 }
 
@@ -782,7 +789,7 @@ bool tracks_overlap(track* trk_A, track* trk_B, FP_TYPE sr)
         int off_B = tr_B_st - min_tss;
         
         // check for distance between points
-        bool overlap = true;
+        bool overlap = false;
         for (int ts=min_tss; ts < max_tse; ts++)
         {
             int trk_A_idx = ts - off_A - min_tss;
@@ -794,9 +801,10 @@ bool tracks_overlap(track* trk_A, track* trk_B, FP_TYPE sr)
                 track_point* tp_A = trk_A->get_track_point(trk_A_idx);
                 track_point* tp_B = trk_B->get_track_point(trk_B_idx);
                 // calculate the distance between
-                FP_TYPE hD = haversine(tp_A->pt.lon, tp_A->pt.lat, tp_B->pt.lon, tp_B->pt.lat, EARTH_R);
+                FP_TYPE hD1 = haversine(tp_A->pt.lon, tp_A->pt.lat, tp_B->pt.lon, tp_B->pt.lat, EARTH_R);
+                FP_TYPE hD2 = haversine(tp_B->pt.lon, tp_B->pt.lat, tp_A->pt.lon, tp_A->pt.lat, EARTH_R);
                 // check against search radius
-                overlap &= (hD < sr);
+                overlap |= (hD1 < sr || hD2 < sr);
             }
         }
         return overlap;
@@ -810,17 +818,20 @@ bool tracks_overlap(track* trk_A, track* trk_B, FP_TYPE sr)
         // get the distance
         track_point* tp_A = trk_A->get_track_point(0);
         track_point* tp_B = trk_B->get_last_track_point();
-        FP_TYPE hD = haversine(tp_B->pt.lon, tp_B->pt.lat, tp_A->pt.lon, tp_A->pt.lat, EARTH_R);
+        FP_TYPE hD1 = haversine(tp_A->pt.lon, tp_A->pt.lat, tp_B->pt.lon, tp_B->pt.lat, EARTH_R);
+        FP_TYPE hD2 = haversine(tp_B->pt.lon, tp_B->pt.lat, tp_A->pt.lon, tp_A->pt.lat, EARTH_R);
         // check against search radius
-        return (hD < sr);
+        return (hD1 < sr || hD2 < sr);
     }
-    else if (tr_B_st == tr_A_ed + 1)
+    else if (tr_B_st == tr_A_ed +1)
     {
         track_point* tp_A = trk_A->get_last_track_point();
         track_point* tp_B = trk_B->get_track_point(0);
-        FP_TYPE hD = haversine(tp_A->pt.lon, tp_A->pt.lat, tp_B->pt.lon, tp_B->pt.lat, EARTH_R);
+        FP_TYPE hD1 = haversine(tp_A->pt.lon, tp_A->pt.lat, tp_B->pt.lon, tp_B->pt.lat, EARTH_R);
+        FP_TYPE hD2 = haversine(tp_B->pt.lon, tp_B->pt.lat, tp_A->pt.lon, tp_A->pt.lat, EARTH_R);
+
         // check against search radius
-        return (hD < sr);
+        return (hD1 < sr || hD2 < sr);
     }
     else
         return false;
@@ -917,6 +928,30 @@ void tracker::remove_phantom_points(track* trk_P)
         trk_P->tr.erase(trk_P->tr.begin());
     if (trk_P->tr.size() != 0 && trk_P->tr.back().rules_bf == PHANTOM)
         trk_P->tr.pop_back();
+}
+
+/*****************************************************************************/
+
+void tracker::interpolate_phantom_points(track* trk_P)
+{
+    for (int tp = 1; tp < trk_P->get_persistence()-1; tp++)
+    {
+        track_point* tp1 = trk_P->get_track_point(tp);
+        if (tp1->rules_bf == PHANTOM)
+        {
+            track_point* tp0 = trk_P->get_track_point(tp-1);
+            track_point* tp2 = trk_P->get_track_point(tp+1);
+            tp1->pt.lat = tp0->pt.lat + (tp2->pt.lat - tp0->pt.lat)*0.5;
+            if (tp0->pt.lon > 180.0 && tp2->pt.lon < 180.0)
+                tp1->pt.lon = tp0->pt.lon + (tp2->pt.lon - tp0->pt.lon-360)*0.5;
+            else
+                tp1->pt.lon = tp0->pt.lon + (tp2->pt.lon - tp0->pt.lon)*0.5;
+            while (tp1->pt.lon >= 360.0)
+                tp1->pt.lon -= 360.0;
+            tp1->pt.intensity = (tp0->pt.intensity + tp2->pt.intensity) * 0.5;
+            tp1->pt.delta = (tp0->pt.delta + tp2->pt.delta) * 0.5;
+        }
+    }
 }
 
 /*****************************************************************************/
@@ -1141,7 +1176,7 @@ void tracker::apply_optimise_tracks(void)
                                 // check whether the distance is greater in the merged track
                                 // and the total cost is less                                
                                 if (new_len > OPT.cur_opt_len &&
-                                    new_cost < OPT.cur_opt_cost && new_cost != 0.0 &&
+                                    new_cost < 1.1*OPT.cur_opt_cost && new_cost != 0.0 &&
                                     new_max_cost < MAX_COST)
                                 {
                                     // costs / length

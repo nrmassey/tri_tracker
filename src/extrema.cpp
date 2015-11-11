@@ -16,6 +16,7 @@
 #include "minima_background.h"
 #include "steering_vector.h"
 #include "geo_wind_vector.h"
+#include "mslp_wind_vector.h"
 #include "minima_back_wind.h"
 #include "minima_largescale.h"
 
@@ -60,6 +61,8 @@ steering_vector* create_steering_vector(std::string steering_string)
     // determine which (inherited) steering class to use
     if (steering == "geostrophic")
         sv = new geo_wind_vector();
+    else if (steering == "mslp_wind")
+        sv = new mslp_wind_vector();
     else if (steering != "")
         throw (std::string("Unknown steering vector method: " + steering));
     // note - this function can return NULL if the steering string is empty
