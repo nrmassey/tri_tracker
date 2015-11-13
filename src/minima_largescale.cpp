@@ -82,10 +82,13 @@ bool minima_largescale::process_data(void)
             FP_TYPE bV = data_smooth->get_data(t,d);
             FP_TYPE V = fV - bV;
             // set the data in the data processed data_store
-            data_processed->set_data(t,d,V);
+            if (bV != mv && fV != mv)
+                data_processed->set_data(t,d,V);
+            else
+                data_processed->set_data(t,d,mv);
         }
     }
-    // option to save the output - build the filename first
+//     // option to save the output - build the filename first
 //     std::string out_fname = ds_fname.substr(0, ds_fname.size()-4);
 //     std::stringstream ss;
 //     // large scale field subtracted from data at extrema location level

@@ -141,7 +141,7 @@ spline form_lon_spline(ncdata* nc_data, int lon_idx, int lat_idx, int z, int t)
     // ncdata boundaries
     int n_lons = nc_data->get_lon_len();
     int n_t = nc_data->get_t_len();
-    for (int i=-spl2; i<spl2+1; i++)
+    for (int i=-spl2; i<spl2; i++)
     {
         int lat_i, lon_i;
         get_lon_lat_idx(nc_data, lon_idx, lat_idx, i, 0, lon_i, lat_i);
@@ -170,7 +170,7 @@ spline form_lat_spline(ncdata* nc_data, int lon_idx, int lat_idx, int z, int t)
     int n_lats = nc_data->get_lat_len();
     int n_t = nc_data->get_t_len();
     
-    for (int j=-spl2; j<spl2+1; j++)
+    for (int j=-spl2; j<spl2; j++)
     {
         int lat_i, lon_i;
         get_lon_lat_idx(nc_data, lon_idx, lat_idx, 0, j, lon_i, lat_i);
