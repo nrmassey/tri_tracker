@@ -209,7 +209,9 @@ FP_TYPE curvature_cost(track_point* tp0, track_point* tp1, track_point* tp2, FP_
                               tp1->pt.lon, tp1->pt.lat,
                               tp2->pt.lon, tp2->pt.lat);
     FP_TYPE cost = (w1*(fabs(c)/90.0)) + (w2*(d1+d2) * CURV_S/sr);
-    if (c > 120.0)
+    if (fabs(c) > 120.0)
+        cost += 2e20;
+    if (d1 > sr or d2 > sr)
         cost += 2e20;
     return cost;
 }
@@ -230,7 +232,9 @@ FP_TYPE curvature_cost(track* TR, steering_extremum* EX_svex, FP_TYPE sr)
                               tp1->pt.lon, tp1->pt.lat,
                               EX_svex->lon, EX_svex->lat);
     FP_TYPE cost = (w1*(fabs(c)/90.0)) + (w2*(d1+d2) * CURV_S/sr);
-    if (c > 120.0)
+    if (fabs(c) > 120.0)
+        cost += 2e20;
+    if (d1 > sr or d2 > sr)
         cost += 2e20;
     return cost;
 }

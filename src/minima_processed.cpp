@@ -74,10 +74,6 @@ bool minima_processed::is_extrema(indexed_force_tri_3D* tri, int t_step)
     // contour the data minus the background
     FP_TYPE tri_val_C = contour_data(tri_val, contour_value);
 
-    // quickest check
-    if (tri_val_C > min_delta)
-        return false;
-
     int n_less = 0;
     // loop through all the adjacent triangles
     const LABEL_STORE* tri_adj_labels = tri->get_adjacent_labels(adj_type);
@@ -111,6 +107,7 @@ void minima_processed::refine_extrema(void)
 {
     // refine the extrema to the lowest grid level first
     extrema_locator::refine_extrema();
+    std::cout << "# Refining extrema, timestep: ";
     // now construct a new set of labels where the values are within one
     // contour of the minimum value
     for (int t=0; t<ds.get_number_of_time_steps(); t++)
@@ -140,9 +137,16 @@ void minima_processed::refine_extrema(void)
             }
             svex->object_labels.clear();
             svex->object_labels = new_label_list;
+            // get the minimum and maximum values for the modified object
+            get_min_max_values_processed(min_v, max_v, e, t);
+            min_v = contour_data(min_v, contour_value);
+            // Check that min_v is <= min delta
+            if (min_v > min_delta || fabs(min_v) > 2e10)
+                svex->object_labels.clear();
         }
         tstep_out_end(t);
     }
+    std::cout << std::endl;
 }
 
 /******************************************************************************/
