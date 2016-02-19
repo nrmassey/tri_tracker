@@ -45,10 +45,6 @@ void minima_back_wind::locate(void)
 	}
 	find_objects();
 	merge_objects();
-	if (grid_level > 5)
-	{
-		trim_objects();
-	}
 	expand_objects();
 	merge_objects();
 	ex_points_from_objects();

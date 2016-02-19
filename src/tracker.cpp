@@ -28,6 +28,7 @@ const int CURVATURE = 0x16;
 const int PHANTOM   = 0xFF;
 
 const FP_TYPE MAX_COST = 1.2;
+const FP_TYPE MAX_CURV = 110.0;
 const FP_TYPE CURV_S = 1e-3;
 const FP_TYPE MAX_GEOWIND = 90.0;
 const FP_TYPE MAX_INTENSITY = 1e6;
@@ -208,8 +209,8 @@ FP_TYPE curvature_cost(track_point* tp0, track_point* tp1, track_point* tp2, FP_
     FP_TYPE c = get_curvature(tp0->pt.lon, tp0->pt.lat,
                               tp1->pt.lon, tp1->pt.lat,
                               tp2->pt.lon, tp2->pt.lat);
-    FP_TYPE cost = (w1*(fabs(c)/90.0)) + (w2*(d1+d2) * CURV_S/sr);
-    if (fabs(c) > 120.0)
+    FP_TYPE cost = (w1*(fabs(c)/MAX_CURV)) + (w2*(d1+d2) * CURV_S/sr);
+    if (fabs(c) > MAX_CURV)
         cost += 2e20;
     if (d1 > sr or d2 > sr)
         cost += 2e20;
@@ -231,8 +232,8 @@ FP_TYPE curvature_cost(track* TR, steering_extremum* EX_svex, FP_TYPE sr)
     FP_TYPE c = get_curvature(tp0->pt.lon, tp0->pt.lat,
                               tp1->pt.lon, tp1->pt.lat,
                               EX_svex->lon, EX_svex->lat);
-    FP_TYPE cost = (w1*(fabs(c)/90.0)) + (w2*(d1+d2) * CURV_S/sr);
-    if (fabs(c) > 120.0)
+    FP_TYPE cost = (w1*(fabs(c)/MAX_CURV)) + (w2*(d1+d2) * CURV_S/sr);
+    if (fabs(c) > MAX_CURV)
         cost += 2e20;
     if (d1 > sr or d2 > sr)
         cost += 2e20;

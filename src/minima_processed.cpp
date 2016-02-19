@@ -40,7 +40,6 @@ void minima_processed::locate(void)
     refine_extrema();
     find_objects();
     merge_objects();
-    trim_objects();
     ex_points_from_objects();
 }
 
@@ -283,50 +282,6 @@ void minima_processed::calculate_object_delta(int o, int t)
     get_min_max_values_processed(min_v, max_v, o, t);   
     steering_extremum* svex = ex_list.get(t, o);
     svex->delta = min_v;
-}
-
-/*****************************************************************************/
-
-void minima_processed::trim_objects(void)
-{
-    std::cout << "# Trimming objects, timestep: ";
-    FP_TYPE sum_o = 0.0;
-    // get the surface area of a triangle
-    steering_extremum* svex = ex_list.get(0, 0);
-    if (svex == NULL)
-    {
-        std::cout << std::endl;
-        return;
-    }
-    indexed_force_tri_3D* c_tri = tg.get_triangle(svex->object_labels[0]);
-    FP_TYPE surf_A = c_tri->surface_area();
-    for (int t=0; t<ex_list.size(); t++)
-    {
-        tstep_out_begin(t);
-        int o_s = ex_list.number_of_extrema(t);
-        sum_o += o_s;
-        for (int o1=0; o1<o_s; o1++)
-        {
-            // remove those greater than minimum delta
-            FP_TYPE min_vd, max_vd;
-            get_min_max_values_processed(min_vd, max_vd, o1, t);
-            if (min_vd > min_delta)
-            {
-                ex_list.get(t, o1)->object_labels.clear();// delete!
-                sum_o -= 1;
-            }
-            // remove those with a surface area > 5,000km^2
-            if (ex_list.get(t, o1)->object_labels.size()*surf_A > (5e3)*(5e3))
-                ex_list.get(t, o1)->object_labels.clear();// delete!
-            // remove those with less than four triangles if level high enough
-            if (extrema_level >= 6 && ex_list.get(t, o1)->object_labels.size() < 4)
-                ex_list.get(t, o1)->object_labels.clear();// delete!
-        }
-        tstep_out_end(t);   
-    }
-    std::cout << std::endl;
-    std::cout << "# Number of objects: " << sum_o << " ";
-    std::cout << std::endl;
 }
 
 /*****************************************************************************/

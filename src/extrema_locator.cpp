@@ -381,7 +381,7 @@ void extrema_locator::get_min_max_values(FP_TYPE& min_v, FP_TYPE& max_v,
             max_v = val;
         if (fabs(val) < 0.99*fabs(mv) && val < min_v && fabs(val) < 1e10)
             min_v = val;
-    }   
+    }
 }
 
 /*****************************************************************************/
