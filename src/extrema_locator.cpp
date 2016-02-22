@@ -322,6 +322,7 @@ void extrema_locator::merge_objects(void)
                 // is a label in the shell found in the object?
                 // test at different levels - 1st shells overlap?
                 bool test = false;
+                // 1st test object shells overlap
                 if (!test) test = objects_share_nodes(o1_shell_labs, o2_shell_labs);
                 // 2nd - 1st object shell overlaps with 2nd object
                 if (!test) test = objects_share_nodes(o1_shell_labs, o2_labs);
@@ -338,7 +339,10 @@ void extrema_locator::merge_objects(void)
                     {
                         // if it's not already in the object
                         if (find(o1_labs->begin(), o1_labs->end(), *it_o2) == o1_labs->end())
+                        {
+                            o1_shell_labs->push_back(*it_o2);
                             o1_labs->push_back(*it_o2);
+                        }
                     }
                     obj_c_shells[o2].get_labels()->clear(); // delete the object
                     o2_labs->clear();
