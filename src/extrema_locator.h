@@ -54,6 +54,7 @@ class extrema_locator
         extrema_list ex_list;
         steering_vector* sv;        // steering vector class
         META_DATA_TYPE meta_data;   // add the meta data as we parse the methods and steering vector
+        FP_TYPE max_merge_dist;
         
         /*********************************************************************/
 

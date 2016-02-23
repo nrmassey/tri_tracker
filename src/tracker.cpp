@@ -24,14 +24,14 @@ const int DISTANCE  = 0x01;
 const int OVERLAP   = 0x02;
 const int INTENSITY = 0x04;
 const int STEERING  = 0x08;
-const int CURVATURE = 0x16;
+const int CURVATURE = 0x10;
 const int PHANTOM   = 0xFF;
 
 const FP_TYPE MAX_COST = 1.2;
 const FP_TYPE MAX_CURV = 110.0;
-const FP_TYPE CURV_S = 1e-3;
+const FP_TYPE CURV_S = 1;
 const FP_TYPE MAX_GEOWIND = 90.0;
-const FP_TYPE MAX_INTENSITY = 1e6;
+const FP_TYPE MAX_INTENSITY = 1e4;
 
 // constants for first / last timestep just to aid debugging
 const int FIRST_TS=0;
@@ -209,7 +209,9 @@ FP_TYPE curvature_cost(track_point* tp0, track_point* tp1, track_point* tp2, FP_
     FP_TYPE c = get_curvature(tp0->pt.lon, tp0->pt.lat,
                               tp1->pt.lon, tp1->pt.lat,
                               tp2->pt.lon, tp2->pt.lat);
-    FP_TYPE cost = (w1*(fabs(c)/MAX_CURV)) + (w2*(d1+d2) * CURV_S/sr);
+    FP_TYPE c1 = (w1*(fabs(c)/90.0));
+    FP_TYPE c2 = (w2*(d1+d2) * CURV_S/sr);
+    FP_TYPE cost = c1 + c2;
     if (fabs(c) > MAX_CURV)
         cost += 2e20;
     if (d1 > sr or d2 > sr)
@@ -232,7 +234,9 @@ FP_TYPE curvature_cost(track* TR, steering_extremum* EX_svex, FP_TYPE sr)
     FP_TYPE c = get_curvature(tp0->pt.lon, tp0->pt.lat,
                               tp1->pt.lon, tp1->pt.lat,
                               EX_svex->lon, EX_svex->lat);
-    FP_TYPE cost = (w1*(fabs(c)/MAX_CURV)) + (w2*(d1+d2) * CURV_S/sr);
+    FP_TYPE c1 = (w1*(fabs(c)/90.0));
+    FP_TYPE c2 = (w2*(d1+d2) * CURV_S/sr);
+    FP_TYPE cost = c1 + c2;
     if (fabs(c) > MAX_CURV)
         cost += 2e20;
     if (d1 > sr or d2 > sr)
@@ -310,7 +314,7 @@ FP_TYPE intensity(track* TR, steering_extremum* EX_svex)
 {
     // calculate the change in intensity between track points
     steering_extremum* trk_pt = &(TR->get_last_track_point()->pt);
-    FP_TYPE intensity_diff = fabs(trk_pt->intensity - EX_svex->intensity);
+    FP_TYPE intensity_diff = fabs(trk_pt->delta) - fabs(EX_svex->delta);
     return intensity_diff;
 }
 
@@ -336,6 +340,8 @@ bool tracker::should_replace_candidate_point(track* TR, track_point* cur_cand,
             cost = curvature_cost(TR, &(new_cand->pt), sr);
         else if ((new_cand->rules_bf & STEERING) != 0)
             cost = steering(TR, &(new_cand->pt), hrs_per_t_step);
+        else if ((new_cand->rules_bf & INTENSITY) != 0)
+            cost = intensity(TR, &(new_cand->pt));
         else if ((new_cand->rules_bf & OVERLAP) != 0)
             cost = overlap(TR, &(new_cand->pt));
         else

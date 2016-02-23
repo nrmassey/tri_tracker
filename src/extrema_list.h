@@ -32,7 +32,6 @@ class extrema_list
 		const steering_extremum* get(int t_step, int ex_n) const;
 		void add(int t_step, steering_extremum ex);
 		void remove(int t_step, int ex_n);
-		void consolidate(FP_TYPE mv);		// permanently remove removed extrema
 		void save(std::string output_fname, FP_TYPE mv);
 		void save_text(std::string output_fname, tri_grid* tg);
 		void load(std::string input_fname, FP_TYPE& mv, bool append=false);

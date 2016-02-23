@@ -1,6 +1,7 @@
 #include "haversine.h"
 #include <math.h>
 #include <iostream>
+#include "geo_convert.h"
 
 FP_TYPE haversine(FP_TYPE lon1, FP_TYPE lat1, FP_TYPE lon2, FP_TYPE lat2, FP_TYPE R)
 {
@@ -33,4 +34,12 @@ FP_TYPE haversine(FP_TYPE lon1, FP_TYPE lat1, FP_TYPE lon2, FP_TYPE lat2, FP_TYP
 	if (c > 1.0) c = 1.0;
 	FP_TYPE d = R * 2 * asin(sqrt(c));
 	return d;
+}
+
+FP_TYPE haversine(vector_3D& point_1, vector_3D& point_2, FP_TYPE R)
+{
+    FP_TYPE lon1, lat1, lon2, lat2;
+    cart_to_model(point_1, lon1, lat1);
+    cart_to_model(point_2, lon2, lat2);
+    return haversine(lon1, lat1, lon2, lat2, R);
 }

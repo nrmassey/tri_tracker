@@ -881,13 +881,8 @@ FP_TYPE tri_grid::distance_between_triangles(LABEL SL, LABEL EL)
     // get the centroid
     vector_3D vec_SL = tri_SL->centroid();
     vector_3D vec_EL = tri_EL->centroid();
-    // convert the points to model coordinates (lat-lon)
-    FP_TYPE lon_SL, lat_SL;
-    FP_TYPE lon_EL, lat_EL;
-    cart_to_model(vec_SL, lon_SL, lat_SL);
-    cart_to_model(vec_EL, lon_EL, lat_EL);
     // get the distance
-    FP_TYPE dist = haversine(lon_SL, lat_SL, lon_EL, lat_EL, EARTH_R);
+    FP_TYPE dist = haversine(vec_SL, vec_EL, EARTH_R);
     return dist;
 }
 

@@ -35,6 +35,16 @@ minima_processed::~minima_processed(void)
 
 void minima_processed::locate(void)
 {
+    // calculate the distance between the centroid of a triangle and its 
+    // corner points for a triangle at the identification level - this is the
+    // maximum merge distance. Get just the first triangle
+    indexed_force_tri_3D* first_tri = tg.get_triangles_at_level(extrema_level).front()->get_data();
+    // get the centroid
+    vector_3D centroid = first_tri->centroid();
+    vector_3D vertex = first_tri->get_vertex(0);
+    // get the distance between the points - 
+    FP_TYPE hD = haversine(centroid, vertex, EARTH_R);
+    max_merge_dist = 2*hD;
     process_data();
     find_extrema();
     refine_extrema();
@@ -72,7 +82,10 @@ bool minima_processed::is_extrema(indexed_force_tri_3D* tri, int t_step)
 
     // contour the data minus the background
     FP_TYPE tri_val_C = contour_data(tri_val, contour_value);
-
+    // quickest check
+    if (tri_val_C > min_delta)
+        return false;
+        
     int n_less = 0;
     // loop through all the adjacent triangles
     const LABEL_STORE* tri_adj_labels = tri->get_adjacent_labels(adj_type);
@@ -141,7 +154,7 @@ void minima_processed::refine_extrema(void)
             min_v = contour_data(min_v, contour_value);
             // Check that min_v is <= min delta
             if (min_v > min_delta || fabs(min_v) > 2e10)
-                svex->object_labels.clear();
+                svex->deleted = true;
         }
         tstep_out_end(t);
     }
@@ -168,9 +181,9 @@ bool minima_processed::is_in_object(indexed_force_tri_3D* O_TRI,
     FP_TYPE mv = data_processed->get_missing_value();
     is_in &= !is_mv(cl_v, mv);
     // less than the minimum delta
-    is_in &= (cl_v_C <= min_delta);
-    // less than 1000km radius
-    is_in &= tg.distance_between_triangles(O_TRI->get_label(), C_TRI->get_label())/1000.0 < 1000.0;
+    is_in &= (cl_v_C < min_delta);
+    // less than 500 radius
+    is_in &= tg.distance_between_triangles(O_TRI->get_label(), C_TRI->get_label()) < max_merge_dist;
     // within one contour
     is_in &= cl_v_C <= ol_v_C;
     

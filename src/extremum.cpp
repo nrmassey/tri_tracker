@@ -15,8 +15,10 @@ void steering_extremum::set(FP_TYPE ilon, FP_TYPE ilat, FP_TYPE iintensity, FP_T
 	 				        FP_TYPE iu, FP_TYPE iv) 
 {
 	lon = ilon; lat = ilat;
-	intensity = iintensity; delta = idelta;
+	intensity = iintensity; 
+	delta = idelta;
 	sv_u = iu; sv_v = iv;
+	deleted = false;
 }
 
 /*****************************************************************************/
@@ -25,6 +27,7 @@ void steering_extremum::set(FP_TYPE ilon, FP_TYPE ilat, FP_TYPE iintensity, FP_T
      				        FP_TYPE iu, FP_TYPE iv, LABEL_STORE iobject_labels)
 {
 	set(ilon, ilat, iintensity, idelta, iu, iv);
+	deleted = false;
 	object_labels.clear();
 	for (LABEL_STORE::iterator it_obj_lab = iobject_labels.begin();
 		 it_obj_lab != iobject_labels.end(); it_obj_lab++)
@@ -57,7 +60,7 @@ void steering_extremum::save_text(std::ofstream& out)
 	// write the extremum out as a text chunk
 	out << lon << " " << lat << " " 
 		<< intensity << " " << delta << " "
-		<< sv_u << " " << sv_v << " ";
+		<< sv_u << " " << sv_v << " " << deleted << " ";
 	// write the object out in lon / lat coordinates
 	out << object_labels.size() << " ";
 	for (LABEL_STORE::iterator it_obj_lab = object_labels.begin();

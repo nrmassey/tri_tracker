@@ -55,6 +55,7 @@ extrema_locator::~extrema_locator(void)
 
 void extrema_locator::locate(void)
 {
+    max_merge_dist = 500.0 * 1000.0;        // 500 km
     find_extrema();
     refine_extrema();
     find_objects();
@@ -68,7 +69,9 @@ void extrema_locator::save(std::string output_fname, bool save_text)
 {
     int n_ex = 0;
     for (int t=0; t<ex_list.size(); t++)
-        n_ex += ex_list.number_of_extrema(t);
+        for (int o=0; o<ex_list.number_of_extrema(t); o++)
+            if (!ex_list.get(t,0)->deleted)
+                n_ex += 1;
     std::cout << "# Number of extrema: " << n_ex << std::endl;
     ex_list.set_meta_data(&meta_data);
 
@@ -135,7 +138,7 @@ void extrema_locator::find_extrema(void)
             {
                 // add to the extrema list, via the object list - the location and
                 // value of the svex is currently just filled with the missing value
-                steering_extremum svex(mv, mv, mv, mv, mv, mv);
+                steering_extremum svex(mv, mv, mv, mv, false, mv, mv);
                 svex.object_labels.push_back(c_tri->get_label());
                 // now add to the extrema list
                 ex_list.add(t, svex);
@@ -223,7 +226,7 @@ void extrema_locator::find_objects(void)
             // get the extremum for this object
             steering_extremum* svex = ex_list.get(t, e);
             // check to see whether a label actually exists
-            if (svex->object_labels.size() == 0)
+            if (svex->deleted)
                 continue;
             // get the "original triangle" for this object 
             // - i.e. the one at the centre of the object
@@ -258,6 +261,9 @@ void extrema_locator::find_objects(void)
                 }
                 c_shell.recalculate(&tg, &shell_in_object);
             }
+            // set deleted if size is 0 - i.e. no triangles found
+            if (svex->object_labels.size() == 0)
+                svex->deleted = true;
         }
         tstep_out_end(t);
     }
@@ -270,10 +276,6 @@ bool extrema_locator::objects_share_nodes(const LABEL_STORE* o1,
                                           const LABEL_STORE* o2)
 {
     // are two labels equal in the object lists
-    // check that each object actually has a label!
-    if (o1->size() == 0 || o2->size() == 0)
-        return false;
-    
     for (LABEL_STORE::const_iterator it_o1 = o1->begin();
          it_o1 != o1->end(); it_o1++)
     {
@@ -305,19 +307,19 @@ void extrema_locator::merge_objects(void)
         for (int o1=0; o1<o_s; o1++)
         {           
             LABEL_STORE* o1_shell_labs = obj_c_shells[o1].get_labels();
-            if (o1_shell_labs->size() == 0) // deleted object as above
+            steering_extremum* obj_1 = ex_list.get(t, o1);
+            if (obj_1->deleted) // deleted object as above
                 continue;
             // get the labels in the object as well as the shell
-            LABEL_STORE* o1_labs = &(ex_list.get(t, o1)->object_labels);
-            for (int o2=0; o2<o_s; o2++)
+            LABEL_STORE* o1_labs = &(obj_1->object_labels);
+            for (int o2=o1+1; o2<o_s; o2++)
             {
-                if (o1 == o2)
+                steering_extremum* obj_2 = ex_list.get(t, o2);
+                if (obj_2->deleted)
                     continue;
                 LABEL_STORE* o2_shell_labs = obj_c_shells[o2].get_labels();
-                if (o2_shell_labs->size() == 0) // deleted object
-                    continue;
                 // get the labels for both objects
-                LABEL_STORE* o2_labs = &(ex_list.get(t, o2)->object_labels);
+                LABEL_STORE* o2_labs = &(obj_2->object_labels);
                 
                 // is a label in the shell found in the object?
                 // test at different levels - 1st shells overlap?
@@ -333,19 +335,51 @@ void extrema_locator::merge_objects(void)
 
                 if (test)
                 {
-                    // add to the first object
+                    // create two sets of new labels - one for each object
+                    LABEL_STORE new_obj_1_L;
+                    LABEL_STORE new_obj_2_L;
+                    LABEL_STORE new_shell;
+                    
+                    // get the first object label in object 2
+                    LABEL obj_2_centre = (*o2_labs)[0];
+                    
+                    // add object 2 labels to new object 2 labels
                     for (LABEL_STORE::iterator it_o2 = o2_labs->begin(); 
                          it_o2 != o2_labs->end(); it_o2++)
+                        new_obj_2_L.push_back(*it_o2);
+
+                    // loop through object 1's labels
+                    for (LABEL_STORE::iterator it_o1 = o1_labs->begin(); 
+                         it_o1 != o1_labs->end(); it_o1++)
                     {
-                        // if it's not already in the object
-                        if (find(o1_labs->begin(), o1_labs->end(), *it_o2) == o1_labs->end())
+                        // measure the distance between object 2's central triangle
+                        // and the new triangle
+                        FP_TYPE dist = tg.distance_between_triangles(obj_2_centre, *it_o1);
+                        // if the distance is less than 1000km then add to object 2
+                        if (dist < max_merge_dist)
                         {
-                            o1_shell_labs->push_back(*it_o2);
-                            o1_labs->push_back(*it_o2);
+                            // if it's not already in the object
+                            if (find(new_obj_2_L.begin(), new_obj_2_L.end(), *it_o1) == new_obj_2_L.end())
+                            {
+                                new_obj_2_L.push_back(*it_o1);
+                                // get the new labels to add to the shell
+                                new_shell.push_back(*it_o1);
+                            }
                         }
+                        else
+                        // otherwise add to new object 1's labels
+                            new_obj_1_L.push_back(*it_o1);
                     }
-                    obj_c_shells[o2].get_labels()->clear(); // delete the object
-                    o2_labs->clear();
+                    // set labels
+                    obj_2->object_labels = new_obj_2_L;
+                    // if new obj 1 labels are not empty then add to object 1
+                    // otherwise delete object 1
+                    if (new_obj_1_L.size() != 0)
+                        obj_1->object_labels = new_obj_1_L;
+                    else
+                        obj_1->deleted = true;
+                    // recalculate the shell
+                    obj_c_shells[o2].recalculate(&tg, &new_shell);
                 }
             }
             // sort mostly for debugging purposes
@@ -353,8 +387,6 @@ void extrema_locator::merge_objects(void)
         }
         tstep_out_end(t);
     }
-    // remove any deleted objects from the extrema list - not needed as having 
-    // object_indices as size 0 marks out a deleted object / extrema
     std::cout << std::endl;
 }
 
@@ -369,7 +401,7 @@ void extrema_locator::get_min_max_values(FP_TYPE& min_v, FP_TYPE& max_v,
     max_v = -2e20f;
     LABEL_STORE* object_labels = &(ex_list.get(t, o)->object_labels);
     // if there are no labels do not try to find the min/max
-    if (object_labels->size() == 0)
+    if (ex_list.get(t, o)->deleted)
         return;
     // get the missing value
     FP_TYPE mv = ds.get_missing_value();
@@ -410,14 +442,16 @@ void extrema_locator::ex_points_from_objects(void)
         tstep_out_begin(t);
         for (int o=0; o<ex_list.number_of_extrema(t); o++)  // objects
         {
-            calculate_object_position(o, t);
-            if (sv != NULL)
-                calculate_steering_vector(o, t);
-            calculate_object_delta(o, t);
-            calculate_object_intensity(o, t);
+            if (!ex_list.get(t,o)->deleted)
+            {
+                calculate_object_position(o, t);
+                if (sv != NULL)
+                    calculate_steering_vector(o, t);
+                calculate_object_delta(o, t);
+                calculate_object_intensity(o, t);
+            }
         }
         tstep_out_end(t);
     }
-    ex_list.consolidate(ds.get_missing_value());    // remove any undefined objects 
     std::cout << std::endl;
 }

@@ -71,30 +71,7 @@ void extrema_list::add(int t_step, steering_extremum ex)
 
 void extrema_list::remove(int t_step, int ex_n)
 {
-	ex_list[t_step][ex_n].object_labels.clear();		// set as removed
-}
-
-/*****************************************************************************/
-
-void extrema_list::consolidate(FP_TYPE mv)
-{
-	// remove objects from the list that have been marked as having no
-	// size - either the object label list is size 0 or the longitude
-	// is the missing value
-	bool stop = false;
-	while (!stop)
-	{
-		stop = true;
-		for (int t=0; t<size(); t++)
-			for (int e=0; e<number_of_extrema(t); e++)
-				if (ex_list[t][e].lon == mv || 
-					ex_list[t][e].object_labels.size() == 0)
-				{					
-					ex_list[t].erase(ex_list[t].begin()+e);
-					stop = false;
-					break;
-				}
-	}
+	ex_list[t_step][ex_n].deleted = true;   // set as removed
 }
 
 /*****************************************************************************/
@@ -134,12 +111,17 @@ void extrema_list::save(std::string output_fname, FP_TYPE mv)
 	write_int(out, size());	
 	for (int t=0; t<size(); t++)
 	{
-		// write number of extrema for this timestep
-		write_int(out, number_of_extrema(t));
+		// write number of extrema for this timestep - need to calculate first
+		int n_extrema = 0;
+		for (int o=0; o<number_of_extrema(t); o++)
+		    if (!get(t,o)->deleted)
+		        n_extrema++;
+		write_int(out, n_extrema);
 		for (int e=0; e<number_of_extrema(t); e++)
 		{
-			steering_extremum* svex = get(t, e);
-			svex->save(out);
+   			steering_extremum* svex = get(t, e);
+   			if (!svex->deleted)
+        		svex->save(out);
 		}
 	}
 	out.close();
@@ -159,9 +141,12 @@ void extrema_list::save_text(std::string output_fname, tri_grid* tg)
 		for (int e=0; e<number_of_extrema(t); e++)
 		{
 			steering_extremum* svex = get(t, e);
-			out << t << " ";
-			svex->save_text(out);
-			out << std::endl;
+			if (!svex->deleted)
+			{
+    			out << t << " ";
+	    		svex->save_text(out);
+		    	out << std::endl;
+		    }
 		}
 	}
 	out.close();
