@@ -44,7 +44,7 @@ void minima_processed::locate(void)
     vector_3D vertex = first_tri->get_vertex(0);
     // get the distance between the points - 
     FP_TYPE hD = haversine(centroid, vertex, EARTH_R);
-    max_merge_dist = 2*hD;
+    max_merge_dist = 2.5*hD;
     process_data();
     find_extrema();
     refine_extrema();

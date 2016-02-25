@@ -374,7 +374,7 @@ void extrema_locator::merge_objects(void)
                     obj_2->object_labels = new_obj_2_L;
                     // if new obj 1 labels are not empty then add to object 1
                     // otherwise delete object 1
-                    if (new_obj_1_L.size() != 0)
+                    if (new_obj_1_L.size() > 1)
                         obj_1->object_labels = new_obj_1_L;
                     else
                         obj_1->deleted = true;

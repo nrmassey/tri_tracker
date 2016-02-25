@@ -58,11 +58,7 @@ void track::consolidate_candidate_point(void)
 {
     // assign the current candidate point to the track
     if (cand_pt.timestep != -1)
-    {
-/*        if (get_persistence() > 0)
-            assert(get_last_track_point()->timestep == cand_pt.timestep -1);*/
         tr.push_back(cand_pt);
-    }
     cand_pt.timestep = -1;  // clear the candidate point
 }
 
