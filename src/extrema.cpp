@@ -36,15 +36,15 @@ extrema_locator* create_extrema_locator(std::string method_string)
     extrema_locator* el;
     std::string method = get_method(method_string);
     // determine which class to use to do the extrema location
-    if (method=="minima")
+/*    if (method=="minima")
         el = new minima_locator();
     else if (method=="maxima")
         el = new maxima_locator();
     else if (method=="minima_background")     // minima with background removal
         el = new minima_background();
-/*  else if (method=="minima_back_wind")
+    else if (method=="minima_back_wind")
         el = new minima_back_wind();*/
-    else if (method=="minima_largescale")
+/*    else*/ if (method=="minima_largescale")
         el = new minima_largescale();
     else
         throw (std::string("Unsupported extrema location method: " + method));

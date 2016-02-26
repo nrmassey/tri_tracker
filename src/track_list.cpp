@@ -13,13 +13,18 @@
 
 /*****************************************************************************/
 
-extern FP_TYPE curvature_cost(track_point* tp0, track_point* tp1, track_point* tp2, FP_TYPE sr);
+track_point::track_point(steering_extremum ipt, int itimestep, int irules_bf, FP_TYPE icost)
+            : pt(ipt), timestep(itimestep), rules_bf(irules_bf), cost(icost)
+{
+}
 
 /*****************************************************************************/
 
 track::track(void)
 {
     cand_pt.timestep = -1;
+    cand_pt.rules_bf = 0;
+    cand_pt.cost = 2e20;
     deleted = false;
     tr.clear();
 }
@@ -60,6 +65,8 @@ void track::consolidate_candidate_point(void)
     if (cand_pt.timestep != -1)
         tr.push_back(cand_pt);
     cand_pt.timestep = -1;  // clear the candidate point
+    cand_pt.rules_bf = 0;
+    cand_pt.cost = 2e20;
 }
 
 /*****************************************************************************/
@@ -341,21 +348,13 @@ void track_list::save_text(std::string output_fname, FP_TYPE sr=1000)
         out << it->get_persistence() << " " << curv_mean << std::endl;
         for (int tp=0; tp < it->get_persistence(); tp++)
         {
-            FP_TYPE c = 0.0;
             track_point* tp2 = it->get_track_point(tp);
-            if (tp >= 2)
-            {
-                track_point* tp0 = it->get_track_point(tp-2);
-                track_point* tp1 = it->get_track_point(tp-1);
-                c = curvature_cost(tp0, tp1, tp2, sr);
-            }
-
             // write the frame number first
             out << tp2->timestep << " ";
             // write the bitfield
             out << tp2->rules_bf << " ";
-            // write the all import curvature
-            out << c << " ";
+            // write the cost
+            out << tp2->cost << " ";
             // write the extremum point
             tp2->pt.save_text(out);
             out << std::endl;           // component costs

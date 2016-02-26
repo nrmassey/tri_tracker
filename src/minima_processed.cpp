@@ -45,6 +45,7 @@ void minima_processed::locate(void)
     // get the distance between the points - 
     FP_TYPE hD = haversine(centroid, vertex, EARTH_R);
     max_merge_dist = 2.5*hD;
+    
     process_data();
     find_extrema();
     refine_extrema();
@@ -119,6 +120,7 @@ void minima_processed::refine_extrema(void)
 {
     // refine the extrema to the lowest grid level first
     extrema_locator::refine_extrema();
+    
     std::cout << "# Refining extrema, timestep: ";
     // now construct a new set of labels where the values are within one
     // contour of the minimum value
@@ -181,7 +183,7 @@ bool minima_processed::is_in_object(indexed_force_tri_3D* O_TRI,
     FP_TYPE mv = data_processed->get_missing_value();
     is_in &= !is_mv(cl_v, mv);
     // less than the minimum delta
-    is_in &= (cl_v_C < min_delta);
+    is_in &= (cl_v_C <= min_delta);
     // less than 500 radius
     is_in &= tg.distance_between_triangles(O_TRI->get_label(), C_TRI->get_label()) < max_merge_dist;
     // within one contour

@@ -17,11 +17,13 @@
 class track_point
 {
     public:
-        track_point(void) : timestep(0), rules_bf(0) {}
-        track_point(const track_point& rhs) : pt(rhs.pt), timestep(rhs.timestep), rules_bf(rhs.rules_bf) {}
+        track_point(void) : timestep(0), rules_bf(0), cost(2e20) {}
+        track_point(steering_extremum ipt, int itimestep, int irules_bf, FP_TYPE icost);
+        track_point(const track_point& rhs) : pt(rhs.pt), timestep(rhs.timestep), rules_bf(rhs.rules_bf), cost(rhs.cost) {}
         steering_extremum pt;   // point
         int timestep;
         int rules_bf;
+        FP_TYPE cost;
 };
 
 /*****************************************************************************/

@@ -73,7 +73,6 @@ bool minima_locator::process_data(void)
     std::cout << "# Processing data" << std::endl;
     
     // get the triangles at the extrema detection level
-    // we only have to process this level
     // we want to process every level, not just the grid level
     for (int l=0; l<tg.get_max_level(); l++)
     {

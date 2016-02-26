@@ -78,17 +78,14 @@ class tracker
         std::vector<int> get_overlapping_tracks(track* tr_A);
         
         // functions for deriving the initial tracks
-        int  determine_track_for_candidate(steering_extremum* svex, int t);
-        bool assign_candidate(steering_extremum c_svex, int min_tr, int t);
+        int  determine_track_for_candidate(track_point& n_cand, int t);
+        bool assign_candidate(track_point& n_cand, int min_tr, int t);
         void add_unassigned_points_as_tracks(int t);
 
         // the all important search function - returns a bitfield based on whether
-        // the rules have been met (in a specific order)
-        int apply_rules(track* TR, steering_extremum* EX_svex, FP_TYPE& cost);
-        // check whether a current candidate event should be overwritten with a new one
-        bool should_replace_candidate_point(track* TR, track_point* cur_cand,
-                                             track_point* new_cand, FP_TYPE& cost);
-
+        // the rules have been met (in a specific order) and the cost of meeting that
+        // rule.  All values returned within the candidate point
+        void apply_rules(track* TR, track_point& n_cand);
 };
 
 #endif

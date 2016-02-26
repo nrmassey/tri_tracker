@@ -320,89 +320,6 @@ FP_TYPE intensity(track* TR, steering_extremum* EX_svex)
 
 /*****************************************************************************/
 
-bool tracker::should_replace_candidate_point(track* TR, track_point* cur_cand,
-                                             track_point* new_cand, FP_TYPE& cost)
-{
-    // should we replace the current candidate event?
-    // we need to compare values for CURVATURE, STEERING, OVERLAP and DISTANCE
-    // in that order. i.e. CURVATURE is at the top of a hierarchy of rules
-    bool replace = false;
-    FP_TYPE cur_cand_distance = distance(TR, &(cur_cand->pt));
-    FP_TYPE new_cand_distance = distance(TR, &(new_cand->pt));
-    // first check on search radius
-    if (new_cand_distance > sr)
-        return false;
-    if (cur_cand->rules_bf < new_cand->rules_bf)
-    {
-        replace = true;
-        // get the costs
-        if ((new_cand->rules_bf & CURVATURE) != 0)
-            cost = curvature_cost(TR, &(new_cand->pt), sr);
-        else if ((new_cand->rules_bf & STEERING) != 0)
-            cost = steering(TR, &(new_cand->pt), hrs_per_t_step);
-        else if ((new_cand->rules_bf & INTENSITY) != 0)
-            cost = intensity(TR, &(new_cand->pt));
-        else if ((new_cand->rules_bf & OVERLAP) != 0)
-            cost = overlap(TR, &(new_cand->pt));
-        else
-            cost = new_cand_distance;
-    }
-    else if (cur_cand->rules_bf == new_cand->rules_bf)
-    {
-        if ((cur_cand->rules_bf & CURVATURE) != 0)
-        {
-            FP_TYPE cur_cand_curve = curvature_cost(TR, &(cur_cand->pt), sr);
-            FP_TYPE new_cand_curve = curvature_cost(TR, &(new_cand->pt), sr);
-            if (new_cand_curve < cur_cand_curve)
-            {
-                replace = true;
-                cost = new_cand_curve;
-            }
-        }
-        else if ((cur_cand->rules_bf & INTENSITY) != 0)
-        {
-            FP_TYPE cur_cand_intensity = intensity(TR, &(cur_cand->pt));
-            FP_TYPE new_cand_intensity = intensity(TR, &(new_cand->pt));
-            if (new_cand_intensity < cur_cand_intensity)
-            {
-                replace = true;
-                cost = new_cand_intensity;
-            }
-        }
-        else if ((cur_cand->rules_bf & STEERING) != 0)
-        {
-            FP_TYPE cur_cand_steer = steering(TR, &(cur_cand->pt), hrs_per_t_step);
-            FP_TYPE new_cand_steer = steering(TR, &(new_cand->pt), hrs_per_t_step);
-            if (new_cand_steer < cur_cand_steer)
-            {
-                replace = true;
-                cost = new_cand_steer;
-            }
-        }
-        else if ((cur_cand->rules_bf & OVERLAP) != 0)
-        {
-            FP_TYPE cur_cand_overlap = overlap(TR, &(cur_cand->pt));
-            FP_TYPE new_cand_overlap = overlap(TR, &(new_cand->pt));
-            if (new_cand_overlap < cur_cand_overlap)
-            {
-                replace = true;
-                cost = new_cand_overlap;
-            }
-        }
-        else
-        {
-            if (new_cand_distance < cur_cand_distance)
-            {
-                replace = true;
-                cost = new_cand_distance;
-            }
-        }
-    }
-    return replace;
-}
-
-/*****************************************************************************/
-
 FP_TYPE get_adaptive_sr(track* TR, int n_t_steps)
 {
     // get the mean displacement over the last n_t_steps
@@ -430,82 +347,79 @@ FP_TYPE calculate_steering_distance(steering_extremum* EX_svex, FP_TYPE hrs_ts)
 
 /*****************************************************************************/
 
-int tracker::apply_rules(track* TR, steering_extremum* EX_svex, FP_TYPE& cost)
+void tracker::apply_rules(track* TR, track_point& n_cand)
 {
-    // bit field
-    int rules_bf = 0;
     // calculate and return the components of the cost function
-    FP_TYPE distance_val = distance(TR, EX_svex);
+    FP_TYPE distance_val = distance(TR, &(n_cand.pt));
     
     // Apply distance rule
     // 1. The steering distance calculated from the geostrophic wind / steering vector.
-    
-    FP_TYPE steering_dist = calculate_steering_distance(EX_svex, hrs_per_t_step);
+    FP_TYPE steering_dist = calculate_steering_distance(&(n_cand.pt), hrs_per_t_step);
     // check for rogue steering distances
     if (steering_dist > sr * 2)
         steering_dist = sr * 2;
-//    FP_TYPE steering_dist = sr;
     
     // 2. Less than the user specified search radius
+    n_cand.rules_bf = 0;
+    n_cand.cost = 2e20;
     if (distance_val <= sr || distance_val <= steering_dist)
     {
-        rules_bf = DISTANCE;
-        cost = distance_val;
+        n_cand.rules_bf = DISTANCE;
+        n_cand.cost = distance_val;
     }
     
     // don't do any other processing if rules_bf = 0 (i.e. out of range)
-    if (rules_bf > 0)
+    if (n_cand.rules_bf > 0)
     {
         // overlap only allowed after first timestep
         if (TR->get_persistence() >= 2)
         {
             // don't allow tracks to move more than 90 degrees over a timestep
-            FP_TYPE curv_cost = curvature_cost(TR, EX_svex, sr);
+            FP_TYPE curv_cost = curvature_cost(TR, &(n_cand.pt), sr);
             if (curv_cost < MAX_CURV_COST)
             {
-                rules_bf |= CURVATURE;
-                cost = curv_cost;
+                n_cand.rules_bf |= CURVATURE;
+                n_cand.cost = curv_cost;
             }
             else
             {
-                rules_bf = 0;
-                cost = 2e20;
+                n_cand.rules_bf = 0;
+                n_cand.cost = 2e20;
             }
         }
         else if (TR->get_persistence() >= 1)
         {
-            FP_TYPE overlap_val = overlap(TR, EX_svex);
+            FP_TYPE overlap_val = overlap(TR, &(n_cand.pt));
             // more than overlap_val% overlap (note - the cost is 100 - the overlap)
             if (overlap_val >= ov)
             {
-                rules_bf |= OVERLAP;
-                cost = 100 - overlap_val;
+                n_cand.rules_bf |= OVERLAP;
+                n_cand.cost = 100 - overlap_val;
             }
-            FP_TYPE intensity_val = intensity(TR, EX_svex);
+            FP_TYPE intensity_val = intensity(TR, &(n_cand.pt));
             // more than overlap_val% overlap (note - the cost is 100 - the overlap)
             if (intensity_val < MAX_INTENSITY)
             {
-                rules_bf |= INTENSITY;
-                cost = intensity_val;
+                n_cand.rules_bf |= INTENSITY;
+                n_cand.cost = intensity_val;
             }
-            if (EX_svex->sv_u != mv)
+            if (n_cand.pt.sv_u != mv)
             {
                 // don't allow steering_val to be more than 90 degrees
-                FP_TYPE steering_val = steering(TR, EX_svex, hrs_per_t_step);
+                FP_TYPE steering_val = steering(TR, &(n_cand.pt), hrs_per_t_step);
                 if (steering_val < MAX_GEOWIND)
                 {
-                    rules_bf |= STEERING;
-                    cost = steering_val;
+                    n_cand.rules_bf |= STEERING;
+                    n_cand.cost = steering_val;
                 }
             }
         }
     }
-    return rules_bf;
 }
 
 /*****************************************************************************/
 
-int tracker::determine_track_for_candidate(steering_extremum* svex, int t)
+int tracker::determine_track_for_candidate(track_point& n_cand, int t)
 {
     // set up the minimum cost so far
     int min_tr = -1;
@@ -524,62 +438,58 @@ int tracker::determine_track_for_candidate(steering_extremum* svex, int t)
             continue; // next track!
         else
         {
-            FP_TYPE cost = 2e20;
-            int add_track = apply_rules(c_trk, svex, cost);
-            // we don't want the track to just be based on distance - although
-            // it has to pass this rule first
-            if (add_track > 0)
+            // apply the rules to the candidate point
+            apply_rules(c_trk, n_cand);
+            // if outside the distance
+            if (n_cand.rules_bf == 0)
+                continue;
+            // is within the distance
+            if ((n_cand.rules_bf > min_rules_bf) ||
+                (n_cand.rules_bf == min_rules_bf && n_cand.cost < min_cost))
             {
-                // Output between certain latitudes for debugging only
-                bool output = false;
-                if (t == 471 && c_pt->pt.lat > 56 && c_pt->pt.lat < 59 && c_pt->pt.lon > 0 && c_pt->pt.lon < 13)
-                    output = true;
-                
                 // is there already a candidate?
                 track_point* c_cand = c_trk->get_candidate_point();
                 if (c_cand->timestep != -1)
                 {
-                    if (output)
+                    // check whether the candidate point should be replaced
+                    // either the new cand has a higher set of rules than the existing
+                    // cand or the rules are the same but the cost is lower in the new cand
+                    if ((n_cand.rules_bf > c_cand->rules_bf) || 
+                        (n_cand.rules_bf == c_cand->rules_bf && n_cand.cost < c_cand->cost))
                     {
-                        std::cout << " " << c_cand->timestep << " 2 " << tr << " " << c_pt->pt.lon << "," << c_pt->pt.lat
-                                  << " : CAND: " << c_cand->pt.lon << "," << c_cand->pt.lat << " " <<  min_cost << " " << c_cand->rules_bf
-                                  << " : NEW: " << svex->lon << "," << svex->lat << " " << cost << " " << add_track << std::endl;
-                    }
-                    track_point new_cand;
-                    new_cand.pt = *svex;
-                    new_cand.timestep=t;
-                    new_cand.rules_bf = add_track;
-                    FP_TYPE replace_cost = 0.0;
-                    if (should_replace_candidate_point(c_trk, c_cand, &new_cand, replace_cost))
-                    {
-                        if (output)
-                            std::cout << " REPLACE " << add_track << " " << c_cand->rules_bf << " " << replace_cost << " " << min_cost << std::endl;
                         min_tr = tr;
-                        min_cost = replace_cost;
-                        min_rules_bf = add_track;
+                        min_cost = n_cand.cost;
+                        min_rules_bf = n_cand.rules_bf;
+                    }
+                    else
+                    {
+                        min_tr = -1;
+                        min_cost = 2e20;
+                        min_rules_bf = 0;
                     }
                 }
-                else if (add_track > min_rules_bf && cost < min_cost && cost < 1e10)
+                // otherwise ensure that we either have the maximum rule passed
+                // or the minimum cost if the rules passed are the same
+                else
                 {
-                    if (output)
-                    {
-                        std::cout << " " << t << " 1 " << tr << " " << c_pt->pt.lon << "," << c_pt->pt.lat << " : " 
-                                  << svex->lon << "," << svex->lat << " "
-                                  << cost << " " << add_track << std::endl;
-                    }
                     min_tr = tr;
-                    min_cost = cost;
-                    min_rules_bf = add_track;
+                    min_cost = n_cand.cost;
+                    min_rules_bf = n_cand.rules_bf;
                 }
             }
         }
     }
+    // reassign the minimum cost and rules so that they can be used in the
+    // local optimisation
+    n_cand.cost = min_cost;
+    n_cand.rules_bf = min_rules_bf;
+
     return min_tr;
 }
 
 /*****************************************************************************/
 
-bool tracker::assign_candidate(steering_extremum c_svex, int min_tr, int t)
+bool tracker::assign_candidate(track_point& n_cand, int min_tr, int t)
 {
     // now the minimum track location has been found - add to the track
     // check first whether a track was found
@@ -596,19 +506,7 @@ bool tracker::assign_candidate(steering_extremum c_svex, int min_tr, int t)
             steering_extremum prev_cand_pt = trk->get_candidate_point()->pt;
             ex_queue.push(prev_cand_pt);
         }
-        // set as candidate point
-        track_point cand_pt;
-        cand_pt.pt = c_svex;
-        cand_pt.timestep = t;
-        FP_TYPE cost = 2e20;
-        cand_pt.rules_bf = apply_rules(trk, &(c_svex), cost);
-        // get the last event point from the event_track
-        track_point* c_pt = trk->get_last_track_point();
-        if (t==471 && c_pt->pt.lat > 56 && c_pt->pt.lat < 59 && c_pt->pt.lon > 0 && c_pt->pt.lon < 13)
-        {
-            std::cout << " ASSIGN " << min_tr << " " << cand_pt.rules_bf << std::endl;
-        }
-        trk->set_candidate_point(cand_pt);
+        trk->set_candidate_point(n_cand);
         return true;
     }
 }
@@ -682,9 +580,11 @@ void tracker::find_tracks(void)
                 // pop an event off the front of the queue
                 steering_extremum svex_cand = ex_queue.front();
                 ex_queue.pop();
+                // create the candidate point
+                track_point n_cand(svex_cand, t, 0, 2e20);      // default no rules passed + high cost
                 // determine which track it should be assigned to and assign it
-                int min_tr = determine_track_for_candidate(&svex_cand, t);
-                assigned = assign_candidate(svex_cand, min_tr, t);
+                int min_tr = determine_track_for_candidate(n_cand, t);
+                assigned = assign_candidate(n_cand, min_tr, t);
                 if (not assigned)
                     // not found so add to back of the queue
                     ex_queue.push(svex_cand);

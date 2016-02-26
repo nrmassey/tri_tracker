@@ -18,9 +18,9 @@ DEBUG_FLAGS = -Wno-deprecated -O0 -g -Wall -pg #-D_GLIBCXX_DEBUG
 RELEASE_FLAGS = -Wno-deprecated -O3 -msse3 -g
 PROFILE_FLAGS = $(RELEASE_FLAGS) -pg
 COMMON_FLAGS = -DFP_TYPE=float
-#FLAGS = $(RELEASE_FLAGS) $(COMMON_FLAGS)
+FLAGS = $(RELEASE_FLAGS) $(COMMON_FLAGS)
 #FLAGS = $(PROFILE_FLAGS) $(COMMON_FLAGS)
-FLAGS = $(DEBUG_FLAGS) $(COMMON_FLAGS)
+#FLAGS = $(DEBUG_FLAGS) $(COMMON_FLAGS)
 
 # Linker variables
 LDFLAGS = $(FLAGS) -stdlib=libstdc++
@@ -50,12 +50,10 @@ REGRID_OBJ = $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(REGRID_CPP))
 TRI_GRID_TO_NC_CPP = tri_grid_to_netcdf.cpp data_store.cpp
 TRI_GRID_TO_NC_OBJ = $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(TRI_GRID_TO_NC_CPP))
 
-EXTREMA_CPP = extrema.cpp extrema_locator.cpp data_store.cpp \
-              maxima_locator.cpp minima_locator.cpp extrema_list.cpp \
-              minima_background.cpp geo_wind_vector.cpp \
-              mslp_wind_vector.cpp \
+EXTREMA_CPP = extrema.cpp data_store.cpp extrema_list.cpp \
+              geo_wind_vector.cpp mslp_wind_vector.cpp \
               concentric_shell.cpp spline.cpp \
-              minima_largescale.cpp minima_processed.cpp
+              extrema_locator.cpp minima_largescale.cpp minima_processed.cpp
 EXTREMA_OBJ = $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(EXTREMA_CPP))
 
 TRACK_CPP = track.cpp track_list.cpp tracker.cpp extrema_list.cpp \
