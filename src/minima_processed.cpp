@@ -50,6 +50,7 @@ void minima_processed::locate(void)
     find_extrema();
     refine_extrema();
     find_objects();
+    split_objects();
     merge_objects();
     ex_points_from_objects();
 }

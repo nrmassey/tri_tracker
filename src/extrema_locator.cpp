@@ -59,6 +59,7 @@ void extrema_locator::locate(void)
     find_extrema();
     refine_extrema();
     find_objects();
+    split_objects();
     merge_objects();
     ex_points_from_objects();
 }
@@ -283,6 +284,48 @@ bool extrema_locator::objects_share_nodes(const LABEL_STORE* o1,
             return true;
     }
     return false;
+}
+
+/*****************************************************************************/
+void extrema_locator::split_objects(void)
+{
+    // split the objects into constituent objects - i.e. one triangle per object
+    extrema_list new_ex_list;
+    // set the new extrema list to have the same number of timesteps as the current one
+    new_ex_list.set_size(ex_list.size());
+    std::cout << "# Splitting objects, timestep: ";
+    for (int t=0; t<ex_list.size(); t++)
+    {
+        tstep_out_begin(t);
+        // loop over every object for this timestep
+        int o_s = ex_list.number_of_extrema(t);
+        for (int o1=0; o1<o_s; o1++)
+        {
+           // loop over every label in this object
+            steering_extremum* svex = ex_list.get(t, o1);
+            // check to see whether a label actually exists
+            if (svex == NULL || svex->deleted)
+                continue;
+            // create one object for every triangle in the current object
+            for (int o2=0; o2<svex->object_labels.size(); o2++)
+            {
+                // create a new svex with just one label
+                steering_extremum new_svex(svex->lon, svex->lat, 
+                                           svex->intensity, svex->delta, 
+                                           false,
+                                           svex->sv_u, svex->sv_v);
+                // add the label to the object
+                new_svex.object_labels.push_back(svex->object_labels[o2]);
+                // add the object (with one label / triangle) to the new
+                // extrema list
+                new_ex_list.add(t, new_svex);
+            }
+        }
+        tstep_out_end(t);
+    }
+    // assign the extrema list to the new extrema list
+    ex_list = new_ex_list;
+    std::cout << std::endl;
 }
 
 /*****************************************************************************/

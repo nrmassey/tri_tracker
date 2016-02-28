@@ -71,6 +71,7 @@ class extrema_locator
         virtual void find_extrema(void);
         virtual void refine_extrema(void);
         virtual void find_objects(void);
+        virtual void split_objects(void);
         
         // Functions that are applicable to all 
         void merge_objects(void);
