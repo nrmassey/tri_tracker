@@ -287,6 +287,7 @@ bool extrema_locator::objects_share_nodes(const LABEL_STORE* o1,
 }
 
 /*****************************************************************************/
+
 void extrema_locator::split_objects(void)
 {
     // split the objects into constituent objects - i.e. one triangle per object
@@ -298,27 +299,72 @@ void extrema_locator::split_objects(void)
     {
         tstep_out_begin(t);
         // loop over every object for this timestep
-        int o_s = ex_list.number_of_extrema(t);
-        for (int o1=0; o1<o_s; o1++)
+        int e_s = ex_list.number_of_extrema(t);
+        for (int e1=0; e1<e_s; e1++)
         {
            // loop over every label in this object
-            steering_extremum* svex = ex_list.get(t, o1);
+            steering_extremum* svex = ex_list.get(t, e1);
             // check to see whether a label actually exists
-            if (svex == NULL || svex->deleted)
+            if (svex == NULL || svex->deleted || svex->object_labels.size() == 0)
                 continue;
-            // create one object for every triangle in the current object
-            for (int o2=0; o2<svex->object_labels.size(); o2++)
+            
+            // create a new list of label stores to store this objects split
+            // labels in
+            std::vector<LABEL_STORE> label_stores;
+            label_stores.clear();
+            // create a new LABEL_STORE in the list containing the first label in the objects
+            LABEL_STORE new_label_store;
+            new_label_store.push_back(svex->object_labels[0]);
+            label_stores.push_back(new_label_store);
+            
+            // now loop through the other labels and if they are adjacent to a label
+            // in the new label_stores, then add to the new respective LABEL_STORE.
+            // If not adjacent then create a new LABEL_STORE.  Need to check all label_stores.
+            for (int o1=1; o1<svex->object_labels.size(); o1++)
             {
-                // create a new svex with just one label
-                steering_extremum new_svex(svex->lon, svex->lat, 
-                                           svex->intensity, svex->delta, 
-                                           false,
-                                           svex->sv_u, svex->sv_v);
-                // add the label to the object
-                new_svex.object_labels.push_back(svex->object_labels[o2]);
-                // add the object (with one label / triangle) to the new
-                // extrema list
-                new_ex_list.add(t, new_svex);
+                // get the current label
+                LABEL c_label = svex->object_labels[o1];
+                // loop over the number of LABEL_STOREs in the new list
+                for (int e2=0; e2<new_label_store.size(); e2++)
+                {
+                    // loop over the labels in the new label store and check whether
+                    // the current label (from the old object) is adjacent to any
+                    // of them
+                    bool is_adjacent = false;
+                    for (int o2=0; o2<label_stores[e2].size(); o2++)
+                    {
+                        // get the adjacent triangles for this label - point adjacency
+                        const LABEL_STORE* c_adj_labels = tg.get_triangle(label_stores[e2][o2])->get_adjacent_labels(POINT);
+                        // search for the label in the labels already added to the label store
+                        is_adjacent = (std::find(c_adj_labels->begin(), c_adj_labels->end(), c_label) != c_adj_labels->end());
+                    }
+                    // if the triangle is adjacent to one (or more) triangles already added
+                    // to the label store then add the triangle label to the store
+                    if (is_adjacent)
+                    {
+                        
+                        // add this label to the existing label store
+                        label_stores[e2].push_back(c_label);
+                    }
+                    else
+                    {
+                        // otherwise add a new label store
+                        LABEL_STORE new_label_store2;
+                        new_label_store2.push_back(c_label);
+                        label_stores.push_back(new_label_store2);
+                    }
+                }
+            }
+            // now create a new svex for each label store and add to the new extrema list
+            for (int ls=0; ls<label_stores.size(); ls++)
+            {
+                // create the new steering extremum
+                steering_extremum svex2;
+                // add the labels from the label stores
+                svex2.object_labels = label_stores[ls];
+                // add to the new extrema list, if greater than 1
+                if (svex2.object_labels.size() > 0)
+                    new_ex_list.add(t, svex2);
             }
         }
         tstep_out_end(t);
@@ -337,6 +383,7 @@ void extrema_locator::merge_objects(void)
     std::cout << "# Merging objects, timestep: ";
     for (int t=0; t<ex_list.size(); t++)
     {
+        bool continue_merge = true;
         tstep_out_begin(t);
         int o_s = ex_list.number_of_extrema(t);
         // calculate the concentric shells for each object
@@ -347,86 +394,104 @@ void extrema_locator::merge_objects(void)
             o_c_shell.calculate(&tg, ex_list.get(t, o1));
             obj_c_shells.push_back(o_c_shell);
         }
-        for (int o1=0; o1<o_s; o1++)
-        {           
-            LABEL_STORE* o1_shell_labs = obj_c_shells[o1].get_labels();
-            steering_extremum* obj_1 = ex_list.get(t, o1);
-            if (obj_1->deleted) // deleted object as above
-                continue;
-            // get the labels in the object as well as the shell
-            LABEL_STORE* o1_labs = &(obj_1->object_labels);
-            for (int o2=o1+1; o2<o_s; o2++)
-            {
-                steering_extremum* obj_2 = ex_list.get(t, o2);
-                if (obj_2->deleted)
+        while (continue_merge)
+        {
+            continue_merge = false;
+            int n_objs = 0;
+            for (int o1=0; o1<o_s; o1++)
+            {           
+                LABEL_STORE* o1_shell_labs = obj_c_shells[o1].get_labels();
+                steering_extremum* obj_1 = ex_list.get(t, o1);
+                if (obj_1->deleted) // deleted object as above
                     continue;
-                LABEL_STORE* o2_shell_labs = obj_c_shells[o2].get_labels();
-                // get the labels for both objects
-                LABEL_STORE* o2_labs = &(obj_2->object_labels);
-                
-                // is a label in the shell found in the object?
-                // test at different levels - 1st shells overlap?
-                bool test = false;
-                // 1st test object shells overlap
-                if (!test) test = objects_share_nodes(o1_shell_labs, o2_shell_labs);
-                // 2nd - 1st object shell overlaps with 2nd object
-                if (!test) test = objects_share_nodes(o1_shell_labs, o2_labs);
-                // 3rd - 2nd object shell overlaps with 1st object
-                if (!test) test = objects_share_nodes(o1_labs, o2_shell_labs);
-                // 4th - labels in 1st object overlaps 2nd object
-                if (!test) test = objects_share_nodes(o1_labs, o2_labs);
-
-                if (test)
+                else
+                    n_objs++;
+                // get the labels in the object as well as the shell
+                LABEL_STORE* o1_labs = &(obj_1->object_labels);
+                for (int o2=o1+1; o2<o_s; o2++)
                 {
-                    // create two sets of new labels - one for each object
-                    LABEL_STORE new_obj_1_L;
-                    LABEL_STORE new_obj_2_L;
-                    LABEL_STORE new_shell;
+                    steering_extremum* obj_2 = ex_list.get(t, o2);
+                    if (obj_2->deleted)
+                        continue;
+                    LABEL_STORE* o2_shell_labs = obj_c_shells[o2].get_labels();
+                    // get the labels for both objects
+                    LABEL_STORE* o2_labs = &(obj_2->object_labels);
+                
+                    // is a label in the shell found in the object?
+                    // test at different levels - 1st shells overlap?
+                    bool test = false;
+                    // 1st test object shells overlap
+                    if (!test) test = objects_share_nodes(o1_shell_labs, o2_shell_labs);
+                    // 2nd - 1st object shell overlaps with 2nd object
+                    if (!test) test = objects_share_nodes(o1_shell_labs, o2_labs);
+                    // 3rd - 2nd object shell overlaps with 1st object
+                    if (!test) test = objects_share_nodes(o1_labs, o2_shell_labs);
+                    // 4th - labels in 1st object overlaps 2nd object
+                    if (!test) test = objects_share_nodes(o1_labs, o2_labs);
                     
-                    // get the first object label in object 2
-                    LABEL obj_2_centre = (*o2_labs)[0];
-                    
-                    // add object 2 labels to new object 2 labels
-                    for (LABEL_STORE::iterator it_o2 = o2_labs->begin(); 
-                         it_o2 != o2_labs->end(); it_o2++)
-                        new_obj_2_L.push_back(*it_o2);
 
-                    // loop through object 1's labels
-                    for (LABEL_STORE::iterator it_o1 = o1_labs->begin(); 
-                         it_o1 != o1_labs->end(); it_o1++)
+                    if (test)
                     {
-                        // measure the distance between object 2's central triangle
-                        // and the new triangle
-                        FP_TYPE dist = tg.distance_between_triangles(obj_2_centre, *it_o1);
-                        // if the distance is less than 1000km then add to object 2
-                        if (dist < max_merge_dist)
+                        // create two sets of new labels - one for each object
+                        LABEL_STORE new_obj_1_L;
+                        LABEL_STORE new_obj_2_L;
+                        LABEL_STORE new_shell;
+                    
+                        // get the first object label in object 2
+                        LABEL obj_2_centre = (*o2_labs)[0];
+                    
+                        // add object 2 labels to new object 2 labels
+                        for (LABEL_STORE::iterator it_o2 = o2_labs->begin(); 
+                             it_o2 != o2_labs->end(); it_o2++)
+                            new_obj_2_L.push_back(*it_o2);
+
+                        // loop through object 1's labels
+                        for (LABEL_STORE::iterator it_o1 = o1_labs->begin(); 
+                             it_o1 != o1_labs->end(); it_o1++)
                         {
-                            // if it's not already in the object
-                            if (find(new_obj_2_L.begin(), new_obj_2_L.end(), *it_o1) == new_obj_2_L.end())
+                            // measure the distance between object 2's central triangle
+                            // and the new triangle
+                            FP_TYPE dist = tg.distance_between_triangles(obj_2_centre, *it_o1);
+                            // if the distance is less than 1000km then add to object 2
+                            if (dist < max_merge_dist)
                             {
-                                new_obj_2_L.push_back(*it_o1);
-                                // get the new labels to add to the shell
-                                new_shell.push_back(*it_o1);
+                                // if it's not already in the object
+                                if (find(new_obj_2_L.begin(), new_obj_2_L.end(), *it_o1) == new_obj_2_L.end())
+                                {
+                                    new_obj_2_L.push_back(*it_o1);
+                                    // get the new labels to add to the shell
+                                    new_shell.push_back(*it_o1);
+                                }
                             }
+                            else
+                            // otherwise add to new object 1's labels
+                                new_obj_1_L.push_back(*it_o1);
                         }
+                        // set labels
+                        obj_2->object_labels = new_obj_2_L;
+                        // if new obj 1 labels are not empty then add to object 1
+                        // otherwise delete object 1
+                        if (new_obj_1_L.size() > 0)
+                            obj_1->object_labels = new_obj_1_L;
                         else
-                        // otherwise add to new object 1's labels
-                            new_obj_1_L.push_back(*it_o1);
+                            obj_1->deleted = true;
+                        // recalculate the shell
+                        obj_c_shells[o2].recalculate(&tg, &new_shell);
                     }
-                    // set labels
-                    obj_2->object_labels = new_obj_2_L;
-                    // if new obj 1 labels are not empty then add to object 1
-                    // otherwise delete object 1
-                    if (new_obj_1_L.size() > 1)
-                        obj_1->object_labels = new_obj_1_L;
-                    else
-                        obj_1->deleted = true;
-                    // recalculate the shell
-                    obj_c_shells[o2].recalculate(&tg, &new_shell);
                 }
+                // sort mostly for debugging purposes
+    //          sort(o1_labs->begin(), o1_labs->end());
             }
-            // sort mostly for debugging purposes
-//          sort(o1_labs->begin(), o1_labs->end());
+            int n_objs2 = 0;
+            for (int o1=0; o1<o_s; o1++)
+            {           
+                steering_extremum* obj_1 = ex_list.get(t, o1);
+                if (!obj_1->deleted) // deleted object as above
+                    n_objs2++;
+            }
+            // continue merging if the number of objects at the beginning is not
+            // equal to the number of objects at the end
+            continue_merge = (n_objs != n_objs2);
         }
         tstep_out_end(t);
     }
