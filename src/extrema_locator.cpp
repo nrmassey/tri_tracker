@@ -288,9 +288,11 @@ bool extrema_locator::objects_share_nodes(const LABEL_STORE* o1,
 
 /*****************************************************************************/
 
+// method 1 of split objects - reform objects based on adjacency list
+
 void extrema_locator::split_objects(void)
 {
-    // split the objects into constituent objects - i.e. one triangle per object
+    // split the triangles based on the adjacency list
     extrema_list new_ex_list;
     // set the new extrema list to have the same number of timesteps as the current one
     new_ex_list.set_size(ex_list.size());
@@ -325,6 +327,7 @@ void extrema_locator::split_objects(void)
                 // get the current label
                 LABEL c_label = svex->object_labels[o1];
                 // loop over the number of LABEL_STOREs in the new list
+                int min_e2 = -1;
                 for (int e2=0; e2<new_label_store.size(); e2++)
                 {
                     // loop over the labels in the new label store and check whether
@@ -337,22 +340,23 @@ void extrema_locator::split_objects(void)
                         const LABEL_STORE* c_adj_labels = tg.get_triangle(label_stores[e2][o2])->get_adjacent_labels(POINT);
                         // search for the label in the labels already added to the label store
                         is_adjacent = (std::find(c_adj_labels->begin(), c_adj_labels->end(), c_label) != c_adj_labels->end());
+                        if (is_adjacent)
+                            min_e2 = e2;
                     }
-                    // if the triangle is adjacent to one (or more) triangles already added
-                    // to the label store then add the triangle label to the store
-                    if (is_adjacent)
-                    {
-                        
-                        // add this label to the existing label store
-                        label_stores[e2].push_back(c_label);
-                    }
-                    else
-                    {
-                        // otherwise add a new label store
-                        LABEL_STORE new_label_store2;
-                        new_label_store2.push_back(c_label);
-                        label_stores.push_back(new_label_store2);
-                    }
+                }
+                // if the triangle is adjacent to one (or more) triangles already added
+                // to the label store then add the triangle label to the store
+                if (min_e2 != -1)
+                {
+                    // add this label to the existing label store
+                    label_stores[min_e2].push_back(c_label);
+                }
+                else
+                {
+                    // otherwise add a new label store
+                    LABEL_STORE new_label_store2;
+                    new_label_store2.push_back(c_label);
+                    label_stores.push_back(new_label_store2);
                 }
             }
             // now create a new svex for each label store and add to the new extrema list
@@ -416,7 +420,10 @@ void extrema_locator::merge_objects(void)
                     LABEL_STORE* o2_shell_labs = obj_c_shells[o2].get_labels();
                     // get the labels for both objects
                     LABEL_STORE* o2_labs = &(obj_2->object_labels);
-                
+                    // fast distance check
+/*                    FP_TYPE dist = tg.distance_between_triangles((*o1_labs)[0], (*o2_labs)[0]);
+                    if (dist > 2*max_merge_dist)
+                        continue;*/
                     // is a label in the shell found in the object?
                     // test at different levels - 1st shells overlap?
                     bool test = false;
@@ -429,7 +436,6 @@ void extrema_locator::merge_objects(void)
                     // 4th - labels in 1st object overlaps 2nd object
                     if (!test) test = objects_share_nodes(o1_labs, o2_labs);
                     
-
                     if (test)
                     {
                         // create two sets of new labels - one for each object
