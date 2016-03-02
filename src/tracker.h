@@ -17,23 +17,6 @@
 
 /*****************************************************************************/
 
-// Optimisation routine outcome
-struct opt_outcome
-{
-    FP_TYPE cur_opt_cost;
-    FP_TYPE cur_opt_len;
-    
-    int trk_A_st;
-    int trk_A_ed;
-    int trk_A_idx;
-    
-    int trk_B_st;
-    int trk_B_ed;
-    int trk_B_idx;
-};
-
-/*****************************************************************************/
-
 class tracker
 {
     public:
@@ -71,12 +54,11 @@ class tracker
         void remove_phantom_points(track* trk_P);
         void interpolate_phantom_points(track* trk_P);
         void apply_optimise_tracks(void);
-        track* merge_tracks(track* trk_A, track* trk_B);
-        void add_optimised_track(opt_outcome OPT);
-        
         // get a list of overlapping tracks (overlapping in time) for a particular track number
         std::vector<int> get_overlapping_tracks(track* tr_A);
-        
+        void apply_merge_tracks(void);
+        void merge_tracks(track* trk_A, track* trk_B);
+
         // functions for deriving the initial tracks
         int  determine_track_for_candidate(track_point& n_cand, int t);
         bool assign_candidate(track_point& n_cand, int min_tr, int t);
