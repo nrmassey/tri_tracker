@@ -812,7 +812,7 @@ bool can_merge(track* trk_A, track* trk_B, FP_TYPE& merge_dist, FP_TYPE sr)
 
 /*****************************************************************************/
 
-void tracker::merge_tracks(track* trk_A, track* trk_B)
+void merge_tracks(track* trk_A, track* trk_B)
 {
     // just add trk_B (from the 2nd point - i.e. not the phantom point) to
     // trk_A
@@ -824,6 +824,27 @@ void tracker::merge_tracks(track* trk_A, track* trk_B)
     
     // set track B as deleted
     trk_B->set_deleted();
+}
+
+/*****************************************************************************/
+
+track subset_track(track* trk_A, int si, int ei)
+{
+    // subset a track to the portion between si and ei
+    if (si < 0)         // range check to prevent memory errors
+        si = 0;
+    if (ei >= trk_A->get_persistence())
+        ei = trk_A->get_persistence()-1;
+        
+    // create the new track
+    track new_track;
+    // loop over the track and add the points between the si and ei
+    for (int i=si; i<ei; i++)
+    {
+        new_track.set_candidate_point(*(trk_A->get_track_point(i)));
+        new_track.consolidate_candidate_point();
+    }
+    return new_track;
 }
 
 /*****************************************************************************/

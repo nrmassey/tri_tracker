@@ -57,7 +57,6 @@ class tracker
         // get a list of overlapping tracks (overlapping in time) for a particular track number
         std::vector<int> get_overlapping_tracks(track* tr_A);
         void apply_merge_tracks(void);
-        void merge_tracks(track* trk_A, track* trk_B);
 
         // functions for deriving the initial tracks
         int  determine_track_for_candidate(track_point& n_cand, int t);
