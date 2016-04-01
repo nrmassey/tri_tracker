@@ -47,9 +47,6 @@ class track
         track_point* get_last_track_point(void);
         track_point* get_track_point(int idx);
         
-        // subset a track into a new track
-        track* subset(int st_idx, int ed_idx);
-        
         // get length / persistence / deviation / sum of curvature
         FP_TYPE get_length(void);
         int get_persistence(void);

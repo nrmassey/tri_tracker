@@ -26,7 +26,7 @@ track::track(void)
     cand_pt.rules_bf = 0;
     cand_pt.cost = 2e20;
     deleted = false;
-    tr.clear();
+    tr.reserve(4*10);       // would be a long track -4 days of 6 hourly data
 }
 
 /*****************************************************************************/
@@ -73,7 +73,8 @@ void track::consolidate_candidate_point(void)
 
 track_point* track::get_last_track_point(void)
 {
-    return &(tr.back());
+    int s = tr.size();
+    return &(tr[s-1]);
 }
 
 /*****************************************************************************/
@@ -84,21 +85,6 @@ track_point* track::get_track_point(int idx)
     std::advance(it_list, idx);
     return &(*it_list);*/
     return &(tr[idx]);
-}
-
-/*****************************************************************************/
-
-track* track::subset(int st_idx, int ed_idx)
-{
-    // subset a track into a new track
-    assert(st_idx >= 0);
-    assert(ed_idx <= tr.size());
-    track* new_track = new track();
-    new_track->tr.resize(ed_idx-st_idx);
-    for (int i=st_idx; i<ed_idx; i++)
-        new_track->tr[i-st_idx] = tr[i];
-    
-    return new_track;
 }
 
 /*****************************************************************************/
@@ -213,7 +199,11 @@ FP_TYPE track::get_curvature_stddev(FP_TYPE mean)
 
 /*****************************************************************************/
 
-track_list::track_list(void){}
+track_list::track_list(void)
+{
+    // reserve a lot of tracks!
+    tr_list.reserve(10000);
+}
 
 /*****************************************************************************/
 
@@ -254,6 +244,7 @@ void track_list::prune_tracks(void)
 {
     // remove any tracks with 0 length
     std::vector<track> new_tr_list;
+    new_tr_list.reserve(tr_list.size());
     for (std::vector<track>::iterator it_list = tr_list.begin(); it_list != tr_list.end(); it_list++)
     {
         // check if all points are phantom

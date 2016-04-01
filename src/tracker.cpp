@@ -828,23 +828,116 @@ void merge_tracks(track* trk_A, track* trk_B)
 
 /*****************************************************************************/
 
-track subset_track(track* trk_A, int si, int ei)
+track tracker::subset_track(track* trk_A, int si, int ei)
 {
     // subset a track to the portion between si and ei
     if (si < 0)         // range check to prevent memory errors
         si = 0;
-    if (ei >= trk_A->get_persistence())
-        ei = trk_A->get_persistence()-1;
+    if (ei > trk_A->get_persistence())
+        ei = trk_A->get_persistence();
         
     // create the new track
     track new_track;
+    new_track.tr.resize(ei-si);
     // loop over the track and add the points between the si and ei
     for (int i=si; i<ei; i++)
+        new_track.tr[i-si] = trk_A->tr[i];
+    return new_track;
+}
+
+/*****************************************************************************/
+
+track tracker::create_compound_track(track* trk_A, int si_A, int ei_A, 
+                                     track* trk_B, int si_B, int ei_B)
+{
+    if (si_A < 0)         // range check to prevent memory errors
+        si_A = 0;
+    if (ei_A > trk_A->get_persistence())
+        ei_A = trk_A->get_persistence();
+
+    if (si_B < 0)         // range check to prevent memory errors
+        si_B = 0;
+    if (ei_B > trk_B->get_persistence())
+        ei_B = trk_B->get_persistence();
+        
+    // create a new track and set it to the size - (ei_A-si_A)+(ei_B-si_B)
+    int new_size = (ei_A-si_A)+(ei_B-si_B);
+    track new_track;
+    new_track.tr.resize(new_size);
+    int ci=0;
+    // add points from track A
+    for (int i=si_A; i<ei_A; i++)
     {
-        new_track.set_candidate_point(*(trk_A->get_track_point(i)));
-        new_track.consolidate_candidate_point();
+        new_track.tr[ci] = trk_A->tr[i];
+        ci++;
+    }
+    
+    // add points from track B
+    for (int i=si_B; i<ei_B; i++)
+    {
+        new_track.tr[ci] = trk_B->tr[i];
+        ci++;
     }
     return new_track;
+}
+
+/*****************************************************************************/
+
+std::vector<int> tracker::get_overlapping_tracks(int track_number)
+{
+    track* tr_A = tr_list.get_track(track_number);
+    // get the timesteps
+    int tr_A_st = tr_A->get_track_point(0)->timestep;
+    int tr_A_ed = tr_A->get_last_track_point()->timestep;
+    
+    // create the output vector
+    std::vector<int> overlap_trs;
+    overlap_trs.reserve(tr_list.get_number_of_tracks());
+    
+    // get first and last extrema of trk A
+    steering_extremum* ex_A_first = &(tr_A->get_track_point(0)->pt);
+    steering_extremum* ex_A_last = &(tr_A->get_last_track_point()->pt);
+    
+    // loop over each track and get the overlapping tracks for this track
+    for (int c_tr = 0; c_tr < tr_list.get_number_of_tracks(); c_tr++)
+    {
+        // don't compare with itself
+        if (track_number == c_tr)
+            continue;
+        // get the tracks start frame number and end frame number
+        track* tr_B = tr_list.get_track(c_tr);
+        int tr_B_st = tr_B->get_track_point(0)->timestep;
+        int tr_B_ed = tr_B->get_last_track_point()->timestep;
+
+        // four overlapping scenarios handled by three clauses:
+        // +----+     +----+      +----+       +-+          tr_A
+        //   +----+     +----+     +--+      +-----+        tr_B
+        if ((tr_A_ed >= tr_B_st && tr_A_ed <= tr_B_ed) ||
+            (tr_A_st >= tr_B_st && tr_A_st <= tr_B_ed) ||
+            (tr_A_st >= tr_B_st && tr_A_ed <= tr_B_ed))
+        {
+            // tracks must have one point at one timestep that is 
+            // < search radius between each track
+            bool within_radius = false;
+            for (int b=0; b<tr_B->get_persistence(); b++)
+            {
+                // get distance between this point and the last track point of A
+                // and the first track point of A
+                steering_extremum* ex_B = &(tr_B->get_track_point(b)->pt);
+                // distance between this and first
+                FP_TYPE dist_AfB = haversine(ex_A_first->lon, ex_A_first->lat, ex_B->lon, ex_B->lat, EARTH_R);
+                FP_TYPE dist_AlB = haversine(ex_A_last->lon, ex_A_last->lat, ex_B->lon, ex_B->lat, EARTH_R);
+                if (dist_AfB < sr || dist_AlB < sr)
+                {
+                    within_radius = true;
+                    break;
+                }
+            }
+            if (within_radius)
+                overlap_trs.push_back(c_tr);
+        }
+    }
+    return overlap_trs;
 }
 
 /*****************************************************************************/
@@ -862,36 +955,67 @@ void tracker::apply_merge_tracks(void)
         // check whether this track has been deleted
         if (trk_A->is_deleted() || trk_A->get_persistence() == 0)
             continue;
+        // get the overlapping tracks for this track
+        std::vector<int> ov_trks = get_overlapping_tracks(tr_An);
 
         // now loop over all the other tracks to see if they should be merged
         FP_TYPE min_merge_dist = 2e20;
         int min_merge_trk = -1;
-        for (int tr_Bn=0; tr_Bn < n_tracks; tr_Bn++)
+        // loop over all possible subsets of the track, deleting points from the rear of the track
+        // +-------+ trk_B
+        //   trk_A +-------+
+        int sa = 0;
+        for (int a=trk_A->get_persistence()-1; a>=sa; a--)
         {
-            if (tr_An == tr_Bn)     // don't merge with yourself!
+            // sub set the track
+            track sub_trk_A = subset_track(trk_A, 0, a);
+            if (sub_trk_A.get_persistence() == 0)
                 continue;
-            // get the track to compare to
-            track* trk_B = tr_list.get_track(tr_Bn);
-            // check whether this track has been deleted
-            if (trk_B->is_deleted() || trk_B->get_persistence() == 0)
-                continue;
-            // other check whether the track can be merged or not
-            FP_TYPE merge_dist;
-            if (can_merge(trk_A, trk_B, merge_dist, sr))
+            for (int tr_Bn=0; tr_Bn < ov_trks.size(); tr_Bn++)
             {
-                if (merge_dist < min_merge_dist)
+                if (tr_An == tr_Bn)     // don't merge with yourself!
+                    continue;
+                // get the track to compare to
+                track* trk_B = tr_list.get_track(ov_trks[tr_Bn]);
+                // check whether this track has been deleted
+                if (trk_B->is_deleted() || trk_B->get_persistence() == 0)
+                    continue;
+                // check whether the last time step of sub track A is less than the first time step
+                // of track B
+                if (sub_trk_A.get_last_track_point()->timestep < trk_B->get_track_point(0)->timestep-1)
+                    continue;
+                // loop over all possible subsets of the track, deleting points from the front of the track
+                int be = trk_B->get_persistence();
+                for (int b=0; b<be; b++)
                 {
-                    min_merge_dist = merge_dist;
-                    min_merge_trk = tr_Bn;
+                    // other check whether the track can be merged or not
+                    FP_TYPE merge_dist;
+                    // sub set track B
+                    track sub_trk_B = subset_track(trk_B,b,trk_B->get_persistence());
+                    if (sub_trk_B.get_persistence() == 0)
+                        continue;
+                    // check that they still overlap in time
+                    if (sub_trk_B.get_track_point(0)->timestep != sub_trk_A.get_last_track_point()->timestep-1)
+                        continue;
+                    track new_trk = create_compound_track(trk_A, 0, a, trk_B, b, trk_B->get_persistence());
+                    // now check for merging and pick the compound track that maximises length and minimise curvature
+/*                    if (can_merge(trk_A, trk_B, merge_dist, sr))
+                    {
+                        if (merge_dist < min_merge_dist)
+                        {
+                            min_merge_dist = merge_dist;
+                            min_merge_trk = ov_trks[tr_Bn];
+                        }
+                    }*/
                 }
             }
         }
         // now merge track A to track B if a merged track has been found
-        if (min_merge_trk != -1)
+/*        if (min_merge_trk != -1)
         {
             track* trk_B = tr_list.get_track(min_merge_trk);
             merge_tracks(trk_A, trk_B);
-        }
+        }*/
     }
     std::cout << std::endl;
 }
