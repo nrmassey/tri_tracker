@@ -768,38 +768,16 @@ void tracker::interpolate_phantom_points(track* trk_P)
 
 /*****************************************************************************/
 
-bool can_merge(track* trk_A, track* trk_B, FP_TYPE& merge_dist, FP_TYPE sr)
+bool can_merge(track* trk_A, track* trk_B, FP_TYPE sr)
 {
-    // check whether 3 criteria are met:
-    // 1. The timestep fo the last point of track A == timestep of first point of track B
-    //    (both these points will be phantom - we only want one phantom in final track, hence t_A == t_B
-    // 2. The distance between the last point of track A and the 2nd timestep of track B 
-    //    is less than the search radius
-    // 3. The curvature between the 2nd last point of track A, A_F and B_F is less than 
-    //    the maximum curvature
-    
+    // Check curvature of new track is not greater than MAX_CURV_COST
     track_point* tp_A_L = trk_A->get_track_point(trk_A->get_persistence()-1);
     track_point* tp_A_F = trk_A->get_last_track_point();
-    track_point* tp_B_F = trk_B->get_track_point(0);
     track_point* tp_B_1 = trk_B->get_track_point(1);
     
     track_point* tp_B_2 = NULL;
     if (trk_B->get_persistence() > 1)
         tp_B_2 = trk_B->get_track_point(2);
-    
-    // 1. timestep
-    if (tp_A_F->timestep != tp_B_F->timestep)
-        return false;
-    
-    // 2. distance
-    merge_dist = haversine(tp_A_F->pt.lon, tp_A_F->pt.lat,
-                           tp_B_1->pt.lon, tp_B_1->pt.lat, EARTH_R);
-    if (merge_dist > sr)
-    {
-        merge_dist = 2e20;
-        return false;
-    }
-    
     // 3. curvature
     FP_TYPE curv1 = curvature_cost(tp_A_L, tp_A_F, tp_B_1, sr);
     FP_TYPE curv2 = 0;
@@ -808,22 +786,6 @@ bool can_merge(track* trk_A, track* trk_B, FP_TYPE& merge_dist, FP_TYPE sr)
     if (curv1 > MAX_CURV_COST || curv2 > MAX_CURV_COST)
         return false;
     return true;
-}
-
-/*****************************************************************************/
-
-void merge_tracks(track* trk_A, track* trk_B)
-{
-    // just add trk_B (from the 2nd point - i.e. not the phantom point) to
-    // trk_A
-    for (int tp_B=1; tp_B<trk_B->get_persistence(); tp_B++)
-    {
-        trk_A->set_candidate_point(*(trk_B->get_track_point(tp_B)));
-        trk_A->consolidate_candidate_point();
-    }
-    
-    // set track B as deleted
-    trk_B->set_deleted();
 }
 
 /*****************************************************************************/
@@ -906,6 +868,8 @@ std::vector<int> tracker::get_overlapping_tracks(int track_number)
             continue;
         // get the tracks start frame number and end frame number
         track* tr_B = tr_list.get_track(c_tr);
+        if (tr_B->is_deleted())
+            continue;
         int tr_B_st = tr_B->get_track_point(0)->timestep;
         int tr_B_ed = tr_B->get_last_track_point()->timestep;
 
@@ -942,6 +906,23 @@ std::vector<int> tracker::get_overlapping_tracks(int track_number)
 
 /*****************************************************************************/
 
+struct OPT_OUTCOME
+{
+    bool do_opt;
+    // indices into the tracks
+    int trk_A_si;
+    int trk_A_ei;
+    int trk_B_si;
+    int trk_B_ei;
+    // track B index
+    int trk_B_idx;
+    // measures of optimal-ness of the compound track
+    FP_TYPE mean_curv;
+    FP_TYPE len;
+};
+
+/*****************************************************************************/
+
 void tracker::apply_merge_tracks(void)
 {
     int n_tracks = tr_list.get_number_of_tracks();
@@ -949,18 +930,27 @@ void tracker::apply_merge_tracks(void)
     
     for (int tr_An=0; tr_An < n_tracks; tr_An++)
     {
+        // create the optimisation outcome structure and reset it
+        OPT_OUTCOME opt_out;
+        opt_out.do_opt = false;
+        opt_out.mean_curv = 2e20;
+        opt_out.len = 0;
+        
         track_n_out(tr_An);
         // get the track and its persistence
         track* trk_A = tr_list.get_track(tr_An);
         // check whether this track has been deleted
         if (trk_A->is_deleted() || trk_A->get_persistence() == 0)
             continue;
+            
+        // Get track A length and mean curvature
+        FP_TYPE trk_A_len = trk_A->get_length();
+        FP_TYPE trk_A_curv = trk_A->get_curvature_mean();
+        
         // get the overlapping tracks for this track
         std::vector<int> ov_trks = get_overlapping_tracks(tr_An);
 
         // now loop over all the other tracks to see if they should be merged
-        FP_TYPE min_merge_dist = 2e20;
-        int min_merge_trk = -1;
         // loop over all possible subsets of the track, deleting points from the rear of the track
         // +-------+ trk_B
         //   trk_A +-------+
@@ -984,12 +974,14 @@ void tracker::apply_merge_tracks(void)
                 // of track B
                 if (sub_trk_A.get_last_track_point()->timestep < trk_B->get_track_point(0)->timestep-1)
                     continue;
+                // Get track A length and mean curvature
+                FP_TYPE trk_B_len = trk_B->get_length();
+                FP_TYPE trk_B_curv = trk_B->get_curvature_mean();
+
                 // loop over all possible subsets of the track, deleting points from the front of the track
                 int be = trk_B->get_persistence();
                 for (int b=0; b<be; b++)
                 {
-                    // other check whether the track can be merged or not
-                    FP_TYPE merge_dist;
                     // sub set track B
                     track sub_trk_B = subset_track(trk_B,b,trk_B->get_persistence());
                     if (sub_trk_B.get_persistence() == 0)
@@ -997,25 +989,58 @@ void tracker::apply_merge_tracks(void)
                     // check that they still overlap in time
                     if (sub_trk_B.get_track_point(0)->timestep != sub_trk_A.get_last_track_point()->timestep-1)
                         continue;
+                    // check for curvature
+                    if (!can_merge(&sub_trk_A, &sub_trk_B, sr))
+                        continue;
                     track new_trk = create_compound_track(trk_A, 0, a, trk_B, b, trk_B->get_persistence());
-                    // now check for merging and pick the compound track that maximises length and minimise curvature
-/*                    if (can_merge(trk_A, trk_B, merge_dist, sr))
+                    // get the new track length and mean curvature
+                    FP_TYPE trk_N_len = new_trk.get_length();
+                    FP_TYPE trk_N_curv = new_trk.get_curvature_mean();
+                    // optimise if trk_N_len > trk A and trk B len and trk_N_curv < trk_A and trk_B curv
+                    if (trk_N_len > trk_A_len && trk_N_len > trk_B_len &&
+                        trk_N_curv < trk_A_curv && trk_N_curv < trk_B_curv &&
+                        trk_N_len > opt_out.len && trk_N_curv < opt_out.mean_curv)
                     {
-                        if (merge_dist < min_merge_dist)
-                        {
-                            min_merge_dist = merge_dist;
-                            min_merge_trk = ov_trks[tr_Bn];
-                        }
-                    }*/
+                        // set the optimisation outcome
+                        opt_out.do_opt = true;              // we will have to do some optimisation
+                        opt_out.trk_A_si = 0;               // indices into the (sub) tracks
+                        opt_out.trk_A_ei = a;
+                        opt_out.trk_B_si = b;
+                        opt_out.trk_B_ei = trk_B->get_persistence();
+                        opt_out.trk_B_idx = ov_trks[tr_Bn];// index in the track list of track B to merge
+                        opt_out.len = trk_N_len;
+                        opt_out.mean_curv = trk_N_curv;
+                    }
                 }
             }
         }
-        // now merge track A to track B if a merged track has been found
-/*        if (min_merge_trk != -1)
+        // check whether track A should be optimised
+        if (opt_out.do_opt)
         {
-            track* trk_B = tr_list.get_track(min_merge_trk);
-            merge_tracks(trk_A, trk_B);
-        }*/
+            // get the track B that was identified as being optimal to add to track A
+            track* trk_B = tr_list.get_track(opt_out.trk_B_idx);
+
+            // create the compound (new) track
+            track new_trk = create_compound_track(trk_A, opt_out.trk_A_si, opt_out.trk_A_ei, 
+                                                  trk_B, opt_out.trk_B_si, opt_out.trk_B_ei);
+            tr_list.add_track(new_trk);
+            // create the remainder of track A
+            if (opt_out.trk_A_ei != trk_A->get_persistence())
+            {
+                track rem_A_trk = subset_track(trk_A, opt_out.trk_A_ei, trk_A->get_persistence());
+                tr_list.add_track(rem_A_trk);
+            }
+            // create the remainder of track B
+            if (opt_out.trk_B_si != 0)
+            {
+                track rem_B_trk = subset_track(trk_B, 0, opt_out.trk_B_si);
+                tr_list.add_track(rem_B_trk);
+            }
+            // add these three tracks
+            // set A and B as deleted
+            trk_A->set_deleted();
+            trk_B->set_deleted();
+        }
     }
     std::cout << std::endl;
 }
