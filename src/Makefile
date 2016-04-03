@@ -62,7 +62,7 @@ all: $(GEN_GRID_NAME) $(REGRID_NAME) $(EXTREMA_NAME) $(TRACK_NAME)
 ../obj:
 	@mkdir -p $@
 	
-$(GEN_GRID_OBJ): | ../obj
+$(GEN_GRID_OBJ): | ../obj ../exe
 
 $(OBJ_DIR)/%.o : %.cpp $(ALL_DEPEND)
 	$(CPP) $(FLAGS) $(INCLUDE_DIRS) -c $< -o $@
