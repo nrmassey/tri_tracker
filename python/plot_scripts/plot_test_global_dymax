@@ -1,3 +1,0 @@
-#! /usr/bin/env bash
-GRD_FILE=../../grids/global_mesh_0_5_DX.msh
-python ../draw_tri_mesh_dymax.py -m $GRD_FILE -l 5 -o global_dymax.png

@@ -1,9 +1,0 @@
-#! /usr/bin/env bash
-for T_STEP in {0..29}
-do
-  EX_FILE=/Users/massey/WaH/output/EU/hadam3p_eu_p3at_2011_1_008287381_1/p3atma.pcl1dec_l5.ex
-  RGD_FILE=/Users/massey/WaH/output/EU/hadam3p_eu_p3at_2011_1_008287381_1/p3atma.pcl1dec_l5.rgd.txt
-  GRD_FILE=../grids/global_mesh_1_5lat_lon.txt
-  OUT_FILE=output/global/eu_global_rgd_ex_$T_STEP".svg"
-  python plot_lon_lat_grid.py -g $GRD_FILE -d $RGD_FILE -e $EX_FILE -o $OUT_FILE -t $T_STEP
-done
