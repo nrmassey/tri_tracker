@@ -11,13 +11,13 @@
 #include <string>
 #include <sstream>
 #include <fstream>
-#include "minima_locator.h"
-#include "maxima_locator.h"
-#include "minima_background.h"
+//#include "minima_locator.h"
+//#include "maxima_locator.h"
+//#include "minima_background.h"
 #include "steering_vector.h"
 #include "geo_wind_vector.h"
 #include "mslp_wind_vector.h"
-#include "minima_back_wind.h"
+//#include "minima_back_wind.h"
 #include "minima_largescale.h"
 
 /*****************************************************************************/

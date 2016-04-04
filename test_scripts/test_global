@@ -1,27 +1,31 @@
 #!/usr/bin/env bash
 # test the global version
 
-EU_FILE=/Users/massey/WaH/output/EU/hadam3p_eu_p3at_2011_1_008287381_1/p3atma.pcl1dec.nc
-N_PTS=0
+EU_FILE=../test_data/wah_m001ma_1960/m001ma.pbg1dec.nc
 LEV=5
-GRID_FILE=../grids/global_mesh_$N_PTS"_"$LEV".msh"
-NC_VAR=field8_1
+GRID_FILE=../grids/global_mesh_l""$LEV".msh"
+NC_VAR=field8
 GP_VAR=field1
 RGD_FILE=${EU_FILE%.nc}_l$LEV"".rgd
 EX_FILE=${EU_FILE%.nc}_l$LEV"".ex
-NC_RE_FILE=$RGD_FILE"_2D0".nc
 TRK_FILE=${EU_FILE%.nc}_l$LEV"".trk
-DEG=2.0
-EX_ARGS='minima(101300,0,12,0.0000)'
-TRK_WTS=" -0 1.0 -1 49.36 -2 5.54 -3 35.0 "
-TRK_ARGS="-r 1000 -p 1 -d 0 -l 0 -t 1 -k 1 -s 0 "
 
+# gunzip source file
+gunzip $EU_FILE".gz"
+# create grids directory if it doesn't exist
+if [ ! -e ../grids ]; then
+    mkdir ../grids
+fi
 # generate a grid
-echo ../exe/gen_grid -f $EU_FILE -v $NC_VAR -o $GRID_FILE -n $N_PTS -I 0 -l $LEV -L
-../exe/gen_grid -f $EU_FILE -v $NC_VAR -o $GRID_FILE -n $N_PTS -I 0 -l $LEV -L
+cmd="../exe/gen_grid -f $EU_FILE -v $NC_VAR -o $GRID_FILE -I 100 -l $LEV -L"
+echo $cmd
+$cmd
+
 # regrid the netCDF file
 #echo ./regrid_reg -i $EU_FILE -v $NC_VAR -m $GRID_FILE -o $RGD_FILE -T
 #./regrid_reg -i $EU_FILE -v $NC_VAR -m $GRID_FILE -o $RGD_FILE -T
+# gzip the file back
+gzip $EU_FILE
 # convert back to netCDF file
 #echo ./tri_grid_to_netcdf -i $RGD_FILE -m $GRID_FILE -v $NC_VAR -o $NC_RE_FILE -l $LEV -s $DEG -t $DEG
 #./tri_grid_to_netcdf -i $RGD_FILE -m $GRID_FILE -v $NC_VAR -o $NC_RE_FILE -l $LEV -s $DEG -t $DEG
