@@ -234,6 +234,12 @@ float ncdata::get_data(FP_TYPE lon, FP_TYPE lat, int z_idx, int t_idx)
 
 /*****************************************************************************/
 
+field_data ncdata::get_field(int z_idx, int t_idx)
+{
+}
+
+/*****************************************************************************/
+
 int ncdata::get_lon_idx(FP_TYPE lon)
 {
 	int idx = int((lon - lon_s) / lon_d + 0.5);
@@ -253,7 +259,6 @@ int ncdata::get_lat_idx(FP_TYPE lat)
 
 FP_TYPE ncdata::get_lon_from_idx(int lon_idx)
 {
-	
 	return lon_s + lon_idx * lon_d;
 }
 
