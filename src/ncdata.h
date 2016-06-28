@@ -10,6 +10,7 @@
 
 #include <string>
 #include "rotated_grid.h"
+#include "field_data.h"
 
 class ncdata
 {
@@ -18,6 +19,8 @@ class ncdata
 		~ncdata(void);
 		float get_data(int lon_idx, int lat_idx, int z_idx, int t_idx);
 		float get_data(FP_TYPE lon, FP_TYPE lat, int z_idx, int t_idx);
+		field_data get_field(int z_idx, int t_idx);
+		
 		FP_TYPE get_lon_s(void) { return lon_s; }
 		FP_TYPE get_lat_s(void) { return lat_s; }
 		FP_TYPE get_lon_d(void) { return lon_d; }

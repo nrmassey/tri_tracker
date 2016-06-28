@@ -57,7 +57,10 @@ TRACK_CPP = track.cpp track_list.cpp tracker.cpp extrema_list.cpp \
 			spline.cpp get_bearing.cpp haversine.cpp
 TRACK_OBJ = $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(TRACK_CPP))
 
-all: $(GEN_GRID_NAME) $(REGRID_NAME) $(EXTREMA_NAME) $(TRACK_NAME) 
+EVENT_SET_CPP = event_set.cpp field_data.cpp #eventor.cpp extrema_list.cpp event_track_list.cpp
+EVENT_SET_OBJ = $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(EVENT_SET_CPP))
+
+all: $(GEN_GRID_NAME) $(REGRID_NAME) $(TRI_GRID_TO_NC_NAME) $(EXTREMA_NAME) $(TRACK_NAME) $(EVENT_SET_NAME)
 
 ../obj:
 	@mkdir -p $@
@@ -78,6 +81,12 @@ $(EXTREMA_NAME): $(EXTREMA_OBJ) $(COMMON_OBJ) $(NETCDF_OBJ)
 
 $(TRACK_NAME): $(TRACK_OBJ) $(COMMON_OBJ) $(NETCDF_OBJ)
 	$(LD) $^ $(COMMON_LIBS) -o $(OUT_DIR)$@ $(LDFLAGS)
+
+$(EVENT_SET_NAME): $(EVENT_SET_OBJ) $(COMMON_OBJ) $(NETCDF_OBJ)
+	$(LD) $^ $(COMMON_LIBS) -o $(OUT_DIR)$@ $(LDFLAGS)
+
+test: ../obj/test.o $(COMMON_OBJ) $(NETCDF_OBJ)
+	$(LD) $^ $(COMMON_LIBS) -o $(OUT_DIR)$@ $(LD_FLAGS)
 
 clean:
 	rm -f $(OBJ_DIR)/*.o $(OUT_DIR)$(GEN_GRID_NAME) $(OUT_DIR)$(REGRID_NAME) \
