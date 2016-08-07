@@ -9,7 +9,6 @@
 #include <tclap/CmdLine.h>
 #include <string>
 #include <iostream>
-#include "eventor.h"
 #include "read_from_string.h"
 
 int main(int argc, char** argv)
@@ -51,7 +50,7 @@ int main(int argc, char** argv)
         TCLAP::ValueArg<std::string> pop_fname_arg("q", "pop_file", "Population density file to be used in calculating loss function of storm.", true, "", "string", cmd);
         TCLAP::ValueArg<std::string> pop_field_arg("Q", "pop_field", "Field name of population density variable in population density file.", false, "pop", "string", cmd);
         
-        TCLAP::ValueArg<std::string> remap_fname_arg("r", "remap_file", "File used to remap max windspeed to 3s gust", true, "", "string", cmd);
+        TCLAP::ValueArg<std::string> remap_fname_arg("e", "remap_file", "File used to remap max windspeed to 3s gust", true, "", "string", cmd);
 
         TCLAP::ValueArg<std::string> lsm_fname_arg("l", "lsm_file", "Land sea mask file to be used in calculating max wind power over land.", true, "", "string", cmd);
         TCLAP::ValueArg<std::string> lsm_field_arg("L", "lsm_field", "Field name of land sea mask variable in land sea mask file.", false, "lsm", "string", cmd);
@@ -62,9 +61,6 @@ int main(int argc, char** argv)
         TCLAP::ValueArg<std::string> output_fname_arg("o", "output", "Output file name", true, "", "string", cmd);
         TCLAP::ValueArg<std::string> input_fname_arg("i", "input", "Input file name - track file created by ./track", true, "", "string", cmd);
         cmd.parse(argc, argv);
-
-        event_t_steps = event_t_steps_arg.getValue();
-        search_rad = sr_arg.getValue() * 1000.0;    // convert to metres
 
         mslp_fname = mslp_fname_arg.getValue();
         mslp_field = mslp_field_arg.getValue();
@@ -78,9 +74,14 @@ int main(int argc, char** argv)
         pop_fname = pop_fname_arg.getValue();
         pop_field = pop_field_arg.getValue();
 
+        remap_fname = remap_fname_arg.getValue();
+
         lsm_fname = lsm_fname_arg.getValue();
         lsm_field = lsm_field_arg.getValue();
         
+        event_t_steps = event_t_steps_arg.getValue();
+        search_rad = sr_arg.getValue() * 1000.0;    // convert to metres
+
         output_fname = output_fname_arg.getValue();
         input_track = input_fname_arg.getValue();
     }
