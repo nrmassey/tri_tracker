@@ -382,12 +382,14 @@ void track_list::load(std::string input_fname)
             // create the track point
             track_point trk_pt;
             // read the frame number
-            trk_pt.timestep = read_float(in_file);
+            trk_pt.timestep = read_int(in_file);
             // read the extremum point
             trk_pt.pt.load(in_file);
             // add the point to the track
             trk.set_candidate_point(trk_pt);
             trk.consolidate_candidate_point();
+            // read the bitfield in
+            trk_pt.rules_bf = read_int(in_file);
         }
         // add the track to the track list
         tr_list.push_back(trk);

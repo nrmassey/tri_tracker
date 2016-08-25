@@ -10,6 +10,7 @@
 #include <string>
 #include <iostream>
 #include "read_from_string.h"
+#include "event_creator.h"
 
 int main(int argc, char** argv)
 {
@@ -34,8 +35,8 @@ int main(int argc, char** argv)
     std::string lsm_field;          // variable name of lsm in land sea mask file
     
     FP_TYPE search_rad;             // search radius (km)
-    int event_t_steps;              // number of timesteps in integrated event 
-                                    // (e.g. 6 hourly data, 72 hour event - event_t_steps = 12)
+    int event_t_steps;              // minimum number of timesteps in integrated event 
+                                    // (e.g. 6 hourly data, 24 hour event - event_t_steps = 5)
     
     try
     {
@@ -55,10 +56,10 @@ int main(int argc, char** argv)
         TCLAP::ValueArg<std::string> lsm_fname_arg("l", "lsm_file", "Land sea mask file to be used in calculating max wind power over land.", true, "", "string", cmd);
         TCLAP::ValueArg<std::string> lsm_field_arg("L", "lsm_field", "Field name of land sea mask variable in land sea mask file.", false, "lsm", "string", cmd);
 
-        TCLAP::ValueArg<int> event_t_steps_arg("t", "event_timesteps", "Number of timesteps to use in integrated event set.", false, 12, "integer", cmd);
+        TCLAP::ValueArg<int> event_t_steps_arg("t", "event_timesteps", "Minimum number of timesteps to use in integrated event set.", false, 12, "integer", cmd);
         TCLAP::ValueArg<FP_TYPE> sr_arg("r", "search_radius", "Radius, in km, to search when locating tracks.", false, 500.0, "FP_TYPE", cmd);
 
-        TCLAP::ValueArg<std::string> output_fname_arg("o", "output", "Output file name", true, "", "string", cmd);
+        TCLAP::ValueArg<std::string> output_fname_arg("o", "output", "Output prefix for event file names", true, "", "string", cmd);
         TCLAP::ValueArg<std::string> input_fname_arg("i", "input", "Input file name - track file created by ./track", true, "", "string", cmd);
         cmd.parse(argc, argv);
 
@@ -103,10 +104,17 @@ int main(int argc, char** argv)
     
     try
     {
-//        eventor EV(input_fname, min_per, min_tl, min_dev, search_rad, event_t_steps, overlap,
-//                   mslp_fname, mslp_field, wind_fname, wind_field, lsm_file, mesh_file);
-//        EV.find_events();
-//        EV.save(output_fname);
+    
+        event_creator EV(input_track,
+                         mslp_fname,   mslp_field,
+                         wind_fname,   wind_field,
+                         precip_fname, precip_field,
+                         pop_fname,    pop_field,
+                         remap_fname,
+                         lsm_fname,    lsm_field,
+                         search_rad,   event_t_steps);
+        EV.find_events();
+        EV.save_events(output_fname);
     }
     catch(std::string &s)
     {

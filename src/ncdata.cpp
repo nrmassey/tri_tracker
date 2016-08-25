@@ -56,11 +56,12 @@ void get_dimension_pos(NcVar* nc_var, int& t_dim, int& z_dim,
 void get_grid_spacing(NcFile* nc_file, NcVar* nc_var,
                       FP_TYPE& lon_s, FP_TYPE& lat_s,
                       FP_TYPE& lon_d, FP_TYPE& lat_d,
-                      int&    lon_l, int&    lat_l)
+                      int&     lon_l, int&     lat_l,
+                      FP_TYPE& t_s,   FP_TYPE& t_d)
 {
     // get the start, spacing and length of the longitude dimension
-    int lon_id = get_dim_pos(nc_var, "lon");
-    int lat_id = get_dim_pos(nc_var, "lat");
+    int lon_id, lat_id, z_id, t_id;
+    get_dimension_pos(nc_var, t_id, z_id, lon_id, lat_id);
     // get the variables of the lon / lat
     NcVar* lon_var = nc_file->get_var(nc_var->get_dim(lon_id)->name());
     NcVar* lat_var = nc_file->get_var(nc_var->get_dim(lat_id)->name());
@@ -74,6 +75,11 @@ void get_grid_spacing(NcFile* nc_file, NcVar* nc_var,
     // get the size from the dimension
     lon_l = nc_var->get_dim(lon_id)->size();
     lat_l = nc_var->get_dim(lat_id)->size();
+    
+    // get the time start and delta - first get the variable
+    NcVar* t_var = nc_file->get_var(nc_var->get_dim(t_id)->name());
+    t_s = t_var->as_float(0);
+    t_d = t_var->as_float(1) - t_s;
 }
 
 /*****************************************************************************/
@@ -93,7 +99,7 @@ ncdata::ncdata(std::string file_name, std::string var_name) :
 	// get the netCDF variable
 	nc_var = nc_file->get_var(var_name.c_str());
 	// get the grid spacing
-	get_grid_spacing(nc_file, nc_var, lon_s, lat_s, lon_d, lat_d, lon_l, lat_l);
+	get_grid_spacing(nc_file, nc_var, lon_s, lat_s, lon_d, lat_d, lon_l, lat_l, t_s, t_d);
 	// get the indexes
 	get_dimension_pos(nc_var, t_dim, z_dim, lon_dim, lat_dim);
 	// if no time dimension then set length to 1
@@ -126,8 +132,8 @@ ncdata::ncdata(std::string file_name, std::string var_name) :
 			// in this variable there are the rotated pole lat and lon
 			NcAtt* gmv_att_lat = gm_var->get_att("grid_north_pole_latitude");
 			NcAtt* gmv_att_lon = gm_var->get_att("grid_north_pole_longitude");
-			float rotated_pole_lat = gmv_att_lat->as_float(0);
-			float rotated_pole_lon = gmv_att_lon->as_float(0);
+			FP_TYPE rotated_pole_lat = gmv_att_lat->as_float(0);
+			FP_TYPE rotated_pole_lon = gmv_att_lon->as_float(0);
 			// create the rotated grid
 			p_rotated_grid = new rotated_grid(rotated_pole_lat, rotated_pole_lon,
 											  this);
@@ -150,9 +156,9 @@ ncdata::~ncdata(void)
 
 /*****************************************************************************/
 
-float ncdata::get_data(int lon_idx, int lat_idx, int z_idx, int t_idx)
+FP_TYPE ncdata::get_data(int lon_idx, int lat_idx, int z_idx, int t_idx)
 {
-	float value;
+	FP_TYPE value;
 	if (t_dim != -1 && z_dim != -1)	// 4D data
 	{
 		// check whether the data has been cached or not
@@ -223,7 +229,7 @@ float ncdata::get_data(int lon_idx, int lat_idx, int z_idx, int t_idx)
 
 /*****************************************************************************/
 
-float ncdata::get_data(FP_TYPE lon, FP_TYPE lat, int z_idx, int t_idx)
+FP_TYPE ncdata::get_data(FP_TYPE lon, FP_TYPE lat, int z_idx, int t_idx)
 {
 	// calculate the lon and lat indices from the start and spacing
 	int lon_idx = int((lon - lon_s) / lon_d + 0.5);
