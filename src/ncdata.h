@@ -19,6 +19,7 @@ class ncdata
 		~ncdata(void);
 		FP_TYPE get_data(int lon_idx, int lat_idx, int z_idx, int t_idx);
 		FP_TYPE get_data(FP_TYPE lon, FP_TYPE lat, int z_idx, int t_idx);
+		field_data get_field(bool slow_copy=false);
 		field_data get_field(int z_idx, int t_idx);
 		
 		FP_TYPE get_lon_s(void) { return lon_s; }

@@ -242,6 +242,25 @@ FP_TYPE ncdata::get_data(FP_TYPE lon, FP_TYPE lat, int z_idx, int t_idx)
 
 field_data ncdata::get_field(int z_idx, int t_idx)
 {
+    field_data out_data(lat_l, lon_l, 0.0);
+    FP_TYPE* px_out_data = out_data.get();
+    nc_var->set_cur(t_idx, z_idx);
+    nc_var->get(px_out_data, lat_l*lon_l);
+    return out_data;
+}
+
+/*****************************************************************************/
+
+field_data ncdata::get_field(bool slow_copy)
+{
+    field_data out_data(lat_l, lon_l, 0.0);
+    FP_TYPE* px_out_data = out_data.get();
+    if (!slow_copy)
+        nc_var->get(px_out_data, lat_l, lon_l);
+    else
+        for (int i=0; i<nc_var->num_vals(); i++)
+            px_out_data[i] = nc_var->as_float(i);
+    return out_data;
 }
 
 /*****************************************************************************/

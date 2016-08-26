@@ -38,7 +38,7 @@ COMMON_CPP = vector_3D.cpp geo_convert.cpp set_cout_precision.cpp \
              read_from_string.cpp
 COMMON_OBJ = $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(COMMON_CPP)) 
 
-NETCDF_CPP = ncdata.cpp rotated_grid.cpp Rot2Global.cpp
+NETCDF_CPP = ncdata.cpp rotated_grid.cpp Rot2Global.cpp field_data.cpp
 NETCDF_OBJ = $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(NETCDF_CPP)) 
 
 GEN_GRID_CPP = gen_grid.cpp
@@ -58,7 +58,7 @@ TRACK_CPP = track.cpp track_list.cpp tracker.cpp extrema_list.cpp \
 TRACK_OBJ = $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(TRACK_CPP))
 
 EVENT_SET_CPP = event_set.cpp event_creator.cpp track_list.cpp \
-                get_bearing.cpp event.cpp field_data.cpp
+                get_bearing.cpp event.cpp
 EVENT_SET_OBJ = $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(EVENT_SET_CPP))
 
 all: $(GEN_GRID_NAME) $(REGRID_NAME) $(TRI_GRID_TO_NC_NAME) $(EXTREMA_NAME) $(TRACK_NAME) $(EVENT_SET_NAME)

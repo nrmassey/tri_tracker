@@ -11,10 +11,13 @@
 #include <sstream>
 #include <iostream>
 #include <iomanip>
+#include <list>
+#include <vector>
 #include "boost/date_time/gregorian/gregorian.hpp"
 #include "boost/date_time/posix_time/posix_time.hpp"
 #include <sys/stat.h>
 #include "netcdfcpp.h"
+#include "haversine.h"
 
 /*****************************************************************************/
 
@@ -52,10 +55,64 @@ event_creator::~event_creator(void)
 
 /*****************************************************************************/
 
+std::list<std::vector<int> > get_indices_in_circle(int ox, int oy, int max_x, 
+                                                   int max_y, int rad)
+{
+    // use circle equation to determine which grid points are with rad grid
+    // box radius of the origin (ox, oy)
+    // error checking handled by passing in max_x and maxY
+    std::list<std::vector<int> > out_list_of_indices;
+    int R = rad*rad;
+    for (int y = -rad; y <= rad; y++)
+        for (int x = -rad; x <= rad; x++)
+            if ((x*x + y*y <= R) and 
+                (ox+x > 0) and (ox+x < max_x) and
+                (oy+y > 0) and (oy+y < max_y))
+            {
+                std::vector<int> P(2);
+                P[0] = ox+x;
+                P[1] = oy+y;
+                out_list_of_indices.push_back(P);
+            }
+    return out_list_of_indices;
+}
+
+/*****************************************************************************/
+
+int calc_grid_box_radius(FP_TYPE sr, ncdata* input_data)
+{
+    // calculate the search radius in number of grid boxes
+    // this is for a rotated grid where each grid box is (roughly) equal length
+    FP_TYPE x_len = haversine(0.0, 0.0, input_data->get_lon_d(), 0.0, EARTH_R);
+    // search radius is supplied in kms and EARTH_R is defined in kms
+    int gsr = int(sr / x_len + 0.5);        // round up
+    return gsr;
+}
+
+/*****************************************************************************/
+
+FP_TYPE calc_grid_box_area(ncdata* input_data)
+{
+    FP_TYPE x_len = haversine(0.0, 0.0, input_data->get_lon_d(), 0.0, EARTH_R);
+    FP_TYPE y_len = haversine(0.0, 0.0, 0.0, input_data->get_lat_d(), EARTH_R);
+    return x_len * y_len;
+}
+
+/*****************************************************************************/
+
 void event_creator::find_events(void)
 {
     // find the events by looping over the tracks
     std::cout << "# Creating event set, track number: ";
+    // calculate the search radius in grid boxes
+    int gsr = calc_grid_box_radius(sr, &mslp_data);
+    FP_TYPE gA = calc_grid_box_area(&mslp_data);
+
+    // get the slope and intercept for the wind gust
+    field_data remap_slope_field = remap_slope.get_field();
+    field_data remap_icept_field = remap_icept.get_field();
+    field_data pop_field = pop_data.get_field(true);
+
     // loop through all the tracks
     for (int tn=0; tn<tr_list.get_number_of_tracks(); tn++)
     {
@@ -70,19 +127,74 @@ void event_creator::find_events(void)
             event* new_event = new event(mslp_data.get_lon_len(), mslp_data.get_lat_len());
             // set the mslp field as the reference data
             new_event->set_ref_data(&mslp_data);
+            FP_TYPE mv = new_event->mv;
             // loop over the track points
             for (int tp=0; tp < c_trk->get_persistence(); tp++)
             {
                 // get the track point
                 track_point* trk_pt = c_trk->get_track_point(tp);
+                
                 // get the indices from the track point
                 int lon_idx = mslp_data.get_lon_idx(trk_pt->pt.lon);
                 int lat_idx = mslp_data.get_lat_idx(trk_pt->pt.lat);
+                int tstep = trk_pt->timestep;
                 
                 // append the lon, lat and timestep to the new_event
                 new_event->track_lon.push_back(trk_pt->pt.lon);
                 new_event->track_lat.push_back(trk_pt->pt.lat);
                 new_event->timestep.push_back(trk_pt->timestep);
+                
+                // build the circle of indices
+                std::list<std::vector<int> > circ_idxs = get_indices_in_circle(lon_idx, lat_idx, 
+                                                                   mslp_data.get_lon_len(), 
+                                                                   mslp_data.get_lat_len(), gsr);
+                
+                for (std::list<std::vector<int> >::iterator it_idx = circ_idxs.begin();
+                     it_idx != circ_idxs.end(); it_idx++)
+                {
+                    // unpack the indices
+                    int c_x, c_y;
+                    c_x = (*it_idx)[0];
+                    c_y = (*it_idx)[1];
+                    // get the mslp value from the source data
+                    FP_TYPE src_mslp_V = mslp_data.get_data(c_x, c_y, 0, tstep);
+                    // get the mslp value from the target data
+                    FP_TYPE tgt_mslp_V = new_event->mslp.get(c_x, c_y);
+                    // if the src mslp is < tgt mslp or tgt mslp is mv
+                    if ((tgt_mslp_V == mv) or (src_mslp_V < tgt_mslp_V))
+                        new_event->mslp.set(c_x, c_y, src_mslp_V);
+                        
+                    // do the same for the wind data - need a consistency check with the
+                    // mslp data first
+                    if (tstep < wind_data.get_t_len())
+                    {
+                        FP_TYPE src_wind_V = wind_data.get_data(c_x, c_y, 0, tstep);
+                        FP_TYPE tgt_wind_V = new_event->wind_max.get(c_x, c_y);
+                        if ((tgt_wind_V == mv) or (src_wind_V > tgt_wind_V))
+                            new_event->wind_max.set(c_x, c_y, src_wind_V);
+                    
+                        // do the same for the precip data with the timestep check as well
+                        FP_TYPE src_precip_V = precip_data.get_data(c_x, c_y, 0, tstep);
+                        FP_TYPE tgt_precip_V = new_event->precip.get(c_x, c_y);
+                        if ((tgt_precip_V == mv) or (src_wind_V > tgt_precip_V))
+                            new_event->precip.set(c_x, c_y, src_precip_V);
+                    }
+                }
+                // calculate the wind gust - first copy the wind_max to wind_gust
+                new_event->wind_gust.copy_ip(new_event->wind_max);
+                // multiply by slope and add intercept (in place)
+                new_event->wind_gust.mult_ip(remap_slope_field, mv);
+                new_event->wind_gust.add_ip(remap_icept_field, mv);
+                
+                // calculate the loss using a simple loss model of population*wind power
+                new_event->loss.copy_ip(new_event->wind_gust);      // copy wind gust
+                // calculate wind power (w^3) by multiplying twice
+                new_event->loss.mult_ip(new_event->wind_gust, mv);
+                new_event->loss.mult_ip(new_event->wind_gust, mv);
+                // multiply by population per km^2
+                new_event->loss.mult_ip(pop_field, mv);
+                // multiply by grid box area
+                new_event->loss.mult_ip(gA,mv);
             }
             // push the new event onto the event list
             event_list.push_back(new_event);
@@ -149,7 +261,10 @@ void event_creator::save_events(std::string output_prefix)
     // write out the events
     // these variables are needed to get the year, month and day of the beginning
     // of the event so that a sensible filename can be derived
-    
+
+    // require the lsm to determine largest gust over land
+    field_data lsm_field = lsm_data.get_field(true);
+
     for (std::list<event*>::iterator it_evt = event_list.begin();
          it_evt != event_list.end(); it_evt++)
     {
@@ -169,7 +284,7 @@ void event_creator::save_events(std::string output_prefix)
             out_path = out_fname + "_" + c_it + ".nc";
         }
         // write out the event
-        write_event(out_path, cur_evt);
+        write_event(out_path, cur_evt, &lsm_field);
     }
 }
 
@@ -190,23 +305,21 @@ ncbyte* pack_data(FP_TYPE* data, int y_len, int x_len,
         // replace mv with scaled mv
         if (data[i] == mv)
         {
-            data[i] = scale_mv;
+            packed_data[i] = scale_mv;
         }
         else
         {
             FP_TYPE v = (data[i]- offset) * 1.0 / scale;
-            v = (float)((int)(v));
+            v = (int)(v);
             packed_data[i] = (ncbyte)(v);
-            std::cout << packed_data[i] << " ";
         }
     }
-    std::cout << std::endl;
     return packed_data;
 }
 
 /*****************************************************************************/
 
-void event_creator::write_event(std::string out_fname, event* evt)
+void event_creator::write_event(std::string out_fname, event* evt, field_data* lsm_field)
 {
     // write a single event out.  Each event consists of a number of elements:
     // 1. Minimum MSLP field (2D)
@@ -219,7 +332,7 @@ void event_creator::write_event(std::string out_fname, event* evt)
     // 8. Track longitudes (1D)
     // 9. Track latitudes (1D)
     // 10.Track timesteps (1D)
-    
+
     // create the file for writing
     NcFile x_nc_file(out_fname.c_str(), NcFile::New);
     if (!x_nc_file.is_valid())
@@ -271,7 +384,6 @@ void event_creator::write_event(std::string out_fname, event* evt)
         px_rot_lon_var->set_cur(x);
         px_rot_lon_var->put(&c_lon, 1L);
     }
-    
 
     // write the tracks out
     // first number of track points dimensions
@@ -327,7 +439,8 @@ void event_creator::write_event(std::string out_fname, event* evt)
     NcVar* px_mslp_var = x_nc_file.add_var("mslp", ncByte, px_rot_lat_dim, px_rot_lon_dim);
     NcVar* px_wind_var = x_nc_file.add_var("wind_max", ncByte, px_rot_lat_dim, px_rot_lon_dim);
     NcVar* px_gust_var = x_nc_file.add_var("wind_gust", ncByte, px_rot_lat_dim, px_rot_lon_dim);
-    NcVar* px_loss_var = x_nc_file.add_var("loss", ncByte, px_rot_lat_dim, px_rot_lon_dim);
+//    NcVar* px_loss_var = x_nc_file.add_var("loss", ncByte, px_rot_lat_dim, px_rot_lon_dim);
+    NcVar* px_loss_var = x_nc_file.add_var("loss", ncFloat, px_rot_lat_dim, px_rot_lon_dim);
     NcVar* px_precip_var = x_nc_file.add_var("precip", ncByte, px_rot_lat_dim, px_rot_lon_dim);
 
     // add the attributes
@@ -342,19 +455,32 @@ void event_creator::write_event(std::string out_fname, event* evt)
     px_mslp_var->add_att("_FillValue", ncbyte(evt->scale_mv));
     px_wind_var->add_att("_FillValue", ncbyte(evt->scale_mv));
     px_gust_var->add_att("_FillValue", ncbyte(evt->scale_mv));
-    px_loss_var->add_att("_FillValue", ncbyte(evt->scale_mv));
+//    px_loss_var->add_att("_FillValue", ncbyte(evt->scale_mv));
+    px_loss_var->add_att("_FillValue", (evt->mv));
     px_precip_var->add_att("_FillValue", ncbyte(evt->scale_mv));
     
     // minimum / maximum values (depending on variables)
-    px_mslp_var->add_att("minimum", evt->mslp.get_min());
-    FP_TYPE wind_max = evt->wind_max.get_max();
+    px_mslp_var->add_att("minimum", evt->mslp.get_min(evt->mv));
+    
+    // wind maximum over land
+    field_data wind_max_lsm(ref_data->get_lat_len(), ref_data->get_lon_len());
+    wind_max_lsm.copy_ip(evt->wind_max);
+    wind_max_lsm.mult_ip(*lsm_field, evt->mv);
+    FP_TYPE wind_max = wind_max_lsm.get_max(evt->mv);
     px_wind_var->add_att("maximum", wind_max);
     px_wind_var->add_att("maximum_power", wind_max*wind_max*wind_max);
-    FP_TYPE gust_max = evt->wind_gust.get_max();
-    px_wind_var->add_att("maximum", gust_max);
-    px_wind_var->add_att("maximum_power", gust_max*gust_max*gust_max);
-    px_precip_var->add_att("maximum", evt->precip.get_max());
-    px_loss_var->add_att("maximum", evt->loss.get_max());
+    
+    // calculate the gust maximum - which is multiplied by the lsm to get maximum over land
+    field_data gust_max_lsm(ref_data->get_lat_len(), ref_data->get_lon_len());
+    gust_max_lsm.copy_ip(evt->wind_gust);
+    gust_max_lsm.mult_ip(*lsm_field, evt->mv);
+    FP_TYPE gust_max = gust_max_lsm.get_max(evt->mv);
+    px_gust_var->add_att("maximum", gust_max);
+    px_gust_var->add_att("maximum_power", gust_max*gust_max*gust_max);
+    
+    // precip and loss
+    px_precip_var->add_att("maximum", evt->precip.get_max(evt->mv));
+    px_loss_var->add_att("maximum", evt->loss.get_max(evt->mv));
     
     // standard names and units
     px_mslp_var->add_att("standard_name", "air_pressure_at_sea_level");
@@ -369,26 +495,25 @@ void event_creator::write_event(std::string out_fname, event* evt)
     // loss has no standard name or units but it does have a long name
     px_loss_var->add_att("long_name", "estimated losses");
     px_loss_var->add_att("units", "1.0");
-    px_precip_var->add_att("standard_name", "precipitation_amount");
-    px_precip_var->add_att("long_name", "daily accumulated precipitation amount");
-    px_precip_var->add_att("units", "kg m-2");
+    px_precip_var->add_att("standard_name", "precipitation_flux");
+    px_precip_var->add_att("long_name", "total precipitation flux");
+    px_precip_var->add_att("units", "kg m-2 s-1");
 
     // byte packing offsets and scales
     px_mslp_var->add_att("add_offset", evt->mslp_offset);
-    px_mslp_var->add_att("scaling_factor", evt->mslp_scale);
-    px_mslp_var->add_att("_Unsigned", "true");
+    px_mslp_var->add_att("scale_factor", evt->mslp_scale);
+
     px_wind_var->add_att("add_offset", evt->wind_offset);
-    px_wind_var->add_att("scaling_factor", evt->wind_scale);
-    px_wind_var->add_att("_Unsigned", "true");
+    px_wind_var->add_att("scale_factor", evt->wind_scale);
+
     px_gust_var->add_att("add_offset", evt->wind_offset);
-    px_gust_var->add_att("scaling_factor", evt->wind_scale);
-    px_gust_var->add_att("_Unsigned", "true");
-    px_loss_var->add_att("add_offset", evt->loss_offset);
-    px_loss_var->add_att("scaling_factor", evt->loss_scale);
-    px_loss_var->add_att("_Unsigned", "true");
+    px_gust_var->add_att("scale_factor", evt->wind_scale);
+
+//    px_loss_var->add_att("add_offset", evt->loss_offset);
+//    px_loss_var->add_att("scale_factor", evt->loss_scale);
+
     px_precip_var->add_att("add_offset", evt->precip_offset);
-    px_precip_var->add_att("scaling_factor", evt->precip_scale);
-    px_precip_var->add_att("_Unsigned", "true");
+    px_precip_var->add_att("scale_factor", evt->precip_scale);
 
     // byte pack the data
     ncbyte* px_byte_mslp = pack_data(evt->mslp.get(), 
@@ -406,10 +531,10 @@ void event_creator::write_event(std::string out_fname, event* evt)
                                      evt->wind_offset, evt->wind_scale,
                                      evt->mv, evt->scale_mv);
 
-    ncbyte* px_byte_loss = pack_data(evt->loss.get(), 
-                                     ref_data->get_lat_len(), ref_data->get_lon_len(), 
-                                     evt->loss_offset, evt->loss_scale,
-                                     evt->mv, evt->scale_mv);
+//     ncbyte* px_byte_loss = pack_data(evt->loss.get(), 
+//                                      ref_data->get_lat_len(), ref_data->get_lon_len(), 
+//                                      evt->loss_offset, evt->loss_scale,
+//                                      evt->mv, evt->scale_mv);
 
     ncbyte* px_byte_precip = pack_data(evt->precip.get(), 
                                      ref_data->get_lat_len(), ref_data->get_lon_len(), 
@@ -420,7 +545,8 @@ void event_creator::write_event(std::string out_fname, event* evt)
     px_mslp_var->put(px_byte_mslp, ref_data->get_lat_len(), ref_data->get_lon_len());
     px_wind_var->put(px_byte_wind, ref_data->get_lat_len(), ref_data->get_lon_len());
     px_gust_var->put(px_byte_gust, ref_data->get_lat_len(), ref_data->get_lon_len());
-    px_loss_var->put(px_byte_loss, ref_data->get_lat_len(), ref_data->get_lon_len());
+//    px_loss_var->put(px_byte_loss, ref_data->get_lat_len(), ref_data->get_lon_len());
+    px_loss_var->put(evt->loss.get(), ref_data->get_lat_len(), ref_data->get_lon_len());
     px_precip_var->put(px_byte_precip, ref_data->get_lat_len(), ref_data->get_lon_len());
 
     x_nc_file.add_att("Conventions", "CF-1.6");
@@ -430,6 +556,6 @@ void event_creator::write_event(std::string out_fname, event* evt)
     delete [] px_byte_mslp;
     delete [] px_byte_wind;
     delete [] px_byte_gust;
-    delete [] px_byte_loss;
+//    delete [] px_byte_loss;
     delete [] px_byte_precip;
 }

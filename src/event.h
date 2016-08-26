@@ -34,8 +34,8 @@ class event
         const ncbyte scale_mv;          // scaled missing value
         
         // scaling values for byte packing the data
-        const FP_TYPE mslp_offset, mslp_scale;
-        const FP_TYPE wind_offset, wind_scale;
-        const FP_TYPE precip_offset, precip_scale;
-        const FP_TYPE loss_offset, loss_scale;
+        FP_TYPE mslp_offset, mslp_scale;
+        FP_TYPE wind_offset, wind_scale;
+        FP_TYPE precip_offset, precip_scale;
+        FP_TYPE loss_offset, loss_scale;
 };

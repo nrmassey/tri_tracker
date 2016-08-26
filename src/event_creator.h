@@ -35,7 +35,7 @@ class event_creator
         
     private:
         // function to write event to
-        void write_event(std::string out_fname, event* evt);
+        void write_event(std::string out_fname, event* evt, field_data* lsm_field);
     
         // input track
         track_list tr_list;
