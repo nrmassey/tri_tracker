@@ -30,9 +30,6 @@ int read_int(std::ifstream& in);
 void write_label(std::ofstream& out, LABEL val);
 LABEL read_label(std::ifstream& in);
 
-void write_int_as_byte(std::ofstream& out, int val);
-int read_int_as_byte(std::ifstream& in);
-
 void write_vector(std::ofstream& out, vector_3D& vec);
 vector_3D read_vector(std::ifstream& in);
 

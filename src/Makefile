@@ -15,7 +15,7 @@ INCLUDE_DIRS = -I./
 LIBRARY_DIRS = -L/usr/local/lib
 
 DEBUG_FLAGS = -Wno-deprecated -O0 -g -Wall -pg #-D_GLIBCXX_DEBUG
-RELEASE_FLAGS = -Wno-deprecated -O3 -msse3 -g
+RELEASE_FLAGS = -Wno-deprecated -O3 -msse3
 PROFILE_FLAGS = $(RELEASE_FLAGS) -pg
 COMMON_FLAGS = -DFP_TYPE=float
 FLAGS = $(RELEASE_FLAGS) $(COMMON_FLAGS)
@@ -61,7 +61,7 @@ EVENT_SET_CPP = event_set.cpp event_creator.cpp track_list.cpp \
                 get_bearing.cpp event.cpp
 EVENT_SET_OBJ = $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(EVENT_SET_CPP))
 
-all: $(GEN_GRID_NAME) $(REGRID_NAME) $(TRI_GRID_TO_NC_NAME) $(EXTREMA_NAME) $(TRACK_NAME) $(EVENT_SET_NAME)
+all: $(GEN_GRID_NAME) $(REGRID_NAME) $(EXTREMA_NAME) $(TRACK_NAME) $(EVENT_SET_NAME)
 
 ../obj:
 	@mkdir -p $@

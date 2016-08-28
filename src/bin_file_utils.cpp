@@ -13,8 +13,9 @@
 void write_string(std::ofstream& out, std::string string)
 {
 	// write out length of string and each character in the string
-	write_int_as_byte(out, string.size());
-	for (unsigned int c=0; c<string.size();c++)
+	int str_size = string.size(); 
+	write_int(out, str_size);
+	for (unsigned int c=0; c<str_size;c++)
 		out << string.c_str()[c];
 }
 
@@ -24,8 +25,8 @@ std::string read_string(std::ifstream& in)
 {
 	std::string in_string = "";
 	// read in length of the string
-	int sl = read_int_as_byte(in);
-	for (int sc=0; sc<sl; sc++)
+	int sl = read_int(in);
+	for (unsigned int sc=0; sc<sl; sc++)
 	{
 		char c;
 		in >> std::noskipws >> c;
@@ -75,7 +76,7 @@ void write_int(std::ofstream& out, int val)
 
 /*****************************************************************************/
 
-void write_int_as_byte(std::ofstream& out, int val)
+void write_int_as_byte(std::ofstream& out, unsigned int val)
 {
 	out.write(reinterpret_cast<char*>(&val), 1);
 }
@@ -91,11 +92,11 @@ int read_int(std::ifstream& in)
 
 /*****************************************************************************/
 
-int read_int_as_byte(std::ifstream& in)
+unsigned int read_int_as_byte(std::ifstream& in)
 {
 	char val;
 	in.read(&val, 1);
-	return static_cast<int>(val);
+	return static_cast<unsigned int>(val);
 }
 
 /*****************************************************************************/

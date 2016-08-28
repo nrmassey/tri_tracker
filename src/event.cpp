@@ -43,7 +43,7 @@ event::event(int x_len, int y_len) : mv(2e20), scale_mv(-128)
     precip_offset = 0;
     
     // not sure what loss is at the moment!
-    const FP_TYPE loss_max = 1e20;
+    const FP_TYPE loss_max = 1e12;
     loss_scale  = (loss_max - 0.0) / N;
     loss_offset = 0;
 }

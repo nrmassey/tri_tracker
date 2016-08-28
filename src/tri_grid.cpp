@@ -60,7 +60,7 @@ void tri_grid::initialize(SHAPE initial_shape, ncdata* nc_input_data,
     std::stringstream ss;
 
     meta_data["input_grid_file_name"] = nc_input_data->get_file_name();
-    meta_data["input_grid_var_name"] = nc_input_data->get_file_name();
+    meta_data["input_grid_var_name"] = nc_input_data->get_var_name();
     switch(initial_shape)
     {
         case ICOSAHEDRON:

@@ -11,5 +11,8 @@
 void Rot2Global(FP_TYPE  f_rot_lat,  FP_TYPE f_rot_lon,
                 FP_TYPE  f_pole_lat, FP_TYPE f_pole_lon,
                 FP_TYPE& f_global_lat, FP_TYPE& f_global_lon);
-
+void Global2Rot(FP_TYPE  f_global_lat, FP_TYPE f_global_lon,
+                FP_TYPE  f_pole_lat, FP_TYPE f_pole_lon,
+                FP_TYPE& f_rot_lat, FP_TYPE& f_rot_lon);
+  
 #endif
