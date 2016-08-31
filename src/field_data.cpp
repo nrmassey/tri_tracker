@@ -11,6 +11,7 @@
 #include <cstring>
 #include <algorithm>
 #include <iostream>
+#include <math.h>
 
 /*****************************************************************************/
 
@@ -168,7 +169,7 @@ FP_TYPE field_data::get_min(FP_TYPE mv)
 {
     FP_TYPE c_min = 2e20;
     for (int i=0; i<x_len*y_len; i++)
-        if (data[i] < c_min and data[i] != mv)
+        if (data[i] < c_min and data[i] != mv and fabs(data[i]) < 0.9*fabs(mv))
             c_min = data[i];
     return c_min;
 }
@@ -179,9 +180,20 @@ FP_TYPE field_data::get_max(FP_TYPE mv)
 {
     FP_TYPE c_max = -2e20;
     for (int i=0; i<x_len*y_len; i++)
-        if (data[i] > c_max and data[i] != mv)
+        if (data[i] > c_max and data[i] != mv and fabs(data[i]) < 0.9*fabs(mv))
             c_max = data[i];
     return c_max;
+}
+
+/*****************************************************************************/
+
+FP_TYPE field_data::get_sum(FP_TYPE mv)
+{
+    FP_TYPE sum = 0.0;
+    for (int i=0; i<x_len*y_len; i++)
+        if (data[i] != mv and fabs(data[i]) < 0.9*fabs(mv))
+            sum += data[i];
+    return sum;
 }
 
 /*****************************************************************************/

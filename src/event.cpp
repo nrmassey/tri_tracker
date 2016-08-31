@@ -33,19 +33,19 @@ event::event(int x_len, int y_len) : mv(2e20), scale_mv(-128)
     mslp_offset = (mslp_max + mslp_min) / 2;
     
     // wind (and gust) have values between 0 and 70 ms-1
-    const FP_TYPE wind_max = 100.0;
+    const FP_TYPE wind_max = 70.0;
     wind_scale  = (wind_max - 0.0) / N;
-    wind_offset = 0.0;
+    wind_offset = wind_max * 0.5;
     
     // precip flux has values between 0 and 0.005 kg m-2 s-1
-    const FP_TYPE precip_max = 0.005;
+    const FP_TYPE precip_max = 0.002;
     precip_scale  = (precip_max - 0.0) / N;
-    precip_offset = 0;
+    precip_offset = precip_max * 0.5;
     
     // not sure what loss is at the moment!
-    const FP_TYPE loss_max = 1e12;
-    loss_scale  = (loss_max - 0.0) / N;
-    loss_offset = 0;
+    const FP_TYPE loss_max = 50.0;
+    loss_scale  = loss_max / N;
+    loss_offset = loss_max * 0.5;;
 }
 
 /*****************************************************************************/

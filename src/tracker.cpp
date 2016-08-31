@@ -28,7 +28,7 @@ const int CURVATURE = 0x10;
 const int PHANTOM   = 0xFF;
 
 const FP_TYPE MAX_CURV_COST = 1.2;
-const FP_TYPE MAX_CURV = 110.0;
+const FP_TYPE MAX_CURV = 90.0;
 const FP_TYPE CURV_S = 1;
 const FP_TYPE MAX_GEOWIND = 90.0;
 const FP_TYPE MAX_INTENSITY = 1e4;

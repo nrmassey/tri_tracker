@@ -30,7 +30,8 @@ class field_data
         
         FP_TYPE get_min(FP_TYPE mv);    // get the minimum value in the field
         FP_TYPE get_max(FP_TYPE mv);    // get the maximum value in the field
-    
+        FP_TYPE get_sum(FP_TYPE mv);    // get the sum of the field
+            
         FP_TYPE get(int x, int y);          // return the value at x,y
         FP_TYPE* get(void);                 // return a pointer to the start of the data
         void set(int x, int y, FP_TYPE v);  // single point set

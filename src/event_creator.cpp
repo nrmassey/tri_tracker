@@ -107,25 +107,24 @@ void event_creator::find_events(void)
     std::cout << "# Creating event set, track number: ";
     // calculate the search radius in grid boxes
     int gsr = calc_grid_box_radius(sr, &mslp_data);
-    FP_TYPE gA = calc_grid_box_area(&mslp_data) / (1000.0*1000.0);
 
     // get the slope and intercept for the wind gust
     field_data remap_slope_field = remap_slope.get_field();
     field_data remap_icept_field = remap_icept.get_field();
     field_data pop_field = pop_data.get_field(true);
 
-	// get the pole latitude and longitude
-	FP_TYPE plon, plat;
-	if (mslp_data.has_rotated_grid())
-	{
-		plon = mslp_data.get_rotated_grid()->get_rotated_pole_longitude();
-		plat = mslp_data.get_rotated_grid()->get_rotated_pole_latitude();
-	}
-	else
-	{
-		plon = 0.0;
-		plat = 90.0;
-	}
+    // get the pole latitude and longitude
+    FP_TYPE plon, plat;
+    if (mslp_data.has_rotated_grid())
+    {
+        plon = mslp_data.get_rotated_grid()->get_rotated_pole_longitude();
+        plat = mslp_data.get_rotated_grid()->get_rotated_pole_latitude();
+    }
+    else
+    {
+        plon = 0.0;
+        plat = 90.0;
+    }
 
     // loop through all the tracks
     for (int tn=0; tn<tr_list.get_number_of_tracks(); tn++)
@@ -153,13 +152,13 @@ void event_creator::find_events(void)
                 FP_TYPE pt_lon, pt_lat;
                 if (mslp_data.has_rotated_grid())
                 {
-                	Global2Rot(trk_pt->pt.lat, trk_pt->pt.lon, plat, plon,
-                	           pt_lat, pt_lon);
+                    Global2Rot(trk_pt->pt.lat, trk_pt->pt.lon, plat, plon,
+                               pt_lat, pt_lon);
                 }
                 else
                 {
-                	pt_lon = trk_pt->pt.lon;
-                	pt_lat = trk_pt->pt.lat;
+                    pt_lon = trk_pt->pt.lon;
+                    pt_lat = trk_pt->pt.lat;
                 }
                 int lon_idx = mslp_data.get_lon_idx(pt_lon);
                 int lat_idx = mslp_data.get_lat_idx(pt_lat);
@@ -219,8 +218,8 @@ void event_creator::find_events(void)
                 new_event->loss.mult_ip(new_event->wind_gust, mv);
                 // multiply by population per km^2
                 new_event->loss.mult_ip(pop_field, mv);
-                // multiply by grid box area
-                new_event->loss.mult_ip(gA, mv);
+                // multiply by a scalar
+                new_event->loss.mult_ip(1e-6,mv);
             }
             // push the new event onto the event list
             event_list.push_back(new_event);
@@ -250,24 +249,54 @@ std::string get_event_start_date(ncdata* ref_data, int timestep)
     FP_TYPE day_scale, n_days_py;
     // first get the reference time and create a posix time from it
     ref_data->get_reference_time(year, month, day, day_scale, n_days_py);
-    // create a boost posix time of the date and time start
-    ptime ref_date_time(date(year,month,day),time_duration(0,0,0));
-    // do the arithmetic on the time
-    // number of hours that event occurs at since the reference
-    time_duration n_hrs = hours(int((timestep * ref_data->get_t_d() + ref_data->get_t_s())*24+0.5));
-    // create the time at which the event starts
-    ptime trk_date_time = ref_date_time + n_hrs;
     
-    // write out into output string
+    // output string
     std::ostringstream output_string;
-    
-    output_string << to_iso_extended_string(trk_date_time.date())
-                  << "T" << std::setw(2) << std::setfill('0')
-                  << trk_date_time.time_of_day().hours() << ":"
-                  << std::setw(2) << std::setfill('0')
-                  << trk_date_time.time_of_day().minutes() << ":"
-                  << std::setw(2) << std::setfill('0')
-                  << trk_date_time.time_of_day().seconds();
+
+    // need the capability to do two separate strings - one for 365.25 day
+    // data (e.g. PRECIS, ERA-I) and one for 360 day data (e.g. wah data, UM data)
+    if (n_days_py == 365.25)
+    {
+        // create a boost posix time of the date and time start
+        ptime ref_date_time(date(year, month, day), time_duration(0,0,0));
+        // do the arithmetic on the time
+        // number of hours that event occurs at since the reference
+        time_duration n_hrs = hours(int((timestep * ref_data->get_t_d() + ref_data->get_t_s())*24+0.5));
+        // create the time at which the event starts
+        ptime trk_date_time = ref_date_time + n_hrs;
+        // write out into output string    
+        output_string << to_iso_extended_string(trk_date_time.date())
+                      << "T" << std::setw(2) << std::setfill('0')
+                      << trk_date_time.time_of_day().hours() << "-"
+                      << std::setw(2) << std::setfill('0')
+                      << trk_date_time.time_of_day().minutes() << "-"
+                      << std::setw(2) << std::setfill('0')
+                      << trk_date_time.time_of_day().seconds();
+    }
+    else if (n_days_py == 360.0)
+    {
+        // calculate number of days since the reference time
+        FP_TYPE n_evt_days = timestep * ref_data->get_t_d() + ref_data->get_t_s();
+        // create the number of days of the reference time and add on the event days
+        FP_TYPE n_total_days = year * 360 + month * 30 + day + n_evt_days;
+        // calculate the year
+        int year = int(n_total_days / 360.0);
+        n_total_days -= year * 360;
+        // calculate the month
+        int month = int(n_total_days/30);
+        n_total_days -= month * 30;
+        // calculate the day
+        int day = int(n_total_days);
+        n_total_days -= day;
+        // calculate the hour
+        int hrs = int(n_total_days*ref_data->get_t_d());
+        // write out the string
+        output_string << std::setw(4) << std::setfill('0') << year << "-"
+                      << std::setw(2) << std::setfill('0') << month + 1 << "-"
+                      << std::setw(2) << std::setfill('0') << day << "T"
+                      << std::setw(2) << std::setfill('0') << hrs << "-"
+                      << "00-00";
+    }
     return output_string.str();
 }
 
@@ -434,9 +463,14 @@ void event_creator::write_event(std::string out_fname, event* evt, field_data* l
     // output to string stream
     std::ostringstream time_units;
     time_units << "days since " << year << "-" << month << "-" << day << " 00:00:00";
-    // add the variable
+    // add the attributes
     px_trk_time_var->add_att("standard_name", "time");
     px_trk_time_var->add_att("units", time_units.str().c_str());
+    // add the calendar type
+    if (n_days_py == 365.25)
+        px_trk_time_var->add_att("calendar", "standard");
+    else if (n_days_py == 360.0)
+        px_trk_time_var->add_att("calendar", "360_day");
     
     // write the track lats and lons out
     std::list<FP_TYPE>::iterator track_lon_it = evt->track_lon.begin();   // position of track points
@@ -466,7 +500,7 @@ void event_creator::write_event(std::string out_fname, event* evt, field_data* l
     NcVar* px_wind_var = x_nc_file.add_var("wind_max", ncByte, px_rot_lat_dim, px_rot_lon_dim);
     NcVar* px_gust_var = x_nc_file.add_var("wind_gust", ncByte, px_rot_lat_dim, px_rot_lon_dim);
     NcVar* px_loss_var = x_nc_file.add_var("loss", ncByte, px_rot_lat_dim, px_rot_lon_dim);
-//    NcVar* px_loss_var = x_nc_file.add_var("loss", ncFloat, px_rot_lat_dim, px_rot_lon_dim);
+
     NcVar* px_precip_var = x_nc_file.add_var("precip", ncByte, px_rot_lat_dim, px_rot_lon_dim);
 
     // add the attributes
@@ -482,7 +516,6 @@ void event_creator::write_event(std::string out_fname, event* evt, field_data* l
     px_wind_var->add_att("_FillValue", ncbyte(evt->scale_mv));
     px_gust_var->add_att("_FillValue", ncbyte(evt->scale_mv));
     px_loss_var->add_att("_FillValue", ncbyte(evt->scale_mv));
-//    px_loss_var->add_att("_FillValue", (evt->mv));
     px_precip_var->add_att("_FillValue", ncbyte(evt->scale_mv));
     
     // minimum / maximum values (depending on variables)
@@ -507,6 +540,7 @@ void event_creator::write_event(std::string out_fname, event* evt, field_data* l
     // precip and loss
     px_precip_var->add_att("maximum", evt->precip.get_max(evt->mv));
     px_loss_var->add_att("maximum", evt->loss.get_max(evt->mv));
+    px_loss_var->add_att("sum", evt->loss.get_sum(evt->mv));
     
     // standard names and units
     px_mslp_var->add_att("standard_name", "air_pressure_at_sea_level");
@@ -518,9 +552,10 @@ void event_creator::write_event(std::string out_fname, event* evt, field_data* l
     px_gust_var->add_att("standard_name", "wind_speed_of_gust");
     px_gust_var->add_att("long_name", "3s peak gust wind speed at 10m");
     px_gust_var->add_att("units", "m s-1");
-    // loss has no standard name or units but it does have a long name
+    // loss has no standard name but it does have a long name and units
     px_loss_var->add_att("long_name", "estimated losses");
-    px_loss_var->add_att("units", "1.0");
+    px_loss_var->add_att("units", "1e6 m3 s-3 persons km^-2");
+    
     px_precip_var->add_att("standard_name", "precipitation_flux");
     px_precip_var->add_att("long_name", "total precipitation flux");
     px_precip_var->add_att("units", "kg m-2 s-1");
@@ -572,7 +607,6 @@ void event_creator::write_event(std::string out_fname, event* evt, field_data* l
     px_wind_var->put(px_byte_wind, ref_data->get_lat_len(), ref_data->get_lon_len());
     px_gust_var->put(px_byte_gust, ref_data->get_lat_len(), ref_data->get_lon_len());
     px_loss_var->put(px_byte_loss, ref_data->get_lat_len(), ref_data->get_lon_len());
-//    px_loss_var->put(evt->loss.get(), ref_data->get_lat_len(), ref_data->get_lon_len());
     px_precip_var->put(px_byte_precip, ref_data->get_lat_len(), ref_data->get_lon_len());
 
     x_nc_file.add_att("Conventions", "CF-1.6");
