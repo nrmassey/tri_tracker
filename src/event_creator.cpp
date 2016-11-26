@@ -126,6 +126,12 @@ void event_creator::find_events(void)
         plat = 90.0;
     }
 
+    // get the scaling factor for the timesteps for the wind data and the precip data
+    // this allows precip and wind data at less than 6 hourly timesteps to be used
+    // for example daily precip data
+    FP_TYPE precip_t_step_scale = float(precip_data.get_t_len()) / mslp_data.get_t_len();
+    FP_TYPE wind_t_step_scale = float(wind_data.get_t_len()) / mslp_data.get_t_len();
+
     // loop through all the tracks
     for (int tn=0; tn<tr_list.get_number_of_tracks(); tn++)
     {
@@ -191,15 +197,15 @@ void event_creator::find_events(void)
                         
                     // do the same for the wind data - need a consistency check with the
                     // mslp data first
-                    if (tstep < wind_data.get_t_len())
+                    if (tstep < int(float(wind_data.get_t_len()) * wind_t_step_scale))
                     {
-                        FP_TYPE src_wind_V = wind_data.get_data(c_x, c_y, 0, tstep);
+                        FP_TYPE src_wind_V = wind_data.get_data(c_x, c_y, 0, int(float(tstep)*wind_t_step_scale));
                         FP_TYPE tgt_wind_V = new_event->wind_max.get(c_x, c_y);
                         if ((tgt_wind_V == mv) or (src_wind_V > tgt_wind_V))
                             new_event->wind_max.set(c_x, c_y, src_wind_V);
                     
                         // do the same for the precip data with the timestep check as well
-                        FP_TYPE src_precip_V = precip_data.get_data(c_x, c_y, 0, tstep);
+                        FP_TYPE src_precip_V = precip_data.get_data(c_x, c_y, 0, int(float(tstep)*precip_t_step_scale));
                         FP_TYPE tgt_precip_V = new_event->precip.get(c_x, c_y);
                         if ((tgt_precip_V == mv) or (src_wind_V > tgt_precip_V))
                             new_event->precip.set(c_x, c_y, src_precip_V);
