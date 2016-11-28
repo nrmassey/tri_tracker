@@ -284,22 +284,22 @@ std::string get_event_start_date(ncdata* ref_data, int timestep)
         // calculate number of days since the reference time
         FP_TYPE n_evt_days = timestep * ref_data->get_t_d() + ref_data->get_t_s();
         // create the number of days of the reference time and add on the event days
-        FP_TYPE n_total_days = year * 360 + month * 30 + day + n_evt_days;
+        FP_TYPE n_total_days = year * 360 + (month-1) * 30 + (day-1) + n_evt_days;
         // calculate the year
-        int year = int(n_total_days / 360.0);
-        n_total_days -= year * 360;
+        int pyear = int(n_total_days / 360.0);
+        n_total_days -= float(pyear) * 360;
         // calculate the month
-        int month = int(n_total_days/30);
-        n_total_days -= month * 30;
+        int pmonth = int(n_total_days/30);
+        n_total_days -= float(pmonth) * 30;
         // calculate the day
-        int day = int(n_total_days);
-        n_total_days -= day;
+        int pday = int(n_total_days) + 1;
+        n_total_days -= float(pday-1);
         // calculate the hour
-        int hrs = int(n_total_days*ref_data->get_t_d());
+        int hrs = int(n_total_days*24);
         // write out the string
-        output_string << std::setw(4) << std::setfill('0') << year << "-"
-                      << std::setw(2) << std::setfill('0') << month + 1 << "-"
-                      << std::setw(2) << std::setfill('0') << day << "T"
+        output_string << std::setw(4) << std::setfill('0') << pyear << "-"
+                      << std::setw(2) << std::setfill('0') << pmonth + 1 << "-"
+                      << std::setw(2) << std::setfill('0') << pday << "T"
                       << std::setw(2) << std::setfill('0') << hrs << "-"
                       << "00-00";
     }
