@@ -1,0 +1,51 @@
+---
+
+- hosts: deployment_servers
+  tasks:
+  
+  # Quick ansible script to install dependancies for tri-tracker on a CentOS machine
+  - name: Install pre-reqs
+    yum: 
+      name={{ item }}
+      state=latest
+    become: yes
+    become_method: sudo
+    with_items:
+      - gcc
+      - gcc-c++
+
+
+  - name: Install netcdf
+    yum:
+      name={{ item }}
+      state=latest
+    become: yes
+    become_method: sudo
+    with_items:
+      - netcdf
+      - netcdf-devel
+
+  
+  - name: Install boost
+    yum:
+      name={{ item }}
+      state=latest
+    become: yes
+    become_method: sudo
+    with_items:
+      - boost
+      - boost-devel
+      - boost-date-time
+
+
+  - name: Fetch TCLAP
+    command: wget https://sourceforge.net/projects/tclap/files/tclap-1.2.1.tar.gz /home/vagrant
+      
+      
+  - name: Extract TCLAP
+    unarchive:
+      src: /home/vagrant/tclap-1.2.1.tar.gz
+      dest: /home/vagrant/
+      copy: no
+
+      
