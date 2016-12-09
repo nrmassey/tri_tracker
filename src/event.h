@@ -6,10 +6,19 @@
 **           data
 ******************************************************************************/
 
+#ifndef EVENT_H
+#define EVENT_H
+
 #include "field_data.h"
 #include <list>
+#include <netcdf>
 #include "ncdata.h"
-#include "netcdfcpp.h"
+
+// BYTE definition for packing
+typedef signed char BYTE;
+typedef netCDF::NcByte NC_SBYTE;
+
+/*****************************************************************************/
 
 class event
 {
@@ -31,7 +40,7 @@ class event
         
         ncdata* ref_data;               // pointer to mslp data to get the grid definition from
         const FP_TYPE mv;               // missing value
-        const ncbyte scale_mv;          // scaled missing value
+        const BYTE scale_mv;  			// scaled missing value
         
         // scaling values for byte packing the data
         FP_TYPE mslp_offset, mslp_scale;
@@ -39,3 +48,5 @@ class event
         FP_TYPE precip_offset, precip_scale;
         FP_TYPE loss_offset, loss_scale;
 };
+
+#endif

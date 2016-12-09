@@ -18,14 +18,14 @@ DEBUG_FLAGS = -Wno-deprecated -O0 -g -Wall -pg #-D_GLIBCXX_DEBUG
 RELEASE_FLAGS = -Wno-deprecated -O3 -msse3
 PROFILE_FLAGS = $(RELEASE_FLAGS) -pg
 COMMON_FLAGS = -DFP_TYPE=float
-FLAGS = $(RELEASE_FLAGS) $(COMMON_FLAGS)
+#FLAGS = $(RELEASE_FLAGS) $(COMMON_FLAGS)
 #FLAGS = $(PROFILE_FLAGS) $(COMMON_FLAGS)
-#FLAGS = $(DEBUG_FLAGS) $(COMMON_FLAGS)
+FLAGS = $(DEBUG_FLAGS) $(COMMON_FLAGS)
 
 # Linker variables
-LDFLAGS = $(FLAGS) -stdlib=libstdc++
+LDFLAGS = $(FLAGS)
 LD = g++ $(LDFLAGS) $(LIBRARY_DIRS)
-COMMON_LIBS = -lnetcdf_c++
+COMMON_LIBS = -lnetcdf -lnetcdf_c++4
 
 ALL_DEPEND = quadtree.h
 

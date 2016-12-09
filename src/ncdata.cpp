@@ -6,19 +6,20 @@
 ******************************************************************************/
 
 #include "ncdata.h"
-#include <netcdfcpp.h>
+#include <netcdf>
 #include <exception>
 #include <sstream>
+#include <map>
 
 /*****************************************************************************/
 
-int get_dim_pos(NcVar* nc_var, std::string search_name)
+int get_dim_pos(netCDF::NcVar* nc_var, std::string search_name)
 {
     int dim_id = -1;
-    for (int i=0; i<nc_var->num_dims(); i++)
+    for (int i=0; i<nc_var->getDimCount(); i++)
     {
-        NcDim* dim = nc_var->get_dim(i);
-        std::string dim_name = dim->name();
+        netCDF::NcDim dim = nc_var->getDim(i);
+        std::string dim_name = dim.getName();
         if (dim_name.find(search_name) != dim_name.npos)
         {
             dim_id = i;
@@ -30,7 +31,7 @@ int get_dim_pos(NcVar* nc_var, std::string search_name)
 
 /*****************************************************************************/
 
-void get_dimension_pos(NcVar* nc_var, int& t_dim, int& z_dim,
+void get_dimension_pos(netCDF::NcVar* nc_var, int& t_dim, int& z_dim,
                        int& lon_dim, int& lat_dim)
 {
 	// time dimension - try "time" and "t"
@@ -53,7 +54,7 @@ void get_dimension_pos(NcVar* nc_var, int& t_dim, int& z_dim,
 
 /*****************************************************************************/
 
-void get_grid_spacing(NcFile* nc_file, NcVar* nc_var,
+void get_grid_spacing(netCDF::NcFile* nc_file, netCDF::NcVar* nc_var,
                       FP_TYPE& lon_s, FP_TYPE& lat_s,
                       FP_TYPE& lon_d, FP_TYPE& lat_d,
                       int&     lon_l, int&     lat_l,
@@ -63,23 +64,41 @@ void get_grid_spacing(NcFile* nc_file, NcVar* nc_var,
     int lon_id, lat_id, z_id, t_id;
     get_dimension_pos(nc_var, t_id, z_id, lon_id, lat_id);
     // get the variables of the lon / lat
-    NcVar* lon_var = nc_file->get_var(nc_var->get_dim(lon_id)->name());
-    NcVar* lat_var = nc_file->get_var(nc_var->get_dim(lat_id)->name());
+    netCDF::NcVar lon_var = nc_file->getVar(nc_var->getDim(lon_id).getName());
+    netCDF::NcVar lat_var = nc_file->getVar(nc_var->getDim(lat_id).getName());
 
-    // get the start and deltas
-    lon_s = lon_var->as_float(0);
-    lat_s = lat_var->as_float(0);
-    lon_d = lon_var->as_float(1) - lon_s;
-    lat_d = lat_var->as_float(1) - lat_s;
+    // get the start and deltas - this very different in new netCDF cpp4
+    // create a single dimension vector with an index to the very first element in the array
+    std::vector<size_t> idx(1);
+    idx[0] = 0;
+    lon_var.getVar(idx, &lon_s);
+    lat_var.getVar(idx, &lat_s);
+    // iterate the index to point to the next latitude value
+    idx[0] += 1;
+    lon_var.getVar(idx, &lon_d);
+    lon_d -= lon_s;					// get the difference between the 1st and 0th index
+    lat_var.getVar(idx, &lat_d);
+    lat_d -= lat_s;
 
     // get the size from the dimension
-    lon_l = nc_var->get_dim(lon_id)->size();
-    lat_l = nc_var->get_dim(lat_id)->size();
+    lon_l = nc_var->getDim(lon_id).getSize();
+    lat_l = nc_var->getDim(lat_id).getSize();
     
     // get the time start and delta - first get the variable
-    NcVar* t_var = nc_file->get_var(nc_var->get_dim(t_id)->name());
-    t_s = t_var->as_float(0);
-    t_d = t_var->as_float(1) - t_s;
+    netCDF::NcVar t_var = nc_file->getVar(nc_var->getDim(t_id).getName());
+    idx[0] = 0;
+    t_var.getVar(idx, &t_s);
+    // get the spacing if time dimension length is > 1
+    if (t_var.getDim(0).getSize() > 1)
+    {
+	    idx[0] += 1;
+    	t_var.getVar(idx, &t_d);
+	    t_d -= t_s;
+	}
+	else
+	{
+		t_d = 0.0;
+	}
 }
 
 /*****************************************************************************/
@@ -90,14 +109,27 @@ ncdata::ncdata(std::string file_name, std::string var_name) :
 {
 	fname = file_name;
 	vname = var_name;
-	nc_file = new NcFile(file_name.c_str());
-	if (!nc_file->is_valid())
+	try
 	{
+		nc_file = new netCDF::NcFile(file_name, netCDF::NcFile::read);
+	}
+	catch(netCDF::exceptions::NcException& e)
+	{
+	    e.what();
 		throw std::string("file " + file_name + " not found or not a netCDF file.");
 	}
+		
 	std::cout << "# Loading netCDF file " << file_name << std::endl;
 	// get the netCDF variable
-	nc_var = nc_file->get_var(var_name.c_str());
+	try
+	{
+		nc_var = new netCDF::NcVar(nc_file->getVar(var_name));
+	}
+	catch(netCDF::exceptions::NcException& e)
+	{
+		e.what();
+		throw std::string("var " + var_name + " not found in file " + file_name);
+	}
 	// get the grid spacing
 	get_grid_spacing(nc_file, nc_var, lon_s, lat_s, lon_d, lat_d, lon_l, lat_l, t_s, t_d);
 	// get the indexes
@@ -107,41 +139,42 @@ ncdata::ncdata(std::string file_name, std::string var_name) :
 		t_len = 1;
 	else
 		// otherwise get the size
-		t_len = nc_var->get_dim(t_dim)->size();
+		t_len = nc_var->getDim(t_dim).getSize();
 
 	current_data = new FP_TYPE [lon_l * lat_l];
-	mv = 2e20;
 	// get the missing value
+	try
 	{
-		NcError error(NcError::silent_nonfatal);
-		NcAtt* fv_att = nc_var->get_att("_FillValue");
-		if (fv_att != 0)
-			mv = fv_att->as_float(0);
-		delete fv_att;
+		netCDF::NcVarAtt fv_att = nc_var->getAtt("_FillValue");
+		fv_att.getValues(&mv);
+	}
+	catch(netCDF::exceptions::NcException& e)
+	{
+		mv = 2e20;
 	}
 	
 	// see if this variable has a grid mapping attribute
+	try
 	{
-		NcError error(NcError::silent_nonfatal);	// don't die if the attribute not found
-		NcAtt* gm_att = nc_var->get_att("grid_mapping");
-		if (gm_att != 0)
-		{
-			// get the name of the variable with the grid mapping and then get the variable
-			char* gm_name = gm_att->as_string(0);
-			NcVar* gm_var = nc_file->get_var(gm_name);
-			// in this variable there are the rotated pole lat and lon
-			NcAtt* gmv_att_lat = gm_var->get_att("grid_north_pole_latitude");
-			NcAtt* gmv_att_lon = gm_var->get_att("grid_north_pole_longitude");
-			FP_TYPE rotated_pole_lat = gmv_att_lat->as_float(0);
-			FP_TYPE rotated_pole_lon = gmv_att_lon->as_float(0);
-			// create the rotated grid
-			p_rotated_grid = new rotated_grid(rotated_pole_lat, rotated_pole_lon,
-											  this);
-			// delete attribute objects
-			delete gm_att;
-			delete gmv_att_lat;
-			delete gmv_att_lon;
-		}
+		netCDF::NcVarAtt gm_att = nc_var->getAtt("grid_mapping");
+		// get the name of the variable with the grid mapping and then get the variable
+		std::string gm_name;
+		gm_att.getValues(gm_name);
+		netCDF::NcVar gm_var = nc_file->getVar(gm_name);
+		
+		// in this variable there are the rotated pole lat and lon
+		netCDF::NcVarAtt gmv_att_lat = gm_var.getAtt("grid_north_pole_latitude");
+		netCDF::NcVarAtt gmv_att_lon = gm_var.getAtt("grid_north_pole_longitude");
+		FP_TYPE rotated_pole_lat, rotated_pole_lon;
+		gmv_att_lat.getValues(&rotated_pole_lat);
+		gmv_att_lon.getValues(&rotated_pole_lon);
+		// create the rotated grid
+		p_rotated_grid = new rotated_grid(rotated_pole_lat, rotated_pole_lon,
+										  this);
+	}
+	catch(netCDF::exceptions::NcNotAtt)
+	{
+	    p_rotated_grid = NULL;
 	}
 }
 
@@ -150,8 +183,9 @@ ncdata::ncdata(std::string file_name, std::string var_name) :
 ncdata::~ncdata(void)
 {
 	delete [] current_data;
-	delete nc_file;
 	delete p_rotated_grid;
+	delete nc_file;
+	delete nc_var;
 }
 
 /*****************************************************************************/
@@ -164,15 +198,21 @@ FP_TYPE ncdata::get_data(int lon_idx, int lat_idx, int z_idx, int t_idx)
 		// check whether the data has been cached or not
 		if (c_z != z_idx || c_t != t_idx)
 		{
-			// get the full field of data
-			long s[4] = {0,0,0,0};
-			long c[4] = {1,1,1,1};
+			// get the full field of data - set the position and counts
+			std::vector<size_t> s(4);
+			std::vector<size_t> c(4);
+			s[lon_dim] = 0;
+			s[lat_dim] = 0;
 			s[z_dim] = z_idx;
 			s[t_dim] = t_idx;
+			
 			c[lon_dim] = lon_l;
 			c[lat_dim] = lat_l;
-			nc_var->set_cur(s);
-			nc_var->get(current_data, c);
+			c[z_dim] = 1;
+			c[t_dim] = 1;
+			
+			// get the data
+			nc_var->getVar(s, c, current_data);
 			c_z = z_idx;
 			c_t = t_idx;
 		}
@@ -183,13 +223,20 @@ FP_TYPE ncdata::get_data(int lon_idx, int lat_idx, int z_idx, int t_idx)
 	{
 		if (c_t != t_idx)
 		{
-			long s[3] = {0,0,0};
-			long c[3] = {1,1,1};
+
+			// get the full field of data - set the position and counts
+			std::vector<size_t> s(3);
+			std::vector<size_t> c(3);
+			s[lon_dim] = 0;
+			s[lat_dim] = 0;
 			s[t_dim] = t_idx;
+			
 			c[lon_dim] = lon_l;
 			c[lat_dim] = lat_l;
-			nc_var->set_cur(s);
-			nc_var->get(current_data, c);
+			c[t_dim] = 1;
+			
+			// get the data
+			nc_var->getVar(s, c, current_data);
 			c_t = t_idx;
 		}
 		value = current_data[lat_idx*lon_l + lon_idx];
@@ -198,13 +245,19 @@ FP_TYPE ncdata::get_data(int lon_idx, int lat_idx, int z_idx, int t_idx)
 	{
 		if (c_z != z_idx)
 		{
-			long s[3] = {0,0,0};
-			long c[3] = {1,1,1};
+			// get the full field of data - set the position and counts
+			std::vector<size_t> s(3);
+			std::vector<size_t> c(3);
+			s[lon_dim] = 0;
+			s[lat_dim] = 0;
 			s[z_dim] = z_idx;
+			
 			c[lon_dim] = lon_l;
 			c[lat_dim] = lat_l;
-			nc_var->get(current_data, c);
-			nc_var->set_cur(s);
+			c[t_dim] = 1;
+			
+			// get the data
+			nc_var->getVar(s, c, current_data);
 			c_z = z_idx;
 		}
 		value = current_data[lat_idx*lon_l + lon_idx];
@@ -213,12 +266,17 @@ FP_TYPE ncdata::get_data(int lon_idx, int lat_idx, int z_idx, int t_idx)
 	{
 		if (c_t == -1)
 		{
-			long s[2] = {0,0};
-			long c[2] = {1,1};
-			s[lon_dim] = lon_idx;
-			s[lat_dim] = lat_idx;
-			nc_var->set_cur(s);
-			nc_var->get(current_data, c);
+			// get the full field of data - set the position and counts
+			std::vector<size_t> s(2);
+			std::vector<size_t> c(2);
+			s[lon_dim] = 0;
+			s[lat_dim] = 0;
+			
+			c[lon_dim] = lon_l;
+			c[lat_dim] = lat_l;
+			
+			// get the data
+			nc_var->getVar(s, c, current_data);
 			c_t = 0;
 		}
 		value = current_data[lat_idx*lon_l + lon_idx];
@@ -244,22 +302,31 @@ field_data ncdata::get_field(int z_idx, int t_idx)
 {
     field_data out_data(lat_l, lon_l, 0.0);
     FP_TYPE* px_out_data = out_data.get();
-    nc_var->set_cur(t_idx, z_idx);
-    nc_var->get(px_out_data, lat_l*lon_l);
+    
+	std::vector<size_t> s(4);
+	std::vector<size_t> c(4);
+	s[lon_dim] = 0;
+	s[lat_dim] = 0;
+	s[z_dim] = z_idx;
+	s[t_dim] = t_idx;
+	
+	c[lon_dim] = lon_l;
+	c[lat_dim] = lat_l;
+	c[z_dim] = 1;
+	c[t_dim] = 1;
+    
+    nc_var->getVar(s, c, px_out_data);
     return out_data;
 }
 
 /*****************************************************************************/
 
-field_data ncdata::get_field(bool slow_copy)
+field_data ncdata::get_field(void)
 {
     field_data out_data(lat_l, lon_l, 0.0);
     FP_TYPE* px_out_data = out_data.get();
-    if (!slow_copy)
-        nc_var->get(px_out_data, lat_l, lon_l);
-    else
-        for (int i=0; i<nc_var->num_vals(); i++)
-            px_out_data[i] = nc_var->as_float(i);
+	// get all the data
+	nc_var->getVar(px_out_data);
     return out_data;
 }
 
@@ -309,21 +376,28 @@ void ncdata::get_grid_details(FP_TYPE& olon_s, FP_TYPE& olat_s, FP_TYPE& olon_d,
 
 /*****************************************************************************/
 
-std::string ncdata::get_units(void)
+std::string get_var_units(netCDF::NcVar* nc_var)
 {
 	// get a string representing the units
 	std::string units = "none";
-	int i_n_atts = nc_var->num_atts();
-	for (int i=0; i<i_n_atts; i++)
+	std::map<std::string, netCDF::NcVarAtt> all_atts = nc_var->getAtts();
+	for (std::map<std::string, netCDF::NcVarAtt>::iterator i = all_atts.begin();
+	     i != all_atts.end(); i++)
 	{
-		NcAtt* nc_att = nc_var->get_att(i);
-		if (std::string(nc_att->name()) == "units")
+		if ((*i).first == "units")
 		{
-			units = std::string(nc_att->as_string(0));
-			break;
+ 			(*i).second.getValues(units);
+ 			break;
 		}
 	}
 	return units;
+}
+
+/*****************************************************************************/
+
+std::string ncdata::get_units(void)
+{
+	return get_var_units(nc_var);
 }
 
 /*****************************************************************************/
@@ -344,7 +418,7 @@ std::string ncdata::get_var_name(void)
 
 std::string ncdata::get_time_dim_name(void)
 {
-	return nc_var->get_dim(t_dim)->name();
+	return nc_var->getDim(t_dim).getName();
 }
 
 /*****************************************************************************/
@@ -352,40 +426,41 @@ std::string ncdata::get_time_dim_name(void)
 void ncdata::get_reference_time(int& year, int& month, int& day, FP_TYPE& day_sc, FP_TYPE& n_days_py)
 {
     // get the reference time from the netcdf file and variable
-	NcError error(NcError::silent_nonfatal);
-	// get the time variable
-    NcVar* time_var = nc_file->get_var(nc_var->get_dim(t_dim)->name());
-
-	NcAtt* tu_att = time_var->get_att("units");
-	char dummy;
-	std::string scale;
-	std::string dummy_string;
-	std::string time_string;
-	if (tu_att != 0)
-	{
-		std::string time_units = tu_att->as_string(0);
-		// parse the string - format is <scale> since <year>-<month>-<day> 00:00:00
-		std::stringstream stream(time_units);
-		stream >> scale >> dummy_string >> time_string;
-		std::stringstream (time_string.substr(0,4)) >> year;
-		std::stringstream (time_string.substr(5,2)) >> month;
-		std::stringstream (time_string.substr(8,2)) >> day;
-		// if the scale is "days since" - day_sc is 1, if it's "hours since" - day_sc is 1.0/24
-		if (scale == "days")
-			day_sc = 1.0;
-		if (scale == "hours")
-			day_sc = 1.0/24.0;		
-		delete tu_att;
-	}
-	// get the number of days per year
-	NcAtt* dpy_att = time_var->get_att("calendar");
-	if (dpy_att != 0)
-	{
-		std::string cal_type = dpy_att->as_string(0);
+    try
+    {
+		netCDF::NcVar time_var = nc_file->getVar(nc_var->getDim(t_dim).getName());
+		std::string time_units = get_var_units(&time_var);
+		
+		char dummy;
+		std::string scale;
+		std::string dummy_string;
+		std::string time_string;
+		if (time_units != "none")
+		{
+			// parse the string - format is <scale> since <year>-<month>-<day> 00:00:00
+			std::stringstream stream(time_units);
+			stream >> scale >> dummy_string >> time_string;
+			std::stringstream (time_string.substr(0,4)) >> year;
+			std::stringstream (time_string.substr(5,2)) >> month;
+			std::stringstream (time_string.substr(8,2)) >> day;
+			// if the scale is "days since" - day_sc is 1, if it's "hours since" - day_sc is 1.0/24
+			if (scale == "days")
+				day_sc = 1.0;
+			if (scale == "hours")
+				day_sc = 1.0/24.0;		
+		}
+		// get the number of days per year
+		netCDF::NcVarAtt dpy_att = time_var.getAtt("calendar");
+		std::string cal_type;
+		dpy_att.getValues(cal_type);
 		if (cal_type == "standard")
 			n_days_py = 365.25;
 		if (cal_type == "360_day")
 			n_days_py = 360.0;
-		delete dpy_att;
+	}
+	catch(netCDF::exceptions::NcException& e)
+	{
+	    e.what();
+		throw std::string("Could not find time variable, or time variable is ill-formatted");
 	}
 }

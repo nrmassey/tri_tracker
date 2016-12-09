@@ -11,6 +11,7 @@
 #include <string>
 #include "rotated_grid.h"
 #include "field_data.h"
+#include <netcdf>
 
 class ncdata
 {
@@ -19,7 +20,7 @@ class ncdata
 		~ncdata(void);
 		FP_TYPE get_data(int lon_idx, int lat_idx, int z_idx, int t_idx);
 		FP_TYPE get_data(FP_TYPE lon, FP_TYPE lat, int z_idx, int t_idx);
-		field_data get_field(bool slow_copy=false);
+		field_data get_field(void);
 		field_data get_field(int z_idx, int t_idx);
 		
 		FP_TYPE get_lon_s(void) { return lon_s; }
@@ -47,8 +48,8 @@ class ncdata
 		void get_reference_time(int& year, int& month, int& day, FP_TYPE& day_scale, FP_TYPE& n_days_py);
 
 	private:
-		class NcFile* nc_file;
-		class NcVar* nc_var;
+		netCDF::NcFile* nc_file;
+		netCDF::NcVar*  nc_var;
 		FP_TYPE lon_s, lat_s;       // start of longitude / latitude
 		FP_TYPE lon_d, lat_d;       // delta of lon / lat
 		int     lon_l, lat_l;        // length of longitude / latitude
