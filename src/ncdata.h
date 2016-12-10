@@ -13,6 +13,8 @@
 #include "field_data.h"
 #include <netcdf>
 
+using namespace netCDF;
+
 class ncdata
 {
 	public:
@@ -48,8 +50,8 @@ class ncdata
 		void get_reference_time(int& year, int& month, int& day, FP_TYPE& day_scale, FP_TYPE& n_days_py);
 
 	private:
-		netCDF::NcFile* nc_file;
-		netCDF::NcVar*  nc_var;
+		NcFile* nc_file;
+		NcVar*  nc_var;
 		FP_TYPE lon_s, lat_s;       // start of longitude / latitude
 		FP_TYPE lon_d, lat_d;       // delta of lon / lat
 		int     lon_l, lat_l;        // length of longitude / latitude

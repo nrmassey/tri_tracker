@@ -10,7 +10,7 @@ TRI_GRID_TO_NC_NAME = ../exe/tri_grid_to_netcdf
 EVENT_SET_NAME = ../exe/event_set
 
 # Compiler variables
-CPP = g++ -stdlib=libstdc++
+CPP = g++ 
 INCLUDE_DIRS = -I./
 LIBRARY_DIRS = -L/usr/local/lib
 
@@ -23,9 +23,9 @@ FLAGS = $(RELEASE_FLAGS) $(COMMON_FLAGS)
 #FLAGS = $(DEBUG_FLAGS) $(COMMON_FLAGS)
 
 # Linker variables
-LDFLAGS = $(FLAGS) -stdlib=libstdc++
-LD = g++ $(LDFLAGS) $(LIBRARY_DIRS)
-COMMON_LIBS = -lnetcdf_c++
+LDFLAGS = $(FLAGS) 
+LD = g++ $(LIBRARY_DIRS)
+COMMON_LIBS = -lnetcdf -lnetcdf_c++4
 
 ALL_DEPEND = quadtree.h
 

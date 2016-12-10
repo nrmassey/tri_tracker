@@ -21,6 +21,8 @@
 #include "haversine.h"
 #include "Rot2Global.h"
 
+using namespace netCDF;
+
 /*****************************************************************************/
 
 event_creator::event_creator(std::string input_track,
@@ -396,13 +398,13 @@ void event_creator::write_event(std::string out_fname, event* evt, field_data* l
     // 10.Track timesteps (1D)
 
     // create the file for writing
-    netCDF::NcFile* px_nc_file = NULL;
+    NcFile* px_nc_file = NULL;
     try
     {
-        px_nc_file = new netCDF::NcFile(out_fname.c_str(), netCDF::NcFile::replace, 
-                                        netCDF::NcFile::nc4);
+        px_nc_file = new NcFile(out_fname.c_str(), NcFile::replace, 
+                                        NcFile::nc4);
     }   
-    catch(netCDF::exceptions::NcException& e)
+    catch(exceptions::NcException& e)
     {
         e.what();
         throw std::string("file " + out_fname + " could not be written to or already exists.");
@@ -413,11 +415,11 @@ void event_creator::write_event(std::string out_fname, event* evt, field_data* l
     // get the reference data from the event
     ncdata* ref_data = evt->ref_data;
     // create the longitude and latitude dimensions
-    netCDF::NcDim x_rot_lat_dim = px_nc_file->addDim("latitude", ref_data->get_lat_len());
-    netCDF::NcDim x_rot_lon_dim = px_nc_file->addDim("longitude", ref_data->get_lon_len());
+    NcDim x_rot_lat_dim = px_nc_file->addDim("latitude", ref_data->get_lat_len());
+    NcDim x_rot_lon_dim = px_nc_file->addDim("longitude", ref_data->get_lon_len());
     // create the longitude and latitude variables
-    netCDF::NcVar x_rot_lat_var = px_nc_file->addVar("latitude", netCDF::ncFloat, x_rot_lat_dim);
-    netCDF::NcVar x_rot_lon_var = px_nc_file->addVar("longitude", netCDF::ncFloat, x_rot_lon_dim);
+    NcVar x_rot_lat_var = px_nc_file->addVar("latitude", ncFloat, x_rot_lat_dim);
+    NcVar x_rot_lon_var = px_nc_file->addVar("longitude", ncFloat, x_rot_lon_dim);
     // add the attributes
     x_rot_lat_var.putAtt("standard_name", "grid_latitude");
     x_rot_lon_var.putAtt("standard_name", "grid_longitude");
@@ -425,18 +427,26 @@ void event_creator::write_event(std::string out_fname, event* evt, field_data* l
     x_rot_lon_var.putAtt("units", "degrees");
     x_rot_lat_var.putAtt("axis", "Y");
     x_rot_lon_var.putAtt("axis", "X");
+    
+    const int  DEFL_LEV=5;
+    const bool SHUFFLE=true;
+    const bool DEFLATE=true;
+    
+    // set compression
+    x_rot_lat_var.setCompression(SHUFFLE, DEFLATE, DEFL_LEV);
+    x_rot_lon_var.setCompression(SHUFFLE, DEFLATE, DEFL_LEV);
 
     // if this is a rotated grid then add the grid mapping variable
     if (ref_data->has_rotated_grid())
     {
         // NRM - note that the empty vector is a bit of a hack borrowed from the next
         // version of C++ netCDF
-	    netCDF::NcVar x_grid_map_var = px_nc_file->addVar("rotated_pole", netCDF::ncChar,
-	                                                      std::vector<netCDF::NcDim>());
+        NcVar x_grid_map_var = px_nc_file->addVar("rotated_pole", ncChar,
+                                                          std::vector<NcDim>());
         x_grid_map_var.putAtt("grid_mapping_name", "rotated_latitude_longitude");
-        x_grid_map_var.putAtt("grid_north_pole_latitude", netCDF::ncFloat,
+        x_grid_map_var.putAtt("grid_north_pole_latitude", ncFloat,
                               ref_data->get_rotated_grid()->get_rotated_pole_latitude());
-        x_grid_map_var.putAtt("grid_north_pole_longitude", netCDF::ncFloat,
+        x_grid_map_var.putAtt("grid_north_pole_longitude", ncFloat,
                               ref_data->get_rotated_grid()->get_rotated_pole_longitude());
     }
 
@@ -444,16 +454,21 @@ void event_creator::write_event(std::string out_fname, event* evt, field_data* l
     // first number of track points dimensions
     int n_trk_pts = evt->timestep.size();
     
-    netCDF::NcDim x_trk_pts_dim = px_nc_file->addDim("track_point", n_trk_pts);
+    NcDim x_trk_pts_dim = px_nc_file->addDim("track_point", n_trk_pts);
     // create the variables for the track
-    netCDF::NcVar x_trk_time_var = px_nc_file->addVar("track_time", netCDF::ncFloat, x_trk_pts_dim);
-    netCDF::NcVar x_trk_lat_var = px_nc_file->addVar("track_latitude", netCDF::ncFloat, x_trk_pts_dim);
-    netCDF::NcVar x_trk_lon_var = px_nc_file->addVar("track_longitude", netCDF::ncFloat, x_trk_pts_dim);
+    NcVar x_trk_time_var = px_nc_file->addVar("track_time", ncFloat, x_trk_pts_dim);
+    NcVar x_trk_lat_var = px_nc_file->addVar("track_latitude", ncFloat, x_trk_pts_dim);
+    NcVar x_trk_lon_var = px_nc_file->addVar("track_longitude", ncFloat, x_trk_pts_dim);
     // add the attributes for the track lon and lat
     x_trk_lat_var.putAtt("standard_name", "latitude");
     x_trk_lon_var.putAtt("standard_name", "longitude");
     x_trk_lat_var.putAtt("units", "degrees_north");
     x_trk_lon_var.putAtt("units", "degrees_east");
+
+    // compress
+    x_trk_time_var.setCompression(SHUFFLE, DEFLATE, DEFL_LEV);
+    x_trk_lon_var.setCompression(SHUFFLE, DEFLATE, DEFL_LEV);
+    x_trk_lat_var.setCompression(SHUFFLE, DEFLATE, DEFL_LEV);
 
     // add the attributes for the time variable
     int year, month, day;
@@ -475,17 +490,24 @@ void event_creator::write_event(std::string out_fname, event* evt, field_data* l
     // write the fields out need to pack them first
     // create each var first
     // need a vector of the dimensions
-    std::vector<netCDF::NcDim> rot_dims(2);
+    std::vector<NcDim> rot_dims(2);
     rot_dims[0] = x_rot_lat_dim;
     rot_dims[1] = x_rot_lon_dim;
     NC_SBYTE ncSbyte;
     
-    netCDF::NcVar x_mslp_var = px_nc_file->addVar("mslp", ncSbyte, rot_dims);
-    netCDF::NcVar x_wind_var = px_nc_file->addVar("wind_max", ncSbyte, rot_dims);
-    netCDF::NcVar x_gust_var = px_nc_file->addVar("wind_gust", ncSbyte, rot_dims);
-    netCDF::NcVar x_loss_var = px_nc_file->addVar("loss", ncSbyte, rot_dims);
+    NcVar x_mslp_var = px_nc_file->addVar("mslp", ncSbyte, rot_dims);
+    NcVar x_wind_var = px_nc_file->addVar("wind_max", ncSbyte, rot_dims);
+    NcVar x_gust_var = px_nc_file->addVar("wind_gust", ncSbyte, rot_dims);
+    NcVar x_loss_var = px_nc_file->addVar("loss", ncSbyte, rot_dims);
+    NcVar x_precip_var = px_nc_file->addVar("precip", ncSbyte, rot_dims);
+    
+    // compress
+    x_mslp_var.setCompression(SHUFFLE, DEFLATE, DEFL_LEV);
+    x_wind_var.setCompression(SHUFFLE, DEFLATE, DEFL_LEV);
+    x_gust_var.setCompression(SHUFFLE, DEFLATE, DEFL_LEV);
+    x_loss_var.setCompression(SHUFFLE, DEFLATE, DEFL_LEV);
+    x_precip_var.setCompression(SHUFFLE, DEFLATE, DEFL_LEV);
 
-    netCDF::NcVar x_precip_var = px_nc_file->addVar("precip", ncSbyte, rot_dims);
 
     // add the attributes
     // rotated grid mapping
@@ -505,33 +527,33 @@ void event_creator::write_event(std::string out_fname, event* evt, field_data* l
     
     // minimum / maximum values (depending on variables)
     FP_TYPE mslp_min = evt->mslp.get_min(evt->mv);
-	x_mslp_var.putAtt("minimum", netCDF::ncFloat,  mslp_min);
+	x_mslp_var.putAtt("minimum", ncFloat,  mslp_min);
     
     // wind maximum over land
     field_data wind_max_lsm(ref_data->get_lat_len(), ref_data->get_lon_len());
     wind_max_lsm.copy_ip(evt->wind_max);
     wind_max_lsm.mult_ip(*lsm_field, evt->mv);
     FP_TYPE wind_max = wind_max_lsm.get_max(evt->mv);
-    x_wind_var.putAtt("maximum", netCDF::ncFloat, wind_max);
+    x_wind_var.putAtt("maximum", ncFloat, wind_max);
     FP_TYPE wind_power = wind_max*wind_max*wind_max;
-    x_wind_var.putAtt("maximum_power", netCDF::ncFloat, wind_power);
+    x_wind_var.putAtt("maximum_power", ncFloat, wind_power);
     
     // calculate the gust maximum - which is multiplied by the lsm to get maximum over land
     field_data gust_max_lsm(ref_data->get_lat_len(), ref_data->get_lon_len());
     gust_max_lsm.copy_ip(evt->wind_gust);
     gust_max_lsm.mult_ip(*lsm_field, evt->mv);
     FP_TYPE gust_max = gust_max_lsm.get_max(evt->mv);
-    x_gust_var.putAtt("maximum", netCDF::ncFloat, gust_max);
+    x_gust_var.putAtt("maximum", ncFloat, gust_max);
     FP_TYPE gust_power = gust_max*gust_max*gust_max;
-    x_gust_var.putAtt("maximum_power", netCDF::ncFloat, gust_power);
+    x_gust_var.putAtt("maximum_power", ncFloat, gust_power);
     
     // precip and loss
     FP_TYPE max_precip = evt->precip.get_max(evt->mv);
-    x_precip_var.putAtt("maximum", netCDF::ncFloat, max_precip);
+    x_precip_var.putAtt("maximum", ncFloat, max_precip);
     FP_TYPE max_loss = evt->loss.get_max(evt->mv);
-    x_loss_var.putAtt("maximum", netCDF::ncFloat, max_loss);
+    x_loss_var.putAtt("maximum", ncFloat, max_loss);
     FP_TYPE sum_loss = evt->loss.get_sum(evt->mv);
-    x_loss_var.putAtt("sum", netCDF::ncFloat, sum_loss);
+    x_loss_var.putAtt("sum", ncFloat, sum_loss);
     
     // standard names and units
     x_mslp_var.putAtt("standard_name", "air_pressure_at_sea_level");
@@ -552,20 +574,20 @@ void event_creator::write_event(std::string out_fname, event* evt, field_data* l
     x_precip_var.putAtt("units", "kg m-2 s-1");
 
     // byte packing offsets and scales
-    x_mslp_var.putAtt("add_offset", netCDF::ncFloat, evt->mslp_offset);
-    x_mslp_var.putAtt("scale_factor", netCDF::ncFloat, evt->mslp_scale);
+    x_mslp_var.putAtt("add_offset", ncFloat, evt->mslp_offset);
+    x_mslp_var.putAtt("scale_factor", ncFloat, evt->mslp_scale);
 
-    x_wind_var.putAtt("add_offset", netCDF::ncFloat, evt->wind_offset);
-    x_wind_var.putAtt("scale_factor", netCDF::ncFloat, evt->wind_scale);
+    x_wind_var.putAtt("add_offset", ncFloat, evt->wind_offset);
+    x_wind_var.putAtt("scale_factor", ncFloat, evt->wind_scale);
 
-    x_gust_var.putAtt("add_offset", netCDF::ncFloat, evt->wind_offset);
-    x_gust_var.putAtt("scale_factor", netCDF::ncFloat, evt->wind_scale);
+    x_gust_var.putAtt("add_offset", ncFloat, evt->wind_offset);
+    x_gust_var.putAtt("scale_factor", ncFloat, evt->wind_scale);
 
-    x_loss_var.putAtt("add_offset", netCDF::ncFloat, evt->loss_offset);
-    x_loss_var.putAtt("scale_factor", netCDF::ncFloat, evt->loss_scale);
+    x_loss_var.putAtt("add_offset", ncFloat, evt->loss_offset);
+    x_loss_var.putAtt("scale_factor", ncFloat, evt->loss_scale);
 
-    x_precip_var.putAtt("add_offset", netCDF::ncFloat, evt->precip_offset);
-    x_precip_var.putAtt("scale_factor", netCDF::ncFloat, evt->precip_scale);
+    x_precip_var.putAtt("add_offset", ncFloat, evt->precip_offset);
+    x_precip_var.putAtt("scale_factor", ncFloat, evt->precip_scale);
 
     // byte pack the data
     BYTE* px_byte_mslp = pack_data(evt->mslp.get(), 
