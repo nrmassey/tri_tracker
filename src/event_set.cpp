@@ -37,11 +37,15 @@ int main(int argc, char** argv)
     FP_TYPE search_rad;             // search radius (km)
     int event_t_steps;              // minimum number of timesteps in integrated event 
                                     // (e.g. 6 hourly data, 24 hour event - event_t_steps = 5)
+    bool write_one_file;            // write all events into one file
     
     try
     {
         TCLAP::CmdLine cmd("Build an event set using tracks located from the tracker program");
-        TCLAP::ValueArg<std::string> mslp_fname_arg("m", "mslp_file", "Original MSLP file used in tracking and field name. MSLP values for the event set will be taken from this file, rather than from the extrema file.", true, "", "string", cmd);       
+        
+        TCLAP::SwitchArg write_one_file_arg("F", "one_file", "Write all events into one file", false);
+        
+        TCLAP::ValueArg<std::string> mslp_fname_arg("m", "mslp_file", "Original MSLP file used in tracking and field name. MSLP values for the event set will be taken from this file, rather than from the extrema file.", true, "", "string", cmd);
         TCLAP::ValueArg<std::string> mslp_field_arg("M", "mslp_field", "Field name of MSLP in original MSLP file.", false, "field8", "string", cmd);
         TCLAP::ValueArg<std::string> wind_fname_arg("w", "wind_file", "Original wind file used in tracking and field name. 10m wind values for the event set will be taken from this file, rather than from the extrema file.", true, "", "string", cmd);
         TCLAP::ValueArg<std::string> wind_field_arg("W", "wind_field", "Field name of 10m wind variable in original wind file.", false, "field50", "string", cmd);
@@ -61,8 +65,10 @@ int main(int argc, char** argv)
 
         TCLAP::ValueArg<std::string> output_fname_arg("o", "output", "Output prefix for event file names", true, "", "string", cmd);
         TCLAP::ValueArg<std::string> input_fname_arg("i", "input", "Input file name - track file created by ./track", true, "", "string", cmd);
+        
         cmd.parse(argc, argv);
 
+        write_one_file = write_one_file_arg.getValue();
         mslp_fname = mslp_fname_arg.getValue();
         mslp_field = mslp_field_arg.getValue();
         

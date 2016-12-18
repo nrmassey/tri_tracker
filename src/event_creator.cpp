@@ -320,7 +320,7 @@ bool file_exists(const std::string& fpath)
 
 /*****************************************************************************/
 
-void event_creator::save_events(std::string output_prefix)
+void event_creator::save_events(std::string output_prefix, bool save_all)
 {
     // write out the events
     // these variables are needed to get the year, month and day of the beginning
@@ -329,26 +329,43 @@ void event_creator::save_events(std::string output_prefix)
     // require the lsm to determine largest gust over land
     field_data lsm_field = lsm_data.get_field();
 
-    for (std::list<event*>::iterator it_evt = event_list.begin();
-         it_evt != event_list.end(); it_evt++)
+    if (save_all)
     {
-        // get the event
-        event* cur_evt = *it_evt;
-        // get the reference time for this event
-        std::string start_date = get_event_start_date(cur_evt->ref_data, cur_evt->timestep.front());
-        // create the output file name
-        std::string out_fname = output_prefix + "_" + start_date;
-        // check whether the file exists or not and iterate until a unique filename is
-        // created.  This is needed for a number of events which start on the same day
-        char c_it = '0';
-        std::string out_path = out_fname + "_" + c_it + ".nc";
-        while (file_exists(out_path))
+        // get the start date of the first event and the end date of the last event
+        event* first_evt = event_list.front();
+        event* last_evt = event_list.back();
+        std::string start_date = get_event_start_date(first_evt->ref_data,
+                                                      first_evt->timestep.front());
+        std::string end_date = get_event_start_date(last_evt->ref_data,
+                                                    last_evt->timestep.back());
+        // build the file name from the prefix plus the start date and end date
+        std::string out_fname = output_prefix + "_" + start_date + "_" + end_date + ".nc";
+        write_all_events(out_fname, &lsm_field);
+    }
+    else
+    {
+        for (std::list<event*>::iterator it_evt = event_list.begin();
+             it_evt != event_list.end(); it_evt++)
         {
-            c_it++;
-            out_path = out_fname + "_" + c_it + ".nc";
+            // get the event
+            event* cur_evt = *it_evt;
+            // get the reference time for this event
+            std::string start_date = get_event_start_date(cur_evt->ref_data, 
+                                                          cur_evt->timestep.front());
+            // create the output file name
+            std::string out_fname = output_prefix + "_" + start_date;
+            // check whether the file exists or not and iterate until a unique filename is
+            // created.  This is needed for a number of events which start on the same day
+            char c_it = '0';
+            std::string out_path = out_fname + "_" + c_it + ".nc";
+            while (file_exists(out_path))
+            {
+                c_it++;
+                out_path = out_fname + "_" + c_it + ".nc";
+            }
+            // write out the event
+            write_event(out_path, cur_evt, &lsm_field);
         }
-        // write out the event
-        write_event(out_path, cur_evt, &lsm_field);
     }
 }
 
@@ -428,10 +445,6 @@ void event_creator::write_event(std::string out_fname, event* evt, field_data* l
     x_rot_lat_var.putAtt("axis", "Y");
     x_rot_lon_var.putAtt("axis", "X");
     
-    const int  DEFL_LEV=5;
-    const bool SHUFFLE=true;
-    const bool DEFLATE=true;
-    
     // set compression
     x_rot_lat_var.setCompression(SHUFFLE, DEFLATE, DEFL_LEV);
     x_rot_lon_var.setCompression(SHUFFLE, DEFLATE, DEFL_LEV);
@@ -508,7 +521,6 @@ void event_creator::write_event(std::string out_fname, event* evt, field_data* l
     x_loss_var.setCompression(SHUFFLE, DEFLATE, DEFL_LEV);
     x_precip_var.setCompression(SHUFFLE, DEFLATE, DEFL_LEV);
 
-
     // add the attributes
     // rotated grid mapping
     x_mslp_var.putAtt("grid_mapping", "rotated_pole");
@@ -527,7 +539,7 @@ void event_creator::write_event(std::string out_fname, event* evt, field_data* l
     
     // minimum / maximum values (depending on variables)
     FP_TYPE mslp_min = evt->mslp.get_min(evt->mv);
-	x_mslp_var.putAtt("minimum", ncFloat,  mslp_min);
+    x_mslp_var.putAtt("minimum", ncFloat,  mslp_min);
     
     // wind maximum over land
     field_data wind_max_lsm(ref_data->get_lat_len(), ref_data->get_lon_len());
@@ -616,7 +628,7 @@ void event_creator::write_event(std::string out_fname, event* evt, field_data* l
                                      evt->mv, evt->scale_mv);
 
     // add the values for the longitude and latitude (on the rotated grid)
-    std::vector<size_t> p(1);		// require vectors for addressing in new netCDF
+    std::vector<size_t> p(1);       // require vectors for addressing in new netCDF
     std::vector<size_t> c(1);
     p[0] = 0;
     c[0] = 1;
@@ -634,17 +646,17 @@ void event_creator::write_event(std::string out_fname, event* evt, field_data* l
         p[0] += 1;
     }
 
-	// end file definition
-	nc_enddef(px_nc_file->getId());
+    // end file definition
+    nc_enddef(px_nc_file->getId());
 
     // write the track lats and lons out
     std::list<FP_TYPE>::iterator track_lon_it = evt->track_lon.begin();   // position of track points
     std::list<FP_TYPE>::iterator track_lat_it = evt->track_lat.begin();   // position of track points
     std::list<int>::iterator     timestep_it  = evt->timestep.begin();    // timestep of track point
 
-	// p & c are still available but need to be reset
-	p[0] = 0;
-	c[0] = 1;
+    // p & c are still available but need to be reset
+    p[0] = 0;
+    c[0] = 1;
     for (int t=0; t < n_trk_pts; t++)
     {
         FP_TYPE time = (*timestep_it * ref_data->get_t_d() + ref_data->get_t_s());
@@ -676,4 +688,21 @@ void event_creator::write_event(std::string out_fname, event* evt, field_data* l
     x_precip_var.putVar(field_start, field_count, px_byte_precip);
     
     delete px_nc_file;
+}
+
+/*****************************************************************************/
+
+void event_creator::write_all_events(std::string out_fname, field_data* lsm_field)
+{
+    // write a single event out.  Each event consists of a number of elements:
+    // 1. Minimum MSLP field (2D)
+    // 2. Maximum wind @ 10m field (2D)
+    // 3. Wind gust @ 10m field (2D)
+    // 4. Precipitation field (2D)
+    // 5. Loss value field (2D)
+    // 6. Max loss (single data point)
+    // 7. Max wind power (single data point)
+    // 8. Track longitudes (1D)
+    // 9. Track latitudes (1D)
+    // 10.Track timesteps (1D)
 }

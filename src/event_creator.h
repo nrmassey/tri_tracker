@@ -31,12 +31,13 @@ class event_creator
                       FP_TYPE search_rad,       int event_t_steps);
         ~event_creator(void);
         void find_events(void);     // function to start search procedure
-        void save_events(std::string output_prefix); // write out the events
+        void save_events(std::string output_prefix, bool save_all=false); // write out the events
         
     private:
         // function to write event to
         void write_event(std::string out_fname, event* evt, field_data* lsm_field);
-    
+        void write_all_events(std::string out_fname, field_data* lsm_field);
+
         // input track
         track_list tr_list;
         
@@ -62,6 +63,11 @@ class event_creator
         
         // list to store the events in
         std::list<event*> event_list;
+        
+        // netCDF4 compression values
+        const int  DEFL_LEV=5;
+        const bool SHUFFLE=true;
+        const bool DEFLATE=true;
 };
 
 #endif
