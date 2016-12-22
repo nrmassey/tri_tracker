@@ -65,9 +65,9 @@ class event_creator
         std::list<event*> event_list;
         
         // netCDF4 compression values
-        const int  DEFL_LEV=5;
-        const bool SHUFFLE=true;
-        const bool DEFLATE=true;
+        const int  DEFL_LEV;
+        const bool SHUFFLE;
+        const bool DEFLATE;
 };
 
 #endif

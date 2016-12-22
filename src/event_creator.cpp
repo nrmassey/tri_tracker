@@ -40,7 +40,8 @@ event_creator::event_creator(std::string input_track,
                 remap_slope(remap_fname, "slope"),
                 remap_icept(remap_fname, "intercept"),
                 lsm_data(lsm_fname, lsm_field),
-                sr(search_rad), evt(event_t_steps)
+                sr(search_rad), evt(event_t_steps),
+				DEFL_LEV(5), SHUFFLE(true), DEFLATE(true)
 {
     // load the track list
     tr_list.load(input_track);
@@ -684,9 +685,13 @@ void event_creator::write_event(std::string out_fname, event* evt, field_data* l
     x_wind_var.putVar(field_start, field_count, px_byte_wind);
     x_gust_var.putVar(field_start, field_count, px_byte_gust);
     x_loss_var.putVar(field_start, field_count, px_byte_loss);
-    
     x_precip_var.putVar(field_start, field_count, px_byte_precip);
-    
+
+	delete [] px_byte_wind;
+	delete [] px_byte_gust;
+	delete [] px_byte_loss;
+	delete [] px_byte_precip;
+
     delete px_nc_file;
 }
 
@@ -694,7 +699,7 @@ void event_creator::write_event(std::string out_fname, event* evt, field_data* l
 
 void event_creator::write_all_events(std::string out_fname, field_data* lsm_field)
 {
-    // write a single event out.  Each event consists of a number of elements:
+    // write all the events out in one file.  Each event consists of a number of elements:
     // 1. Minimum MSLP field (2D)
     // 2. Maximum wind @ 10m field (2D)
     // 3. Wind gust @ 10m field (2D)
@@ -705,4 +710,345 @@ void event_creator::write_all_events(std::string out_fname, field_data* lsm_fiel
     // 8. Track longitudes (1D)
     // 9. Track latitudes (1D)
     // 10.Track timesteps (1D)
+    
+    // create the file for writing
+    NcFile* px_nc_file = NULL;
+    try
+    {
+        px_nc_file = new NcFile(out_fname.c_str(), NcFile::replace, 
+                                        NcFile::nc4);
+    }   
+    catch(exceptions::NcException& e)
+    {
+        e.what();
+        throw std::string("file " + out_fname + " could not be written to or already exists.");
+    }
+    // CF compliant file
+    px_nc_file->putAtt("Conventions", "CF-1.6");
+
+    // get the reference data from the event
+    // get the first event
+    event* ref_evt = event_list.front();
+    ncdata* ref_data = ref_evt->ref_data;
+    // create the longitude and latitude dimensions
+    NcDim x_rot_lat_dim = px_nc_file->addDim("latitude", ref_data->get_lat_len());
+    NcDim x_rot_lon_dim = px_nc_file->addDim("longitude", ref_data->get_lon_len());
+    // create the longitude and latitude variables
+    NcVar x_rot_lat_var = px_nc_file->addVar("latitude", ncFloat, x_rot_lat_dim);
+    NcVar x_rot_lon_var = px_nc_file->addVar("longitude", ncFloat, x_rot_lon_dim);
+    // add the attributes
+    x_rot_lat_var.putAtt("standard_name", "grid_latitude");
+    x_rot_lon_var.putAtt("standard_name", "grid_longitude");
+    x_rot_lat_var.putAtt("units", "degrees");
+    x_rot_lon_var.putAtt("units", "degrees");
+    x_rot_lat_var.putAtt("axis", "Y");
+    x_rot_lon_var.putAtt("axis", "X");
+    
+    // set compression
+    x_rot_lat_var.setCompression(SHUFFLE, DEFLATE, DEFL_LEV);
+    x_rot_lon_var.setCompression(SHUFFLE, DEFLATE, DEFL_LEV);
+
+    // if this is a rotated grid then add the grid mapping variable
+    if (ref_data->has_rotated_grid())
+    {
+        // NRM - note that the empty vector is a bit of a hack borrowed from the next
+        // version of C++ netCDF
+        NcVar x_grid_map_var = px_nc_file->addVar("rotated_pole", ncChar,
+                                                          std::vector<NcDim>());
+        x_grid_map_var.putAtt("grid_mapping_name", "rotated_latitude_longitude");
+        x_grid_map_var.putAtt("grid_north_pole_latitude", ncFloat,
+                              ref_data->get_rotated_grid()->get_rotated_pole_latitude());
+        x_grid_map_var.putAtt("grid_north_pole_longitude", ncFloat,
+                              ref_data->get_rotated_grid()->get_rotated_pole_longitude());
+    }
+
+    // write number of events dimension
+    int n_events = event_list.size();
+    NcDim x_events_dim = px_nc_file->addDim("event", n_events);    
+    
+    // create variable track length type - integer type
+    NcVlenType trackLenType(px_nc_file->addVlenType("trackLen", ncFloat));
+    
+    // create track variables
+    NcVar x_trk_time_var = px_nc_file->addVar("track_time", trackLenType, x_events_dim);
+    NcVar x_trk_lat_var = px_nc_file->addVar("track_latitude", trackLenType, x_events_dim);
+    NcVar x_trk_lon_var = px_nc_file->addVar("track_longitude", trackLenType, x_events_dim);
+    // add the attributes for the track lon and lat
+    x_trk_lat_var.putAtt("standard_name", "latitude");
+    x_trk_lon_var.putAtt("standard_name", "longitude");
+    x_trk_lat_var.putAtt("units", "degrees_north");
+    x_trk_lon_var.putAtt("units", "degrees_east");
+
+    // compress
+    x_trk_time_var.setCompression(SHUFFLE, DEFLATE, DEFL_LEV);
+    x_trk_lon_var.setCompression(SHUFFLE, DEFLATE, DEFL_LEV);
+    x_trk_lat_var.setCompression(SHUFFLE, DEFLATE, DEFL_LEV);
+
+    // add the attributes for the time variable
+    int year, month, day;
+    FP_TYPE day_scale, n_days_py;
+    // first get the reference time
+    ref_data->get_reference_time(year, month, day, day_scale, n_days_py);
+    // output to string stream
+    std::ostringstream time_units;
+    time_units << "days since " << year << "-" << month << "-" << day << " 00:00:00";
+    // add the attributes
+    x_trk_time_var.putAtt("standard_name", "time");
+    x_trk_time_var.putAtt("units", time_units.str());
+    // add the calendar type
+    if (n_days_py == 365.25)
+        x_trk_time_var.putAtt("calendar", "standard");
+    else if (n_days_py == 360.0)
+        x_trk_time_var.putAtt("calendar", "360_day");
+        
+    // write the fields out need to pack them first
+    // create each var first
+    // need a vector of the dimensions
+    std::vector<NcDim> rot_dims(3);
+    rot_dims[0] = x_events_dim;
+    rot_dims[1] = x_rot_lat_dim;
+    rot_dims[2] = x_rot_lon_dim;
+    NC_SBYTE ncSbyte;
+    
+    NcVar x_mslp_var = px_nc_file->addVar("mslp", ncSbyte, rot_dims);
+    NcVar x_wind_var = px_nc_file->addVar("wind_max", ncSbyte, rot_dims);
+    NcVar x_gust_var = px_nc_file->addVar("wind_gust", ncSbyte, rot_dims);
+    NcVar x_loss_var = px_nc_file->addVar("loss", ncSbyte, rot_dims);
+    NcVar x_precip_var = px_nc_file->addVar("precip", ncSbyte, rot_dims);
+    
+    // compress
+    x_mslp_var.setCompression(SHUFFLE, DEFLATE, DEFL_LEV);
+    x_wind_var.setCompression(SHUFFLE, DEFLATE, DEFL_LEV);
+    x_gust_var.setCompression(SHUFFLE, DEFLATE, DEFL_LEV);
+    x_loss_var.setCompression(SHUFFLE, DEFLATE, DEFL_LEV);
+    x_precip_var.setCompression(SHUFFLE, DEFLATE, DEFL_LEV);
+
+    // add the attributes
+    // rotated grid mapping
+    x_mslp_var.putAtt("grid_mapping", "rotated_pole");
+    x_wind_var.putAtt("grid_mapping", "rotated_pole");
+    x_gust_var.putAtt("grid_mapping", "rotated_pole");
+    x_loss_var.putAtt("grid_mapping", "rotated_pole");
+    x_precip_var.putAtt("grid_mapping", "rotated_pole");
+
+    // missing value
+    BYTE b_scale_mv = ref_evt->scale_mv;
+    x_mslp_var.putAtt("_FillValue", ncSbyte, b_scale_mv);
+    x_wind_var.putAtt("_FillValue", ncSbyte, b_scale_mv);
+    x_gust_var.putAtt("_FillValue", ncSbyte, b_scale_mv);
+    x_loss_var.putAtt("_FillValue", ncSbyte, b_scale_mv);
+    x_precip_var.putAtt("_FillValue", ncSbyte, b_scale_mv);
+    
+    // minimum / maximum values (depending on variables)
+    FP_TYPE mslp_min = ref_evt->mslp.get_min(ref_evt->mv);
+    x_mslp_var.putAtt("minimum", ncFloat,  mslp_min);
+    
+    // wind maximum over land
+    field_data wind_max_lsm(ref_data->get_lat_len(), ref_data->get_lon_len());
+    wind_max_lsm.copy_ip(ref_evt->wind_max);
+    wind_max_lsm.mult_ip(*lsm_field, ref_evt->mv);
+    FP_TYPE wind_max = wind_max_lsm.get_max(ref_evt->mv);
+    x_wind_var.putAtt("maximum", ncFloat, wind_max);
+    FP_TYPE wind_power = wind_max*wind_max*wind_max;
+    x_wind_var.putAtt("maximum_power", ncFloat, wind_power);
+    
+    // calculate the gust maximum - which is multiplied by the lsm to get maximum over land
+    field_data gust_max_lsm(ref_data->get_lat_len(), ref_data->get_lon_len());
+    gust_max_lsm.copy_ip(ref_evt->wind_gust);
+    gust_max_lsm.mult_ip(*lsm_field, ref_evt->mv);
+    FP_TYPE gust_max = gust_max_lsm.get_max(ref_evt->mv);
+    x_gust_var.putAtt("maximum", ncFloat, gust_max);
+    FP_TYPE gust_power = gust_max*gust_max*gust_max;
+    x_gust_var.putAtt("maximum_power", ncFloat, gust_power);
+    
+    // precip and loss
+    FP_TYPE max_precip = ref_evt->precip.get_max(ref_evt->mv);
+    x_precip_var.putAtt("maximum", ncFloat, max_precip);
+    FP_TYPE max_loss = ref_evt->loss.get_max(ref_evt->mv);
+    x_loss_var.putAtt("maximum", ncFloat, max_loss);
+    FP_TYPE sum_loss = ref_evt->loss.get_sum(ref_evt->mv);
+    x_loss_var.putAtt("sum", ncFloat, sum_loss);
+    
+    // standard names and units
+    x_mslp_var.putAtt("standard_name", "air_pressure_at_sea_level");
+    x_mslp_var.putAtt("long_name", "mean sea level pressure");
+    x_mslp_var.putAtt("units", "Pa");
+    x_wind_var.putAtt("standard_name", "wind_speed");
+    x_wind_var.putAtt("long_name", "wind speed at 10m");
+    x_wind_var.putAtt("units", "m s-1");
+    x_gust_var.putAtt("standard_name", "wind_speed_of_gust");
+    x_gust_var.putAtt("long_name", "3s peak gust wind speed at 10m");
+    x_gust_var.putAtt("units", "m s-1");
+    // loss has no standard name but it does have a long name and units
+    x_loss_var.putAtt("long_name", "estimated losses");
+    x_loss_var.putAtt("units", "1e6 m3 s-3 persons km^-2");
+    
+    x_precip_var.putAtt("standard_name", "precipitation_flux");
+    x_precip_var.putAtt("long_name", "total precipitation flux");
+    x_precip_var.putAtt("units", "kg m-2 s-1");
+
+    // byte packing offsets and scales
+    x_mslp_var.putAtt("add_offset", ncFloat, ref_evt->mslp_offset);
+    x_mslp_var.putAtt("scale_factor", ncFloat, ref_evt->mslp_scale);
+
+    x_wind_var.putAtt("add_offset", ncFloat, ref_evt->wind_offset);
+    x_wind_var.putAtt("scale_factor", ncFloat, ref_evt->wind_scale);
+
+    x_gust_var.putAtt("add_offset", ncFloat, ref_evt->wind_offset);
+    x_gust_var.putAtt("scale_factor", ncFloat, ref_evt->wind_scale);
+
+    x_loss_var.putAtt("add_offset", ncFloat, ref_evt->loss_offset);
+    x_loss_var.putAtt("scale_factor", ncFloat, ref_evt->loss_scale);
+
+    x_precip_var.putAtt("add_offset", ncFloat, ref_evt->precip_offset);
+    x_precip_var.putAtt("scale_factor", ncFloat, ref_evt->precip_scale);    
+
+    // end file definition
+    nc_enddef(px_nc_file->getId());        
+
+	/******************************** WRITE GRID ****************************************/
+
+    // add the values for the longitude and latitude (on the rotated grid)
+    std::vector<size_t> p(1);       // require vectors for addressing in new netCDF
+    std::vector<size_t> c(1);
+    p[0] = 0;
+    c[0] = 1;
+    for (int y=0; y < ref_data->get_lat_len(); y++)
+    {
+        FP_TYPE c_lat = ref_data->get_lat_s() + ref_data->get_lat_d()*y;
+        x_rot_lat_var.putVar(p, c, &c_lat);
+        p[0] += 1;
+    }
+    p[0] = 0;
+    for (int x=0; x < ref_data->get_lon_len(); x++)
+    {
+        FP_TYPE c_lon = ref_data->get_lon_s() + ref_data->get_lon_d()*x;
+        x_rot_lon_var.putVar(p, c, &c_lon);
+        p[0] += 1;
+    }
+    
+
+	/******************************** WRITE TRACKS **************************************/
+
+    // loop over all the tracks and write out the data
+    int evt_count = 0;
+
+	// create the tracks as variable length arrays
+	nc_vlen_t track_time_data[n_events];
+	nc_vlen_t track_lon_data[n_events];
+	nc_vlen_t track_lat_data[n_events];
+    
+	for (std::list<event*>::iterator it_evt = event_list.begin();
+		 it_evt != event_list.end(); it_evt++)
+	{
+		// get the event
+		event* cur_evt = *it_evt;
+		
+		// get the number of track points
+	    int n_trk_pts = cur_evt->timestep.size();
+	    
+	    // allocate the memory for the data
+	    FP_TYPE* track_time_ptr = new FP_TYPE[n_trk_pts];
+	    FP_TYPE* track_lon_ptr = new FP_TYPE[n_trk_pts];
+	    FP_TYPE* track_lat_ptr = new FP_TYPE[n_trk_pts];
+
+		// write the track information out to the (variable length) array
+		std::list<FP_TYPE>::iterator track_lon_it = cur_evt->track_lon.begin();   // position of track points
+		std::list<FP_TYPE>::iterator track_lat_it = cur_evt->track_lat.begin();   // position of track points
+		std::list<int>::iterator     timestep_it  = cur_evt->timestep.begin();    // timestep of track point
+
+		for (int t=0; t < n_trk_pts; t++)
+		{
+			FP_TYPE time = (*timestep_it * ref_data->get_t_d() + ref_data->get_t_s());
+			track_time_ptr[t] = time;
+			track_lon_ptr[t] = *track_lon_it;
+			track_lat_ptr[t] = *track_lat_it;
+	
+			track_lon_it++;
+			track_lat_it++;
+			timestep_it++;
+		}
+		// assign the variable length variables
+		track_time_data[evt_count].p = track_time_ptr;
+		track_time_data[evt_count].len = n_trk_pts;
+		track_lon_data[evt_count].p = track_lon_ptr;
+		track_lon_data[evt_count].len = n_trk_pts;
+		track_lat_data[evt_count].p = track_lat_ptr;
+		track_lat_data[evt_count].len = n_trk_pts;
+
+		evt_count++;
+	}
+	// finally write the data out
+	x_trk_time_var.putVar(track_time_data);
+	x_trk_lat_var.putVar(track_lat_data);
+	x_trk_lon_var.putVar(track_lon_data); 
+
+	// free all the just created data
+	for (int e=0; e < n_events; e++)
+	{
+		nc_free_vlen(&track_time_data[e]);
+		nc_free_vlen(&track_lat_data[e]);
+		nc_free_vlen(&track_lon_data[e]);
+	}
+
+	/******************************** WRITE FIELDS **************************************/
+
+	evt_count = 0;
+	// dimensions start and count
+	std::vector<size_t> field_start(3);
+	std::vector<size_t> field_count(3);
+	field_start[1] = field_start[2] = 0;
+	field_count[0] = 1;
+	field_count[1] = ref_data->get_lat_len();
+	field_count[2] = ref_data->get_lon_len();
+    
+	for (std::list<event*>::iterator it_evt = event_list.begin();
+		 it_evt != event_list.end(); it_evt++)
+	{
+		// get the event
+		event* cur_evt = *it_evt;
+	
+		// go to the next event
+		field_start[0] = evt_count;
+	    // byte pack the data
+    	BYTE* px_byte_mslp = pack_data(cur_evt->mslp.get(), 
+        	                           ref_data->get_lat_len(), ref_data->get_lon_len(), 
+            	                       cur_evt->mslp_offset, cur_evt->mslp_scale,
+                	                   cur_evt->mv, cur_evt->scale_mv);
+
+	    BYTE* px_byte_wind = pack_data(cur_evt->wind_max.get(), 
+    	                               ref_data->get_lat_len(), ref_data->get_lon_len(), 
+        	                           cur_evt->wind_offset, cur_evt->wind_scale,
+            	                       cur_evt->mv, cur_evt->scale_mv);
+
+		BYTE* px_byte_gust = pack_data(cur_evt->wind_gust.get(), 
+									   ref_data->get_lat_len(), ref_data->get_lon_len(), 
+									   cur_evt->wind_offset, cur_evt->wind_scale,
+									   cur_evt->mv, cur_evt->scale_mv);
+
+		BYTE* px_byte_loss = pack_data(cur_evt->loss.get(), 
+									   ref_data->get_lat_len(), ref_data->get_lon_len(), 
+									   cur_evt->loss_offset, cur_evt->loss_scale,
+									   cur_evt->mv, cur_evt->scale_mv);
+
+		BYTE* px_byte_precip = pack_data(cur_evt->precip.get(), 
+										 ref_data->get_lat_len(), ref_data->get_lon_len(), 
+										 cur_evt->precip_offset, cur_evt->precip_scale,
+										 cur_evt->mv, cur_evt->scale_mv);
+	
+		x_mslp_var.putVar(field_start, field_count, px_byte_mslp);
+		x_wind_var.putVar(field_start, field_count, px_byte_wind);
+		x_gust_var.putVar(field_start, field_count, px_byte_gust);
+		x_loss_var.putVar(field_start, field_count, px_byte_loss);
+		x_precip_var.putVar(field_start, field_count, px_byte_precip);
+		
+		delete [] px_byte_wind;
+		delete [] px_byte_gust;
+		delete [] px_byte_loss;
+		delete [] px_byte_precip;
+		
+		evt_count++;
+	}
+
+    delete px_nc_file;
 }

@@ -44,6 +44,7 @@ int main(int argc, char** argv)
         TCLAP::CmdLine cmd("Build an event set using tracks located from the tracker program");
         
         TCLAP::SwitchArg write_one_file_arg("F", "one_file", "Write all events into one file", false);
+        cmd.add(write_one_file_arg);
         
         TCLAP::ValueArg<std::string> mslp_fname_arg("m", "mslp_file", "Original MSLP file used in tracking and field name. MSLP values for the event set will be taken from this file, rather than from the extrema file.", true, "", "string", cmd);
         TCLAP::ValueArg<std::string> mslp_field_arg("M", "mslp_field", "Field name of MSLP in original MSLP file.", false, "field8", "string", cmd);
@@ -120,7 +121,7 @@ int main(int argc, char** argv)
                          lsm_fname,    lsm_field,
                          search_rad,   event_t_steps);
         EV.find_events();
-        EV.save_events(output_fname);
+        EV.save_events(output_fname, write_one_file);
     }
     catch(std::string &s)
     {
