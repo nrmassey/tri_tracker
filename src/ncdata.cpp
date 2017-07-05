@@ -174,7 +174,7 @@ ncdata::ncdata(std::string file_name, std::string var_name) :
 		p_rotated_grid = new rotated_grid(rotated_pole_lat, rotated_pole_lon,
 										  this);
 	}
-	catch(exceptions::NcNotAtt)
+	catch(exceptions::NcException)
 	{
 	    p_rotated_grid = NULL;
 	}
