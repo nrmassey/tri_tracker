@@ -766,7 +766,7 @@ void event_creator::write_all_events(std::string out_fname, field_data* lsm_fiel
     int n_events = event_list.size();
     NcDim x_events_dim = px_nc_file->addDim("event", n_events);    
     
-    // create variable track length type - integer type
+    // create variable track length type - float type
     NcVlenType trackLenType(px_nc_file->addVlenType("trackLen", ncFloat));
     
     // create track variables
