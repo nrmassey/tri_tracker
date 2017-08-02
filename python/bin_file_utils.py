@@ -29,8 +29,8 @@ def write_vector(fh, V):
 	
 def read_string(fh):
 	# get the string length first
-	b = fh.read(1)
-	strlen = struct.unpack('B', b)[0]
+	b = fh.read(4)
+	strlen = struct.unpack('i', b)[0]
 	b = fh.read(strlen)
 	return b
 

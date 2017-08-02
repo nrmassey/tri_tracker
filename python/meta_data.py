@@ -22,6 +22,6 @@ def read_meta_data(fh):
 			value = read_string(fh)
 			meta_data[key] = value
 	else:
-		# rewind 4 bytes
+		# rewind to beginning of file
 		fh.seek(0)
 	return meta_data
