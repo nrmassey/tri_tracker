@@ -11,16 +11,16 @@ EVENT_SET_NAME = ../exe/event_set
 
 # Compiler variables
 CPP = g++
-INCLUDE_DIRS = -I./
-LIBRARY_DIRS = -L/usr/local/lib
+INCLUDE_DIRS = -I./ -I/apps/libs/boost/1.62/include/
+LIBRARY_DIRS = -L/usr/local/lib -L/apps/libs/boost/1.62/lib/
 
 DEBUG_FLAGS = -Wno-deprecated -O0 -g -Wall -pg #-D_GLIBCXX_DEBUG
 RELEASE_FLAGS = -Wno-deprecated -O3 -msse3
 PROFILE_FLAGS = $(RELEASE_FLAGS) -pg
 COMMON_FLAGS = -DFP_TYPE=float
-#FLAGS = $(RELEASE_FLAGS) $(COMMON_FLAGS)
+FLAGS = $(RELEASE_FLAGS) $(COMMON_FLAGS)
 #FLAGS = $(PROFILE_FLAGS) $(COMMON_FLAGS)
-FLAGS = $(DEBUG_FLAGS) $(COMMON_FLAGS)
+#FLAGS = $(DEBUG_FLAGS) $(COMMON_FLAGS)
 
 # Linker variables
 LDFLAGS = $(FLAGS)
